@@ -1,8 +1,8 @@
 # Native Win16 first slice — Intent Contract
 
-Status: active
+Status: complete
 Task mode: Doctrine
-Lifecycle phase: Implementation
+Lifecycle phase: Closeout
 Strategy epoch: native-win16-1
 Plan kind: Feature / PRD Plan
 Secondary kinds: none
@@ -75,8 +75,8 @@ Transition record: the normal `PROCEED` transition placed the contract on-hold i
 Implementation authorization: active after the actual `PROCEED`, under the exact current-user conditional instruction above.
 Implementation result: the selected helper passed the real-input production replay. The complete 128-byte family, 49 core instructions and 20 wrapper instructions match; the native prototype has three stack parameters at 4/8/12 with sizes 4/4/2. Native operands retain SS-relative argument reads and DS/source-to-ES/destination copy dependencies with two-byte selectors and offsets. The focused native suite passed 9/9; both added bridge fixtures passed, the complete current p-code fixture file passed 9/9, and the native p-code XML test passed. Johnny's entry still runs in both modes with five unresolved import-like calls; no whole-game parity is claimed.
 Committed candidates: ghidra-native `8c0a00933c9d19d493c3858799bb3f8d0388f2fa`; r2ghidra `cf1ca86cd8df32bf4feb44a8da26150e01e80a94` (implementation `47f249fa9386e4ce4f37093e3b22f1cdcb5d4f0e` and separate product documentation). The bridge's existing shared Make/Meson wrap points to the exact native fork commit. radare2 runtime source remains unchanged; this workspace owns the plan and evidence records.
-Code Gate: local `Senior Code Reviewer / Task change-set review`, selected by the current user in turn `01a14642-d89c-78e3-bfc9-0ae04863cdd2`, `2026-10-16T16:49:11.041-03:00` (America/Sao_Paulo): “pode ir de local”. The exact current candidate is ready for the first local Code Gate; no Code verdict exists yet.
-Blocker: pending local Code Gate result.
+Code Gate: `PROCEED` from `/root/native_win16_code_review`, local `Senior Code Reviewer / Task change-set review`, selected by the current user in turn `01a14642-d89c-78e3-bfc9-0ae04863cdd2`, `2026-10-16T16:49:11.041-03:00` (America/Sao_Paulo): “pode ir de local”. The reviewer semantically reviewed all 11 changed files, partitions A–D and their direct causal followers, with no reportable findings, required corrections or evidence-blocked required surface. Reviewed host candidate: `bef6041efaa8f5a3b7b8645f1246033cd5dfeec5`; native and bridge candidates are recorded above. The sole `PROCEED` transition enters Closeout without a rerun.
+Blocker: none for the accepted first slice.
 Fork result: all three named `sangoi-exe` repositories were created and verified as forks of their exact `radareorg` parents. Local `origin` points to the user's fork and `upstream` to the original; the three `win16-fmovmem` branches retain the inspected source pins. No implementation commit was pushed.
-Next high-level action: run the selected local Code Gate on the three committed owner ranges with separate engine, compiler-prototype, bridge/dependency, and documentation/evidence coverage. Keep source candidates fixed until the review ends. Publishing the local candidates is not authorized; the engine pin is not yet remotely available under this task's writes.
-Review status: Plan Gate complete; implementation locally validated; Code Gate pending. Detailed observations and evidence locations are recorded in `.sangoi/task-logs/2026-10-16-native-win16-first-slice.md`.
+Next high-level action: no further mutation is authorized by this completed slice. Publishing the local commits requires current-user authority; publish the native engine before a dependent bridge if that action is authorized. Full extension/MCP migration remains a separate continuation. The unpublished engine pin has no network-only installation proof.
+Review status: Plan Gate and local Code Gate complete; accepted first slice locally validated. Detailed observations, review accounting and evidence locations are recorded in `.sangoi/task-logs/2026-10-16-native-win16-first-slice.md`. Only factual closeout bookkeeping follows the reviewed host commit; native and bridge runtime bytes are unchanged.
