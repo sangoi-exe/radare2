@@ -1,6 +1,6 @@
 # Native Win16 first slice — Intent Contract
 
-Status: active
+Status: on-hold
 Task mode: Doctrine
 Lifecycle phase: Implementation
 Strategy epoch: native-win16-1
@@ -73,7 +73,10 @@ No compatibility layer, duplicate runtime, alias scheme, schema version or paral
 Plan Gate: `PROCEED` from `/root/native_win16_plan_audit`, local `Senior Plan Auditor / Intent contract audit`, Doctrine / Initial. The reviewer accounted for every required Intent field, with no material findings and no evidence-blocked fields. Future implementation correctness was excluded.
 Transition record: the normal `PROCEED` transition placed the contract on-hold in Initial. The explicit current-user instruction in turn `01a145ea-0c5c-7891-86ae-7255c77ae054` then activated Implementation under its confirmed checkpoint exception. No Gate was overridden or relabeled.
 Implementation authorization: active after the actual `PROCEED`, under the exact current-user conditional instruction above.
-Code Gate: not selected or launched for this task.
-Blocker: none at implementation start.
-Next high-level action: verify and create the three authorized forks, then execute the bounded native-engine and bridge entries.
-Review status: Plan Gate complete; implementation and Code Gate pending.
+Implementation result: the selected helper passed the real-input production replay. The complete 128-byte family, 49 core instructions and 20 wrapper instructions match; the native prototype has three stack parameters at 4/8/12 with sizes 4/4/2. Native operands retain SS-relative argument reads and DS/source-to-ES/destination copy dependencies with two-byte selectors and offsets. The focused native suite passed 9/9; both added bridge fixtures passed, the complete current p-code fixture file passed 9/9, and the native p-code XML test passed. Johnny's entry still runs in both modes with five unresolved import-like calls; no whole-game parity is claimed.
+Committed candidates: ghidra-native `8c0a00933c9d19d493c3858799bb3f8d0388f2fa`; r2ghidra `cf1ca86cd8df32bf4feb44a8da26150e01e80a94` (implementation `47f249fa9386e4ce4f37093e3b22f1cdcb5d4f0e` and separate product documentation). The bridge's existing shared Make/Meson wrap points to the exact native fork commit. radare2 runtime source remains unchanged; this workspace owns the plan and evidence records.
+Code Gate: pending fresh current-user selection; no Code Gate has been launched for this task.
+Blocker: the current user must select local Senior Code Reviewer, ChatGPT Web Extra High, or ChatGPT Web Pro for this exact candidate.
+Fork result: all three named `sangoi-exe` repositories were created and verified as forks of their exact `radareorg` parents. Local `origin` points to the user's fork and `upstream` to the original; the three `win16-fmovmem` branches retain the inspected source pins. No implementation commit was pushed.
+Next high-level action: obtain the current user's Code Gate choice and review the three committed owner ranges. Publishing the local candidates is not authorized; the engine pin is not yet remotely available under this task's writes.
+Review status: Plan Gate complete; implementation locally validated; Code Gate pending. Detailed observations and evidence locations are recorded in `.sangoi/task-logs/2026-10-16-native-win16-first-slice.md`.
