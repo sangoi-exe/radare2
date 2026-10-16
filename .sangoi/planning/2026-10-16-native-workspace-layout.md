@@ -1,8 +1,8 @@
 # Nested native workspace — Intent Contract
 
-Status: on-hold
+Status: active
 Task mode: Doctrine
-Lifecycle phase: Initial
+Lifecycle phase: Implementation
 Strategy epoch: native-layout-1
 Plan kind: Operations / Tooling Plan
 Secondary kind: Instruction / Policy Plan
@@ -22,6 +22,7 @@ The primary kind is Operations / Tooling because the result changes the operator
 - Selected layout and added instruction/ignore scope: turn `01a14666-80d7-7b83-92c2-2b006a2b6a1e`, `2026-10-16T17:28:05.499-03:00`: “vamos fazer como eu sugeri”, with parent `.gitignore` protection and an `AGENTS.md` in each repository; radare2 is the primary Codex entry point.
 - Confirmed paraphrase delta: turn `01a1466b-10eb-7142-80a9-dee6491946f3`, `2026-10-16T17:33:04.410-03:00`: “sim, confirmo”. The preceding paraphrase names the exact two ignore rules, the preserved/extended root instructions, scoped child instructions, active path correction, preserved historical records, and no functional change or push.
 - No material route decision remains open. Confirmation authorizes the Plan Gate. After a normal `PROCEED`, obtain later unambiguous current-user implementation authorization; no checkpoint exception from the completed Win16 task carries into this task.
+- Implementation and exact local Code Gate authority: turn `01a14679-0d44-7481-9548-2bcff2156b79`, `2026-10-16T17:48:22.949-03:00` (America/Sao_Paulo): “sim, pode executar, e ir local no code gate”. This later instruction activates the approved task and selects the first local Code Gate for its committed candidate.
 - No external writes, push, PR, deletion, global installation, runtime-setting change or Codex-global instruction edit is authorized.
 
 ## Current owner evidence and selected route
@@ -70,8 +71,8 @@ After relocation, this same plan moves with the primary radare2 repository. Its 
 4. Obtain the current-user-selected Code Gate, then finish factual closeout records and final Git/path inspection.
 
 Plan Gate: `PROCEED` from `/root/native_layout_plan_audit`, local `Senior Plan Auditor / Intent contract audit`, Doctrine / Initial. The reviewer covered every required Intent field, verified the user anchors and decisive owner/path premises, and found no material findings or evidence-blocked required field. The sole matching transition places the plan on-hold in Initial, without authorizing implementation.
-Implementation authority: not yet activated; awaiting later unambiguous current-user authorization after the actual `PROCEED`.
-Code Gate: not selected; the completed native-feature Gate does not authorize this new Gate.
-Blocker: pending current-user implementation authorization.
-Next high-level action: obtain implementation authorization, then activate the plan and integrate the exact checkout relocation and bounded Worker content changes. No repository has moved and no instruction, ignore or product-document edit has started.
+Implementation authority: active under the later current-user instruction above, after the actual Plan Gate `PROCEED`.
+Code Gate: local `Senior Code Reviewer / Task change-set review`, explicitly selected for this task in turn `01a14679-0d44-7481-9548-2bcff2156b79`; not yet launched.
+Blocker: none at implementation start.
+Next high-level action: integrate the exact checkout relocation and apply the bounded Worker instruction, ignore and product-document changes, then validate and commit the candidate for the selected local Code Gate.
 Review status: Plan Gate complete; implementation and Code Gate pending.
