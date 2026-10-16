@@ -1,5 +1,25 @@
 # Agentic Coding Guidelines for radare2
 
+## Native workspace map
+
+Start this workspace at `/home/lucas/work/radare2`. It contains three independent Git repositories, not submodules; run Git commands from the repository that owns the change. Parent ignores exclude the nested checkouts, so a search or status at the workspace root does not cover their contents.
+
+| Repository | Ownership | Local guidance |
+| --- | --- | --- |
+| `.` | radare2 host: `libr/` APIs, analysis, binary loading and plugins; `binr/` command-line tools | Host guide below |
+| `r2ghidra/` | Native decompiler bridge: host types/prototypes, plugin commands, engine integration and language installation | [r2ghidra/AGENTS.md](r2ghidra/AGENTS.md) |
+| `r2ghidra/ghidra-native/` | Editable native engine: decompiler patches, processor specifications, Sleigh compiler and native tests | [ghidra-native/AGENTS.md](r2ghidra/ghidra-native/AGENTS.md) |
+
+Runtime flow is radare2 analysis and commands → r2ghidra translation → native decompiler and matching processor specifications. Build integration consumes `r2ghidra/subprojects/ghidra-native/`, not the editable direct-child engine; `r2ghidra/subprojects/ghidra-native.wrap` owns the engine URL/revision pin. Read the child guidance before editing either child or changing this dependency boundary. Keep RE behavior in its source/specification/patch owners, not in this map.
+
+Validation entry points are the host Make build and `r2r`/unit tests below, bridge Meson and `test/db/extras/`, and engine `make test`; child guidance narrows the component procedures. [The qualified local-component procedure](r2ghidra/doc/win16-fmovmem.md) describes the existing private build and matching runtime inputs. Directory nesting alone does not select the host executable, plugin or language files at runtime.
+
+Last reviewed: 2026-10-16 on `win16-fmovmem`. Maintainers changing topology, ownership, build/test entry points or dependency integration must refresh this map and the affected child guidance against live files; branch names and installed components are not proof that this map is current.
+
+## radare2 host guide
+
+The remaining guidance applies to radare2-owned files, not the independent r2ghidra or ghidra-native repositories. Their local instructions own source style, builds and tests.
+
 ## Work and references
 
 Make the smallest coherent fix. Reuse existing helpers; avoid unrelated cleanup,
