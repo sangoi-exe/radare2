@@ -3048,13 +3048,14 @@ static int fcn_print_json(RCore *core, RAnalFunction *fcn, bool dorefs, PJ *pj) 
 	pj_ki (pj, "ninstrs", r_anal_function_instrcount (fcn));
 	pj_ki (pj, "edges", r_anal_function_count_edges (fcn, &ebbs));
 	pj_ki (pj, "ebbs", ebbs);
+	int nargs = 0;
 	{
-		char *sig = r_core_cmd_strf (core, "afcf @ 0x%"PFMT64x, fcn->addr);
+		RAnalFunctionSignature *sig = r_anal_function_get_signature (fcn);
 		if (sig) {
-			r_str_trim (sig);
-			pj_ks (pj, "signature", sig);
-			free (sig);
+			pj_ks (pj, "signature", sig->signature);
+			nargs = r_list_length (sig->params);
 		}
+		r_anal_function_signature_free (sig);
 	}
 	pj_kn (pj, "minaddr", r_anal_function_min_addr (fcn));
 	pj_kn (pj, "maxaddr", r_anal_function_max_addr (fcn));
@@ -3182,7 +3183,7 @@ static int fcn_print_json(RCore *core, RAnalFunction *fcn, bool dorefs, PJ *pj) 
 
 	if (fcn->type == R_ANAL_FCN_TYPE_FCN || fcn->type == R_ANAL_FCN_TYPE_SYM) {
 		pj_ki (pj, "nlocals", r_anal_var_count_locals (fcn));
-		pj_ki (pj, "nargs", r_anal_var_count_args (fcn));
+		pj_ki (pj, "nargs", nargs);
 #if 0
 		// we have afvj for this no need to dupe in afij
 		pj_k (pj, "bpvars");

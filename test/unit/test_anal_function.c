@@ -546,6 +546,97 @@ bool test_r_anal_function_get_signature_string_hides_variadic_placeholder(void) 
 	mu_end;
 }
 
+bool test_r_core_function_json_uses_typed_signature(void) {
+	const struct {
+		const char *name;
+		const char *prototype;
+		const char *signature;
+		int nvars;
+		int nargs;
+	} cases[] = {
+		{ "record_copy", "copy_proto", "void record_copy (FarAddress16 src, FarAddress16 dst, uint16_t count);", 5, 3 },
+		{ "no_args", NULL, "int no_args ();", 1, 0 },
+		{ "from_vars", NULL, "void from_vars (int32_t word0, int32_t word1);", 2, 2 },
+		{ "fcn.00003000", NULL, "int fcn.00003000 (const char *fmt);", 2, 1 },
+		{ "dbg.by_name", NULL, "char dbg.by_name (char value);", 2, 1 },
+	};
+	size_t i;
+	for (i = 0; i < R_ARRAY_SIZE (cases); i++) {
+		RCore *core = r_core_new ();
+		mu_assert_notnull (core, "create core for function JSON commands");
+		RAnal *anal = core->anal;
+		RAnalBaseType *record = r_anal_base_type_new (R_ANAL_BASE_TYPE_KIND_STRUCT);
+		record->name = strdup ("FarAddress16");
+		record->size = 32;
+		RAnalTypeMember offset = { .name = strdup ("offset"), .type = strdup ("uint16_t") };
+		RAnalTypeMember selector = { .name = strdup ("selector"), .type = strdup ("uint16_t"), .offset = 2 };
+		RVecAnalTypeMember_push_back (&record->struct_data.members, &offset);
+		RVecAnalTypeMember_push_back (&record->struct_data.members, &selector);
+		r_anal_save_base_type (anal, record);
+		r_anal_base_type_free (record);
+		mu_assert_true (r_anal_import_c_decls (anal,
+			"void copy_proto (FarAddress16 src, FarAddress16 dst, uint16_t count);"
+			"int no_args (void);"
+			"int scanf (const char *fmt);"
+			"char by_name (char value);", NULL), "seed canonical JSON prototypes");
+		mu_assert_eq (r_type_get_bitsize (anal->sdb_types, "FarAddress16"), 32, "record contains exactly two packed WORDs");
+		RAnalFunction *fcn = r_anal_create_function (anal, cases[i].name, 0x3000, R_ANAL_FCN_TYPE_FCN, NULL);
+		mu_assert_notnull (fcn, "create function for JSON commands");
+		RAnalBlock *bb = r_anal_create_block (anal, fcn->addr, 1);
+		mu_assert_notnull (bb, "create function range for command lookup");
+		r_anal_function_add_block (fcn, bb);
+		r_unref (bb);
+		mu_assert_true (r_anal_function_store_callconv (anal, fcn, "cdecl"), "seed function calling convention");
+		if (cases[i].prototype) {
+			mu_assert_true (r_type_set_link (anal->sdb_types, cases[i].prototype, fcn->addr), "link record prototype by address");
+		}
+		if (!strcmp (cases[i].name, "fcn.00003000")) {
+			mu_assert_notnull (r_flag_set_inspace (core->flags, R_FLAGS_FS_IMPORTS, "sym.imp.__isoc99_scanf", fcn->addr, 0), "seed import prototype resolution");
+		}
+		int j;
+		for (j = cases[i].nvars - 1; j >= 0; j--) {
+			char *name = r_str_newf ("word%d", j);
+			RAnalVar *var = r_anal_function_set_var (fcn, 4 + j * 4, R_ANAL_VAR_KIND_BPV, "int32_t", 4, true, name);
+			free (name);
+			mu_assert_notnull (var, "seed inferred argument storage");
+		}
+		ut64 function_epoch = r_anal_function_dirty_epoch (fcn);
+		ut64 types_epoch = r_anal_types_dirty_epoch (anal);
+		char *callconv = strdup (r_anal_function_cc (fcn));
+		bool noreturn = fcn->is_noreturn;
+		const char *commands[] = { "afij @ 0x3000", "aflj" };
+		size_t k;
+		for (k = 0; k < R_ARRAY_SIZE (commands); k++) {
+			char *output = r_core_cmd_str (core, commands[k]);
+			mu_assert_notnull (output, "function JSON command output");
+			RJson *json = r_json_parsedup (output);
+			free (output);
+			mu_assert_notnull (json, "parse function JSON command output");
+			mu_assert_eq (json->type, R_JSON_ARRAY, "function JSON is an array");
+			mu_assert_eq (json->children.count, 1, "one function in JSON output");
+			const RJson *entry = r_json_item (json, 0);
+			mu_assert_streq (r_json_get_str (entry, "signature"), cases[i].signature, "JSON uses canonical signature, not inferred storage");
+			const RJson *nargs = r_json_get (entry, "nargs");
+			mu_assert_notnull (nargs, "JSON retains argument count field");
+			mu_assert_eq (nargs->num.u_value, cases[i].nargs, "JSON counts logical parameters");
+			r_json_free (json);
+		}
+		char *signature = r_anal_function_get_signature_string (fcn);
+		mu_assert_streq (signature, cases[i].signature, "JSON and typed API agree");
+		free (signature);
+		mu_assert_eq (r_anal_function_dirty_epoch (fcn), function_epoch, "JSON observation leaves function epoch unchanged");
+		mu_assert_eq (r_anal_types_dirty_epoch (anal), types_epoch, "JSON observation leaves type epoch unchanged");
+		mu_assert_eq (r_list_length (anal->fcns), 1, "JSON observation does not create functions");
+		mu_assert_eq (r_anal_var_count_args (fcn), cases[i].nvars, "JSON observation retains inferred storage");
+		mu_assert_streq (fcn->name, cases[i].name, "JSON observation retains function name");
+		mu_assert_streq (r_anal_function_cc (fcn), callconv, "JSON observation retains calling convention");
+		mu_assert_eq (fcn->is_noreturn, noreturn, "JSON observation retains noreturn");
+		free (callconv);
+		r_core_free (core);
+	}
+	mu_end;
+}
+
 bool test_r_anal_function_get_signature_falls_back_to_valid_callconv(void) {
 	RAnal *anal = r_anal_new ();
 	mu_assert_notnull (anal, "Couldn't create new RAnal");
@@ -785,6 +876,7 @@ int all_tests(void) {
 	mu_run_test (test_r_anal_function_get_signature_uses_basename_for_dbg_prefixed_function);
 	mu_run_test (test_r_anal_function_get_signature_string_falls_back_to_vars);
 	mu_run_test (test_r_anal_function_get_signature_string_hides_variadic_placeholder);
+	mu_run_test (test_r_core_function_json_uses_typed_signature);
 	mu_run_test (test_r_anal_function_get_signature_falls_back_to_valid_callconv);
 	mu_run_test (test_r_anal_function_callconv_resolves_when_assigned);
 	mu_run_test (test_r_anal_function_get_signature_reports_origin_and_only_reads);
