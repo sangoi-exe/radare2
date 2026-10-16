@@ -1,6 +1,6 @@
 # Native Win16 first slice — Intent Contract
 
-Status: on-hold
+Status: active
 Task mode: Doctrine
 Lifecycle phase: Implementation
 Strategy epoch: native-win16-1
@@ -51,7 +51,7 @@ Keeping and coherently repairing Ghidra has a smaller immediate correctness fron
 - Native parameter storage and post-analysis LOAD/STORE operands retain the appropriate selector and 16-bit offset dependencies. Abstract stack bookkeeping still identifies the entry-stack parameters. Printed C must not imply a selector-free host-pointer mapping. Unknown selectors remain unknown; this task does not invent a runtime selector table.
 - Use the production native XML export to inspect operands and storage, original instruction boundaries for coverage, and focused existing owner tests for changed semantics. Nonempty C, a parameter count alone, or opcode names without operands do not establish acceptance.
 - Recheck the already-observed Johnny entry path and directly affected existing native test surfaces after shared changes. Report remaining unresolved imports/NE semantics explicitly; this slice does not require whole-game decompilation parity.
-- Changes and relevant validation are committed in their owning repositories. A current-user-selected Code Gate reviews the consolidated candidate and its direct causal followers before closeout. The Code Gate choice remains pending until that operation.
+- Changes and relevant validation are committed in their owning repositories. A current-user-selected Code Gate reviews the consolidated candidate and its direct causal followers before closeout. The current Gate choice is recorded in lifecycle continuity below.
 
 ## Constraints and non-goals
 
@@ -75,8 +75,8 @@ Transition record: the normal `PROCEED` transition placed the contract on-hold i
 Implementation authorization: active after the actual `PROCEED`, under the exact current-user conditional instruction above.
 Implementation result: the selected helper passed the real-input production replay. The complete 128-byte family, 49 core instructions and 20 wrapper instructions match; the native prototype has three stack parameters at 4/8/12 with sizes 4/4/2. Native operands retain SS-relative argument reads and DS/source-to-ES/destination copy dependencies with two-byte selectors and offsets. The focused native suite passed 9/9; both added bridge fixtures passed, the complete current p-code fixture file passed 9/9, and the native p-code XML test passed. Johnny's entry still runs in both modes with five unresolved import-like calls; no whole-game parity is claimed.
 Committed candidates: ghidra-native `8c0a00933c9d19d493c3858799bb3f8d0388f2fa`; r2ghidra `cf1ca86cd8df32bf4feb44a8da26150e01e80a94` (implementation `47f249fa9386e4ce4f37093e3b22f1cdcb5d4f0e` and separate product documentation). The bridge's existing shared Make/Meson wrap points to the exact native fork commit. radare2 runtime source remains unchanged; this workspace owns the plan and evidence records.
-Code Gate: pending fresh current-user selection; no Code Gate has been launched for this task.
-Blocker: the current user must select local Senior Code Reviewer, ChatGPT Web Extra High, or ChatGPT Web Pro for this exact candidate.
+Code Gate: local `Senior Code Reviewer / Task change-set review`, selected by the current user in turn `01a14642-d89c-78e3-bfc9-0ae04863cdd2`, `2026-10-16T16:49:11.041-03:00` (America/Sao_Paulo): “pode ir de local”. The exact current candidate is ready for the first local Code Gate; no Code verdict exists yet.
+Blocker: pending local Code Gate result.
 Fork result: all three named `sangoi-exe` repositories were created and verified as forks of their exact `radareorg` parents. Local `origin` points to the user's fork and `upstream` to the original; the three `win16-fmovmem` branches retain the inspected source pins. No implementation commit was pushed.
-Next high-level action: obtain the current user's Code Gate choice and review the three committed owner ranges. Publishing the local candidates is not authorized; the engine pin is not yet remotely available under this task's writes.
+Next high-level action: run the selected local Code Gate on the three committed owner ranges with separate engine, compiler-prototype, bridge/dependency, and documentation/evidence coverage. Keep source candidates fixed until the review ends. Publishing the local candidates is not authorized; the engine pin is not yet remotely available under this task's writes.
 Review status: Plan Gate complete; implementation locally validated; Code Gate pending. Detailed observations and evidence locations are recorded in `.sangoi/task-logs/2026-10-16-native-win16-first-slice.md`.
