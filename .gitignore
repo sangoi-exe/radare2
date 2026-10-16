@@ -1,5 +1,6 @@
 clang-log/
 /r2ghidra/
+/r2mcp/
 .claude
 .pmai/
 .cache

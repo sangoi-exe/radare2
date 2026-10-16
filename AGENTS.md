@@ -2,23 +2,24 @@
 
 ## Native workspace map
 
-Start this workspace at `/home/lucas/work/radare2`. It contains three independent Git repositories, not submodules; run Git commands from the repository that owns the change. Parent ignores exclude the nested checkouts, so a search or status at the workspace root does not cover their contents.
+Start this workspace at `/home/lucas/work/radare2`. It contains four independent Git repositories, not submodules; run Git commands from the repository that owns the change. Parent ignores exclude the nested checkouts, so a search or status at the workspace root does not cover their contents.
 
 | Repository | Ownership | Local guidance |
 | --- | --- | --- |
 | `.` | radare2 host: `libr/` APIs, analysis, binary loading and plugins; `binr/` command-line tools | Host guide below |
 | `r2ghidra/` | Native decompiler bridge: host types/prototypes, plugin commands, engine integration and language installation | [r2ghidra/AGENTS.md](r2ghidra/AGENTS.md) |
 | `r2ghidra/ghidra-native/` | Editable native engine: decompiler patches, processor specifications, Sleigh compiler and native tests | [ghidra-native/AGENTS.md](r2ghidra/ghidra-native/AGENTS.md) |
+| `r2mcp/` | Native MCP server: stdio transport, tools and RCore lifecycle | [r2mcp/AGENTS.md](r2mcp/AGENTS.md) |
 
-Runtime flow is radare2 analysis and commands → r2ghidra translation → native decompiler and matching processor specifications. Build integration consumes `r2ghidra/subprojects/ghidra-native/`, not the editable direct-child engine; `r2ghidra/subprojects/ghidra-native.wrap` owns the engine URL/revision pin. Read the child guidance before editing either child or changing this dependency boundary. Keep RE behavior in its source/specification/patch owners, not in this map.
+Runtime flow is native r2mcp tools → linked radare2 RCore analysis and commands → r2ghidra translation → native decompiler and matching processor specifications; the host CLI also uses the same host/bridge/engine owners directly. No Java or Python analysis backend is required for this native path. Build integration consumes `r2ghidra/subprojects/ghidra-native/`, not the editable direct-child engine; `r2ghidra/subprojects/ghidra-native.wrap` owns the engine URL/revision pin. Read the child guidance before editing any child or changing this dependency boundary. Keep RE behavior in its source/specification/patch owners, not in this map.
 
-Validation entry points are the host Make build and `r2r`/unit tests below, bridge Meson and `test/db/extras/`, and engine `make test`; child guidance narrows the component procedures. [The qualified local-component procedure](r2ghidra/doc/win16-fmovmem.md) describes the existing private build and matching runtime inputs. Directory nesting alone does not select the host executable, plugin or language files at runtime.
+Validation entry points are the host Make build and `r2r`/unit tests below, bridge Meson and `test/db/extras/`, engine `make test`, and the MCP root Make build/test targets; child guidance narrows the component procedures. [The qualified local-component procedure](r2ghidra/doc/win16-fmovmem.md) describes the existing private host/bridge/engine build and matching runtime inputs. Directory nesting or an MCP checkout alone does not select matching linked host libraries, plugins or language files, or establish runtime readiness. File-switch preservation and saved-analysis roundtrips require production-path observation, not source inspection alone; persistence belongs to the host, while the server owns its RCore lifecycle.
 
 Last reviewed: 2026-10-16 on `win16-fmovmem`. Maintainers changing topology, ownership, build/test entry points or dependency integration must refresh this map and the affected child guidance against live files; branch names and installed components are not proof that this map is current.
 
 ## radare2 host guide
 
-The remaining guidance applies to radare2-owned files, not the independent r2ghidra or ghidra-native repositories. Their local instructions own source style, builds and tests.
+The remaining guidance applies to radare2-owned files, not the independent r2ghidra, ghidra-native or r2mcp repositories. Their local instructions own source style, builds and tests.
 
 ## Work and references
 
