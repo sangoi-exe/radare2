@@ -330,6 +330,10 @@ R_API bool r_core_bin_set_env(RCore *core, RBinFile *binfile) {
 			const char *cpu = R_STR_ISNOTEMPTY (info->cpu)? info->cpu: arch;
 			r_config_set (config, "asm.cpu", cpu);
 			r_asm_use (core->rasm, arch);
+			if (bits == 16 && !strcmp (arch, "x86")) {
+				bool is_ne = info->rclass && !strcmp (info->rclass, "ne");
+				r_config_set_i (config, "asm.addr.segment.bits", is_ne? 16: 4);
+			}
 		}
 		// set cur before running info so r_bin_patch_relocs has a valid bf
 		r_bin_file_set_cur_binfile (core->bin, binfile);

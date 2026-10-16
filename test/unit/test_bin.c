@@ -70,6 +70,133 @@ bool test_r_bin_plan9_symbol_names(void) {
 	mu_end;
 }
 
+bool test_r_bin_ne_segmented_relocations(void) {
+	ut8 bytes[0x240] = {0};
+	memcpy (bytes, "MZ", 2);
+	r_write_le32 (bytes + 0x3c, 0x40);
+	memcpy (bytes + 0x40, "NE", 2);
+	r_write_le16 (bytes + 0x44, 0x50);
+	r_write_le16 (bytes + 0x46, 16);
+	r_write_le16 (bytes + 0x56, 1);
+	r_write_le16 (bytes + 0x5c, 2);
+	r_write_le16 (bytes + 0x5e, 2);
+	r_write_le16 (bytes + 0x62, 0x40);
+	r_write_le16 (bytes + 0x66, 0x70);
+	r_write_le16 (bytes + 0x68, 0x80);
+	r_write_le16 (bytes + 0x6a, 0x90);
+	bytes[0x76] = 2;
+	const ut8 segments[] = { 0, 1, 0x40, 0, 0x10, 0x11, 0x60, 0, 0, 2, 0x20, 0, 0, 0x10, 0x20, 0 };
+	memcpy (bytes + 0x80, segments, sizeof (segments));
+	// Unused ordinals 1 and 2 precede a movable entry in the final segment.
+	const ut8 entries[] = { 2, 0, 1, 0xff, 0, 0x3f, 0xcd, 2, 0x10, 0, 1, 2, 0, 0x12, 0, 0 };
+	memcpy (bytes + 0x90, entries, sizeof (entries));
+	const ut8 names[] = { 3, 'M', 'O', 'D', 0, 0, 6, 'T', 'a', 'r', 'g', 'e', 't', 3, 0, 0 };
+	memcpy (bytes + 0xb0, names, sizeof (names));
+	r_write_le16 (bytes + 0xc2, 7);
+	memcpy (bytes + 0xd0, "\x06" "KERNEL" "\x04" "USER", 12);
+	const ut16 sites[] = { 1, 6, 0xb, 0x11, 0x16, 0x1b, 0x21, 0x2c, 0x2e };
+	size_t i;
+	for (i = 0; i < R_ARRAY_SIZE (sites); i++) {
+		r_write_le16 (bytes + 0x100 + sites[i], UT16_MAX);
+	}
+	r_write_le16 (bytes + 0x101, 0x11);
+	r_write_le16 (bytes + 0x128, 5);
+	const ut8 records[] = {
+		3, 0, 1, 0, 2, 0, 0, 0,
+		3, 0, 0x21, 0, 0xff, 0, 3, 0,
+		3, 1, 6, 0, 1, 0, 91, 0,
+		3, 1, 0xb, 0, 1, 0, 23, 0,
+		3, 1, 0x16, 0, 2, 0, 91, 0,
+		3, 1, 0x1b, 0, 1, 0, 91, 0,
+		5, 4, 0x28, 0, 2, 0, 0x10, 0,
+		2, 0, 0x2c, 0, 2, 0, 0, 0,
+		5, 0, 0x2e, 0, 0xff, 0, 2, 0,
+		3, 7, 0x31, 0, 1, 0, 0, 0,
+	};
+	r_write_le16 (bytes + 0x140, sizeof (records) / 8);
+	memcpy (bytes + 0x142, records, sizeof (records));
+	RBuffer *buf = r_buf_new_with_bytes (bytes, sizeof (bytes));
+	RBin *bin = r_bin_new ();
+	RIO *io = r_io_new ();
+	r_io_bind (io, &bin->iob);
+	io->va = true;
+	RIODesc *desc = r_io_open_at (io, "malloc://576", R_PERM_RWX, 0, 0);
+	mu_assert_notnull (desc, "NE I/O buffer");
+	mu_assert_true (r_io_write_at (io, 0, bytes, sizeof (bytes)), "write original NE image");
+	RBinFileOptions opt = {0};
+	r_bin_file_options_init (&opt, desc->fd, 0, 0, 0);
+	opt.filename = "segmented.ne";
+	opt.pluginname = "ne";
+	mu_assert_true (r_bin_open_buf (bin, buf, &opt), "open NE image");
+	mu_assert_true (r_bin_get_info (bin)->has_va, "NE has virtual coordinates");
+	mu_assert_true (r_bin_get_info (bin)->has_lit, "NE publishes artificial import addresses");
+	mu_assert_streq (r_bin_get_info (bin)->rclass, "ne", "NE format identity");
+	RVecRBinSection *sections = r_bin_get_sections_vec (bin);
+	mu_assert_eq (RVecRBinSection_length (sections), 2, "NE segment count");
+	RBinSection *section = RVecRBinSection_at (sections, 0);
+	mu_assert_eq (section->paddr, 0x100, "NE preserves file coordinates");
+	mu_assert_eq (section->vaddr, 0x10000, "NE segment coordinate");
+	mu_assert_eq (section->vsize, 0x60, "NE allocation size");
+	mu_assert_true (section->add, "NE segments request host maps");
+	mu_assert_eq (section->perm, R_PERM_RX, "discardable NE code remains readable in analysis maps");
+	R_VEC_FOREACH (sections, section) {
+		mu_assert_notnull (r_io_map_add (io, desc->fd, section->perm, section->paddr, section->vaddr, section->size), "map NE segment");
+	}
+	const RList *entrypoints = r_bin_get_entries (bin);
+	mu_assert_eq (r_list_length (entrypoints), 3, "unused entry ordinals are not entrypoints");
+	RBinAddr *entry = r_list_get_n (entrypoints, 0);
+	mu_assert_eq (entry->paddr, 0x100, "startup file coordinate");
+	mu_assert_eq (entry->vaddr, 0x10000, "startup virtual coordinate");
+	entry = r_list_get_n (entrypoints, 1);
+	mu_assert_eq (entry->paddr, 0x210, "final-segment entry file coordinate");
+	mu_assert_eq (entry->vaddr, 0x20010, "final-segment entry virtual coordinate");
+	entry = r_list_get_n (entrypoints, 2);
+	mu_assert_eq (entry->paddr, 0x212, "fixed final-segment entry file coordinate");
+	mu_assert_eq (entry->vaddr, 0x20012, "fixed final-segment entry virtual coordinate");
+	RVecRBinSymbol *symbols = r_bin_get_symbols_vec (bin);
+	RBinSymbol *symbol = RVecRBinSymbol_at (symbols, 0);
+	mu_assert_streq (symbol->name->oname, "Target", "export name");
+	mu_assert_eq (symbol->ordinal, 3, "export retains skipped ordinal progression");
+	mu_assert_eq (symbol->vaddr, 0x20010, "export resolves its actual ordinal, not startup/list index");
+	RVecRBinImport *imports = r_bin_get_imports_vec (bin);
+	mu_assert_eq (RVecRBinImport_length (imports), 3, "imports deduplicate module plus ordinal, excluding OS fixups");
+	mu_assert_eq (RVecRBinImport_at (imports, 0)->ordinal, 91, "first import ordinal");
+	mu_assert_eq (RVecRBinImport_at (imports, 1)->ordinal, 23, "second import ordinal");
+	mu_assert_eq (RVecRBinImport_at (imports, 2)->ordinal, 91, "same ordinal in another module");
+	symbol = RVecRBinSymbol_at (symbols, RVecRBinSymbol_length (symbols) - 3);
+	mu_assert_true (symbol->is_imported, "artificial target is an imported host symbol");
+	mu_assert_eq (symbol->vaddr, 0x30000, "import symbol agrees with relocated call target");
+	mu_assert_streq (symbol->name->oname, RVecRBinImport_at (imports, 0)->name->oname, "import and target retain the same identity");
+	RVecRBinReloc *relocs = r_bin_patch_relocs (r_bin_cur (bin));
+	mu_assert_notnull (relocs, "patch NE relocations");
+	mu_assert_eq (RVecRBinReloc_length (relocs), 9, "expanded relocation chain, no undefined ordinal or OS import");
+	ut8 patched[0x40];
+	mu_assert_true (r_io_read_at (io, 0x10000, patched, sizeof (patched)), "read relocated analysis view");
+	mu_assert_eq (r_read_le32 (patched + 1), 0x20000, "movable source uses direct target discriminator");
+	mu_assert_eq (r_read_le32 (patched + 0x11), 0x20000, "chain source receives the same target");
+	mu_assert_eq (r_read_le32 (patched + 0x21), 0x20010, "ordinal target uses private entry identity");
+	mu_assert_eq (r_read_le32 (patched + 6), 0x30000, "first artificial import coordinate");
+	mu_assert_eq (r_read_le32 (patched + 0xb), 0x30004, "different ordinals are distinct");
+	mu_assert_eq (r_read_le32 (patched + 0x16), 0x30008, "different modules are distinct");
+	mu_assert_eq (r_read_le32 (patched + 0x1b), 0x30000, "repeated import retains its identity");
+	mu_assert_eq (r_read_le16 (patched + 0x28), 0x15, "additive offset uses original operand");
+	mu_assert_eq (r_read_le16 (patched + 0x2c), 2, "selector operand is a synthetic segment ID");
+	mu_assert_eq (r_read_le16 (patched + 0x2e), UT16_MAX, "undefined ordinal remains unresolved");
+	mu_assert_notnull (r_io_map_get_at (io, 0x30000), "artificial imports use host map");
+	RBinReloc *reloc = RVecRBinReloc_at (relocs, 0);
+	mu_assert_eq (reloc->paddr, 0x101, "relocation preserves physical source");
+	mu_assert_eq (reloc->vaddr, 0x10001, "relocation exposes virtual source");
+	ut8 original[0x240];
+	mu_assert_eq (r_buf_read_at (buf, 0, original, sizeof (original)), sizeof (original), "read original buffer after patches");
+	mu_assert_memeq (original, bytes, sizeof (bytes), "NE relocation preserves original buffer bytes");
+	mu_assert_true (r_io_read_at (io, 0x100, original, 0x40), "read physical backing view");
+	mu_assert_memeq (original, bytes + 0x100, 0x40, "NE relocation does not write backing descriptor");
+	r_bin_free (bin);
+	r_io_free (io);
+	r_unref (buf);
+	mu_end;
+}
+
 bool test_r_bin_mach0_chained_fixups(void) {
 	const char *path = "bins/mach0/hello-macos-arm64-chained";
 	int i;
@@ -621,6 +748,7 @@ bool test_r_bin_elf_pn_xnum_phdr(void) {
 bool all_tests(void) {
 	mu_run_test(test_r_bin);
 	mu_run_test(test_r_bin_plan9_symbol_names);
+	mu_run_test(test_r_bin_ne_segmented_relocations);
 	mu_run_test(test_r_bin_mach0_chained_fixups);
 	mu_run_test(test_r_bin_jni_language);
 	mu_run_test(test_r_bin_languages);

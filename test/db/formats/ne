@@ -16,13 +16,13 @@ RUN
 NAME=NE Symbols
 FILE=bins/ne/anim8.exe
 CMDS=<<EOF
-is
+is~!imp.
 ?e --
 iSS
 ?e --
 iuj~{}~"name":
 ?e --
-ii
+ii~:0..8
 ?e --
 ir~0x?
 ?e --
@@ -30,17 +30,15 @@ ir~WIN87EM
 ir~:0..11
 EOF
 EXPECT=<<EOF
-nth paddr      vaddr      bind   type size lib name       demangled
--------------------------------------------------------------------
-0   0x00000a00 0x00000a00 NONE   NONE 0        ANIM8
-1   0x00000d8e 0x00000d8e GLOBAL NONE 0        WNDPROC
-2   0x00002b5a 0x00002b5a GLOBAL NONE 0        DIAL_ABOUT
-0   0x00000a00 0x00000a00 NONE   NONE 0        ANIM8
+nth paddr      vaddr      bind   type size lib name                                 demangled
+---------------------------------------------------------------------------------------------
+1   0x00000d8e 0x0001038e GLOBAL NONE 0        WNDPROC
+2   0x00002b5a 0x0001215a GLOBAL NONE 0        DIAL_ABOUT
 --
 nth paddr         size vaddr        vsize perm flags type name
 --------------------------------------------------------------
-0   0x00000a00  0x54ee 0x00000a00  0x54ee ---x 0x0   MAP  MOVEABLE.2560
-1   0x00007600  0x3ec4 0x00007600  0x3ec4 -rwx 0x0   MAP  MOVEABLE.30208
+0   0x00000a00  0x54ee 0x00010000  0x54ee -r-x 0x0   MAP  MOVEABLE.2560
+1   0x00007600  0x3ec4 0x00020000  0x3ec4 -rw- 0x0   MAP  MOVEABLE.30208
 --
     "name": "ICONX",
     "name": "FRAME_1",
@@ -84,49 +82,47 @@ nth paddr         size vaddr        vsize perm flags type name
 --
 nth vaddr      bind type lib name
 ---------------------------------
-1   0x00000000 NONE NONE     KERNEL
-2   0x00000000 NONE NONE     USER
-3   0x00000000 NONE NONE     GDI
-4   0x00000000 NONE NONE     WIN87EM
+91  0x00030000 NONE FUNC     KERNEL.INITTASK
+23  0x00030004 NONE FUNC     KERNEL.LOCKSEGMENT
+30  0x00030008 NONE FUNC     KERNEL.WAITEVENT
+5   0x0003000c NONE FUNC     USER.INITAPP
+132 0x00030010 NONE FUNC     KERNEL.GETWINFLAGS
+24  0x00030014 NONE FUNC     KERNEL.UNLOCKSEGMENT
 --
-718
+217
 --
-0x00004c98 0x00004c98 SET_32 3     WIN87EM.__FPMATH
-0x00004cb2 0x00004cb2 SET_16 5     WIN87EM.__FPMATH
-0x00004cb8 0x00004cb8 SET_16 2     WIN87EM.__FPMATH
-0x00004cbd 0x00004cbd SET_32 3     WIN87EM.__FPMATH
-0x00004ccb 0x00004ccb SET_32 3     WIN87EM.__FPMATH
-0x0000569a 0x0000569a ADD_16 5     WIN87EM.0
-0x000056a0 0x000056a0 ADD_16 5     WIN87EM.0
-0x000056b3 0x000056b3 ADD_16 5     WIN87EM.0
-0x00005891 0x00005891 ADD_16 5     WIN87EM.0
+0x00014298 0x00004c98 SET_32 3     WIN87EM.__FPMATH
+0x000142b2 0x00004cb2 SET_16 5     WIN87EM.__FPMATH
+0x000142b8 0x00004cb8 SET_16 2     WIN87EM.__FPMATH
+0x000142bd 0x00004cbd SET_32 3     WIN87EM.__FPMATH
+0x000142cb 0x00004ccb SET_32 3     WIN87EM.__FPMATH
 vaddr      paddr      type   ntype name
 ---------------------------------------
-0x00000a01 0x00000a01 SET_32 3     KERNEL.INITTASK
-0x00000a25 0x00000a25 SET_32 3     KERNEL.LOCKSEGMENT
-0x00000a3c 0x00000a3c SET_32 3     KERNEL.WAITEVENT
-0x00000a45 0x00000a45 SET_32 3     USER.INITAPP
-0x00000a74 0x00000a74 SET_32 3     KERNEL.GETWINFLAGS
-0x00000ad0 0x00000ad0 SET_32 3     KERNEL.UNLOCKSEGMENT
-0x00000f5e 0x00000f5e SET_32 3     USER.SETTIMER
-0x00000f4d 0x00000f4d SET_32 3     USER.KILLTIMER
-0x00000f13 0x00000f13 SET_32 3     USER.SETTIMER
+0x00010001 0x00000a01 SET_32 3     KERNEL.INITTASK
+0x00010025 0x00000a25 SET_32 3     KERNEL.LOCKSEGMENT
+0x0001003c 0x00000a3c SET_32 3     KERNEL.WAITEVENT
+0x00010045 0x00000a45 SET_32 3     USER.INITAPP
+0x00010074 0x00000a74 SET_32 3     KERNEL.GETWINFLAGS
+0x000100d0 0x00000ad0 SET_32 3     KERNEL.UNLOCKSEGMENT
+0x00010186 0x00000b86 SET_32 3     KERNEL.CATCH
+0x00010192 0x00000b92 SET_32 3     USER.POSTQUITMESSAGE
+0x000101a7 0x00000ba7 SET_32 3     USER.LOADSTRING
 EOF
 RUN
 
-NAME=NE: ir* keeps one name at each printed address when every reloc vaddr is 0
+NAME=NE: ir* preserves each relocation source in virtual coordinates
 FILE=bins/ne/anim8.exe
 CMDS=<<EOF
 ir*~KILLTIMER
 ir*~reloc.?
 EOF
 EXPECT=<<EOF
-'f reloc.USER.KILLTIMER 4 0x00000f4d
-'f reloc.USER.KILLTIMER 4 0x00000f02
-'f reloc.USER.KILLTIMER 4 0x00000ef4
-'f reloc.USER.KILLTIMER 4 0x00001359
-'f reloc.USER.KILLTIMER 4 0x00002b14
-707
+'f reloc.USER.KILLTIMER 4 0x000104f4
+'f reloc.USER.KILLTIMER 4 0x00010502
+'f reloc.USER.KILLTIMER 4 0x0001054d
+'f reloc.USER.KILLTIMER 4 0x00010959
+'f reloc.USER.KILLTIMER 4 0x00012114
+209
 EOF
 RUN
 
@@ -137,7 +133,7 @@ CMDS=<<EOF
 is~entry~?
 EOF
 EXPECT=<<EOF
-40
+22
 EOF
 RUN
 
@@ -165,6 +161,6 @@ is~entry~?
 EOF
 EXPECT=<<EOF
 format   ne
-8
+2
 EOF
 RUN

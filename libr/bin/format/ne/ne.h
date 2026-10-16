@@ -22,6 +22,8 @@ typedef struct {
 	bool named;
 } r_ne_resource;
 
+R_VEC_TYPE (RVecNEEntry, RBinAddr);
+
 typedef struct {
 	NE_image_header *ne_header;
 	ut32 header_offset;
@@ -31,13 +33,17 @@ typedef struct {
 	ut8 *resident_name_table;
 	RBuffer *buf;
 	RList *resources;
+	RVecNEEntry entries; // Indexed by entry ordinal minus one, including unused ordinals.
+	RVecRBinImport imports;
+	RVecRBinReloc *relocs;
+	ut64 imports_base;
 	char *os;
 } r_bin_ne_obj_t;
 
 bool r_bin_ne_get_header_offset(RBuffer *buf, R_OUT ut32 *offset);
 void r_bin_ne_free(r_bin_ne_obj_t *bin);
 r_bin_ne_obj_t *r_bin_ne_new_buf(RBuffer *buf, bool verbose);
-RVecRBinReloc *r_bin_ne_get_relocs(r_bin_ne_obj_t *bin, RVecRBinSymbol *symbols, RVecRBinSection *sections);
+RVecRBinReloc *r_bin_ne_get_relocs(r_bin_ne_obj_t *bin, RVecRBinSymbol *symbols);
 void r_bin_ne_load_imports(r_bin_ne_obj_t *bin, RVecRBinImport *vec);
 void r_bin_ne_load_symbols(r_bin_ne_obj_t *bin, RVecRBinSymbol *symbols);
 bool r_bin_ne_load_segments(r_bin_ne_obj_t *bin, RVecRBinSection *segments);

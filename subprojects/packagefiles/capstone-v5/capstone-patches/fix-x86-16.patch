@@ -7,7 +7,7 @@ index 216efb2..37cab47 100644
  		}
  
 +		if (MI->csh->mode == CS_MODE_16)
-+			imm |= (MI->address >> 16) << 16;
++			imm = (imm & 0xffff) | ((MI->address >> 16) << 16);
 +
  		if (imm < 0) {
  			SStream_concat(O, "0x%"PRIx64, imm);
@@ -21,7 +21,7 @@ index 6167e85..cff9237 100644
  		}
  
 +		if (MI->csh->mode == CS_MODE_16)
-+			imm |= (MI->address >> 16) << 16;
++			imm = (imm & 0xffff) | ((MI->address >> 16) << 16);
 +
  		printImm(MI, O, imm, true);
  

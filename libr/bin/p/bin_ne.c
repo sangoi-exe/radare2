@@ -77,6 +77,9 @@ static RBinInfo *info(RBinFile *bf) {
 	r_bin_ne_obj_t *ne = bf->bo->bin_obj;
 	RBinInfo *i = R_NEW0 (RBinInfo);
 	i->bits = 16;
+	i->rclass = strdup ("ne");
+	i->has_va = true;
+	i->has_lit = true;
 	i->arch = strdup ("x86");
 	i->os = strdup (ne->os? ne->os: "os2");
 	if (ne->ne_header) {
@@ -100,7 +103,74 @@ static bool imports_vec(RBinFile *bf) {
 }
 
 static RVecRBinReloc *relocs(RBinFile *bf) {
-	return r_bin_ne_get_relocs (bf->bo->bin_obj, &bf->bo->symbols_vec, &bf->bo->sections_vec);
+	return r_bin_ne_get_relocs (bf->bo->bin_obj, &bf->bo->symbols_vec);
+}
+
+static RVecRBinReloc *patch_relocs(RBinFile *bf) {
+	RBin *b = bf->rbin;
+	r_bin_ne_obj_t *ne = bf->bo->bin_obj;
+	if (!b->iob.io || !b->iob.overlay_write_at) {
+		return NULL;
+	}
+	RVecRBinReloc *all_relocs = relocs (bf);
+	if (!all_relocs) {
+		return NULL;
+	}
+	size_t imports_size = RVecRBinImport_length (&ne->imports) * 4;
+	if (imports_size) {
+		char *uri = r_str_newf ("malloc://%zu", imports_size);
+		RIODesc *desc = b->iob.open_at (b->iob.io, uri, R_PERM_R, 0664, ne->imports_base);
+		free (uri);
+		if (!desc) {
+			R_LOG_ERROR ("Cannot map NE artificial import targets");
+			RVecRBinReloc_free (all_relocs);
+			return NULL;
+		}
+		RIOMap *map = b->iob.map_get_at (b->iob.io, ne->imports_base);
+		if (map) {
+			free (map->name);
+			map->name = strdup ("ne.imports");
+		}
+		b->iob.desc_use (b->iob.io, bf->fd);
+	}
+	RBinReloc *reloc;
+	R_VEC_FOREACH (all_relocs, reloc) {
+		ut64 target = reloc->import? reloc->laddr: reloc->addend;
+		ut8 bytes[4] = {0};
+		int size = 0;
+		switch (reloc->ntype) {
+		case LOBYTE:
+			size = 1;
+			bytes[0] = target;
+			if (reloc->additive) {
+				bytes[0] += r_buf_read8_at (ne->buf, reloc->paddr);
+			}
+			break;
+		case SEL_16:
+		case OFF_16:
+			size = 2;
+			ut16 value = reloc->ntype == SEL_16? target >> 16: target;
+			if (reloc->additive) {
+				value += r_buf_read_le16_at (ne->buf, reloc->paddr);
+			}
+			r_write_le16 (bytes, value);
+			break;
+		case POI_32:
+			size = 4;
+			if (reloc->additive) {
+				target += r_buf_read_le32_at (ne->buf, reloc->paddr);
+			}
+			r_write_le32 (bytes, target);
+			break;
+		default:
+			R_LOG_WARN ("Unsupported NE relocation patch type %" PFMT64u, reloc->ntype);
+			break;
+		}
+		if (size && !b->iob.overlay_write_at (b->iob.io, reloc->vaddr, bytes, size)) {
+			R_LOG_ERROR ("Cannot patch NE relocation at 0x%" PFMT64x, reloc->vaddr);
+		}
+	}
+	return all_relocs;
 }
 
 static bool sections_vec(RBinFile *bf) {
@@ -158,6 +228,7 @@ RBinPlugin r_bin_plugin_ne = {
 	.symbols_vec = &symbols_vec,
 	.imports_vec = &imports_vec,
 	.relocs = &relocs,
+	.patch_relocs = &patch_relocs,
 	.minstrlen = 4,
 	.load_resources = &load_resources
 };

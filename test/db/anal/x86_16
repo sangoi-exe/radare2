@@ -122,7 +122,6 @@ EOF
 EXPECT=<<EOF
 jmp 0xf0070
 EOF
-BROKEN=1
 RUN
 
 NAME=16bit segment bounds 2
@@ -347,5 +346,27 @@ EOF
 EXPECT=<<EOF
 ax,bx,cx,dx
 si,di,bp,sp
+EOF
+RUN
+
+NAME=x86-16 synthetic NE segment targets
+FILE=malloc://0x500000
+CMDS=<<EOF
+e asm.arch=x86
+e asm.bits=16
+e asm.addr.segment.bits=16
+wx 9ad7024f00 @0x10006
+?v $ij @0x10006
+wx ea551a0100 @0x4f02ee
+?v $ij @0x4f02ee
+wx e8e9ff @0x4f02fa
+pi 1 @0x4f02fa
+?v $ij @0x4f02fa
+EOF
+EXPECT=<<EOF
+0x4f02d7
+0x11a55
+call 0x4f02e6
+0x4f02e6
 EOF
 RUN

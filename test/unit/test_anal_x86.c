@@ -124,9 +124,51 @@ bool test_x86_cs_frame_pointer(void) {
 	mu_end;
 }
 
+bool test_x86_segmented_targets(void) {
+	const struct {
+		const char *hex;
+		ut64 addr;
+		int segment_bits;
+		ut64 target;
+	} cases[] = {
+		{ "e8e9ff", 0x4f02fa, 16, 0x4f02e6 },
+		{ "e9c300", 0xfffaa, 4, 0xf0070 },
+		{ "e97ae7", 0xf1911, 4, 0xf008e },
+		{ "e8faff", 0x20000, 16, 0x2fffd },
+		{ "9ad7024f00", 0x10006, 16, 0x4f02d7 },
+		{ "ea551a0100", 0x4f02ee, 16, 0x11a55 },
+		{ "9a34002001", 0x100, 4, 0x1234 },
+	};
+	const int syntax[] = { R_ARCH_SYNTAX_INTEL, R_ARCH_SYNTAX_ATT };
+	RAnal *anal = r_anal_new ();
+	mu_assert_true (r_anal_use (anal, "x86"), "select bundled Capstone x86");
+	mu_assert_true (r_anal_set_bits (anal, 16), "select 16-bit mode");
+	size_t i, j;
+	for (j = 0; j < R_ARRAY_SIZE (syntax); j++) {
+		anal->config->syntax = syntax[j];
+		for (i = 0; i < R_ARRAY_SIZE (cases); i++) {
+			anal->config->seggrn = cases[i].segment_bits;
+			ut8 bytes[8];
+			int size = r_hex_str2bin (cases[i].hex, bytes);
+			RAnalOp op = {0};
+			mu_assert_eq (r_anal_op (anal, &op, cases[i].addr, bytes, size, R_ARCH_OP_MASK_DISASM), size, "decode segmented control flow");
+			mu_assert_eq (op.jump, cases[i].target, "near wrap and far operand use the selected coordinates");
+			if (i < 4) {
+				char *target = r_str_newf ("0x%" PFMT64x, cases[i].target);
+				mu_assert_notnull (strstr (op.mnemonic, target), "printed near target agrees with analysis detail");
+				free (target);
+			}
+			r_anal_op_fini (&op);
+		}
+	}
+	r_anal_free (anal);
+	mu_end;
+}
+
 int all_tests(void) {
 	mu_run_test (test_x86_stack_access);
 	mu_run_test (test_x86_cs_frame_pointer);
+	mu_run_test (test_x86_segmented_targets);
 	return tests_passed != tests_run;
 }
 
