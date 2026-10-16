@@ -4,40 +4,82 @@ Canonical Intent Contract: [2026-10-16-native-framework-transfer.md](2026-10-16-
 
 ## NATIVE-01 — Coherent native NE loading
 
+- Executor: `/root/native_transfer_ne_worker`.
 - Objective: realize the selected synthetic segment coordinates and applied NE internal/import fixups through the existing host loader, preserving original file bytes and ordinal identity.
 - Write footprint: host `libr/bin/format/ne/ne.c`, its private `ne.h`, `libr/bin/p/bin_ne.c`, `libr/core/cbin.c`, `subprojects/packagefiles/capstone-v5/capstone-patches/fix-x86-16.patch`, `test/unit/test_bin.c`, `test/unit/test_anal_x86.c`, `test/db/formats/ne` and `test/db/anal/x86_16`. No public metadata field, other decoder, bridge, engine, instructions or lead-owned records are assigned.
 - Dependencies and parallelism: host-only implementation can run in parallel with NATIVE-02 and MCP checkout preparation. Validation uses a fresh task-private source/build export, not live source files while another Worker edits their dependencies. Cumulative bridge/MCP proof waits for integration.
 - Recon basis: `/root/native_transfer_ne_recon` established target-discriminator and ordinal-list defects, missing overlay callback, existing section/RIO/setup APIs, and the canonical Capstone16 patch's already-broken wrap case. The selected correction remains at these owners, not a new mapper/protocol.
 - Acceptance/targeted validation: coherent file↔segment coordinates, applied operands and distinct imports; the three confirmed game edges and five Johnny startup imports; nonfirst-segment near/far targets and the established wrap witness; skipped entry bundles retain ordinal identity. Use existing focused unit owners and available original-file observations. Report unavailable separate testbins fixtures; do not invent passing expectations.
-- Status: ready for Worker dispatch.
-- Result: none yet.
-- Remaining frontier: implementation, private host build, focused tests and original-input observations.
+- Status: complete and committed at host `4c1046601527cabad43231d8cf6b6fa7ea7995a7`.
+- Result: root inspected the complete nine-file task diff and verified staged/current/validated-export byte equality. Fresh full Make/private install succeeded; bin units 14/14, x86 units 3/3 and the two affected official-fixture r2r files 27/27 passed. All three original relocation edges, five distinct Johnny startup imports and an actual nonfirst-segment near CALL produced matching host references. Original hashes remain unchanged. The discovered NE permission-bit defect was corrected at the same owner. Evidence: `/home/lucas/.cache/codex/native-transfer/ne-ad9vWkxP`; official fixtures at `fixtures-vuer9mge` from `radareorg/radare2-testbins@b191240208897df3835df4647060d2c13178dd3f`. Git add warned about an ignored ancestor of the already-tracked canonical Capstone patch but did stage all nine exact paths; the verified final index needed no force-add.
+- Remaining frontier: bridge/native/MCP integration remains separate. OS instruction fixups stay unchanged; unsupported extended address relocation patch types warn and were not used by either original.
 - Stop: owner/API/architecture expansion or missing original/target evidence; no fabricated selectors, new public field, broad dependency reset or source-worktree build spill.
 
 ## NATIVE-02 — Real CALL argument SS dependencies
 
+- Executor: `/root/native_transfer_stack_worker`.
 - Objective: supply the current declared SS register to real synthesized CALL stack reads while keeping abstract stack placeholders offset-only, including late heritage/prototype reconstruction.
 - Write footprint: one new canonical engine patch `patches/0130-win16-call-stack-segment.patch`, applied after 0110/0120; its generated delta may cover `architecture.cc`, `architecture.hh`, `marshal.cc`, `funcdata.hh`, `funcdata_op.cc`, `coreaction.cc`, `fspec.cc`, x86 `x86-16.cspec` and the existing patch-supplied `src/unittests/testsegmented.cc`. No applied imported-source copies, bridge pin or bridge source are assigned.
 - Dependencies and parallelism: independent of NATIVE-01 source changes. Fresh cache-only patch replay/build with matching x86 specifications; previous proof builds remain untouched. Root integrates the engine commit/pin and matching bridge afterward.
 - Recon basis: `/root/native_transfer_stack_recon`, final Ghidra commits `b2314ae0710bace02cd110858a1a5459ae1a04c5` and `45dbf35174fc1ef00ab4ba9c9ace64559792c6ef`, current native call/placeholder owners and existing 0110 test driver. Port final metadata semantics, not the deleted CALL-local STORE search.
 - Acceptance/targeted validation: known SS binds through actual heritage; unknown SS stays unknown; near addition wraps before segmentation; real arguments remain separate from offset-only placeholder; late `forceSet` reconstruction retains selector dependence. Extend the registered native test owner and exercise the retained fill-wrapper/CALL_RETURN bytes through actual native analysis before claiming full decompilation success. XML copied into the tree is not an executed data test.
-- Status: ready for Worker dispatch.
-- Result: none yet.
-- Remaining frontier: canonical patch, fresh replay, native tests and real-byte native decompilation witness.
+- Status: complete and committed at engine `75a231058183d8a3fee02047f8eb5bd89a4e1710`.
+- Result: root inspected the complete canonical patch and actual native test output; fresh matching-x86 suite passed 12/12, including heritage/late-prototype, unknown SS, real fill-wrapper and converted-JMP/CALL_RETURN decompilation. One packaging correction removed nine whitespace-only diff-context prefixes. Fresh replay generated byte-identical source; unchanged deterministic 12/12 proof was reused, not rerun. Exact final staged whitespace check passed. Evidence roots: `/home/lucas/.cache/codex/native-transfer/stack-sfhph3o9` and `stack-packaging-z6mawnuy`.
+- Remaining frontier: matching bridge pin/build and original-image/MCP integration belong to later entries.
 - Stop: new framework/bridge-side guessed state or general store forwarding; incompatible metadata allocation without native registry evidence; source footprint expansion.
 
 ## NATIVE-03 — Native MCP checkout and workspace integration
 
+- Executors: root for completed Git/GitHub integration; `/root/native_transfer_workspace_worker` for the three declared content files.
 - Objective: establish the selected user's fork as independent `r2mcp/`, then integrate parent ignore/navigation and component guidance without changing runtime semantics in that documentary slice.
 - Write footprint: root owns GitHub fork, native Git checkout/remotes/branch and pre/post verification. Subsequent Worker content footprint is host `.gitignore`, host `AGENTS.md`, and MCP root `AGENTS.md`; the Worker cannot change Git lifecycle or runtime source. Exact native MCP baseline is inspected upstream `562c0cf23c42b65b3052f0b294d8778c20facbde`.
 - Dependencies and parallelism: root preflight must establish the exact local/remote target first. Documentary Worker files are disjoint from NATIVE-01/02. No MCP runtime validation until a separate admitted entry with stable host/plugin dependencies.
 - Recon basis: `/root/native_transfer_mcp_recon` traced canonical r2pm package to `radareorg/radare2-mcp`, inspected C/RCore/stdio/decompiler/tool lifecycle and root AGENTS; root verified the local pinned cache source. Existing native server replaces the unnecessary new Python transport proposal.
 - Acceptance/targeted validation: owned fork/parent identity, independent exact local root/remotes, root-anchored parent ignore without gitlink/tracked child contents, truthful local navigation. Runtime/tool parity is not claimed by checkout/docs.
-- Status: awaiting root read-before-write fork/checkout preflight.
-- Result: none yet.
-- Remaining frontier: external mutation receipt and fork/checkout, then bounded documentary Worker.
+- Status: complete; MCP guide committed as `d48d42b66af146edfdb5bac5b8127b911702ce8d`, host map/ignore as `706634a58f38343da6f11d0e05c7949096ad7f2a`.
+- Result: `sangoi-exe/radare2-mcp` fork ID `1422712454`, canonical parent ID `953244333`, verified owner/push permission. Independent `r2mcp/` checkout is clean on `win16-transfer` at the exact inspected baseline, with user origin and canonical upstream. The external create ran once and its exact result was read back; no parent remotes or main/master refs changed.
+- Remaining frontier: none for checkout/docs. Root inspected complete scoped staged diffs, preserved guide bodies and native ignore/tracking proof; runtime validation is not part of this entry.
 - Stop: authentication/target ambiguity, occupied local destination, incompatible existing user fork or ambiguous external result. Preserve safe state; no reset, deletion, force push or replacement target.
 
-## Not yet dispatched
+## NATIVE-04 — Qualified native helper ABI models
 
-Qualified helper/profile application and native MCP runtime/persistence remain high-level admitted work packages in the Intent Contract. The root will add bounded entries after current native-owner evidence supplies their concrete direction and footprints. This statement is not a deferral or narrowing of the required result.
+- Executor: `/root/native_transfer_abi_worker` when dispatched.
+- Objective: load the remaining established helper and selected TLINK writer conventions through the native compiler specification, preserving exact register joins, stack frames and effects rather than generic bridge conversion.
+- Write footprint: one new engine `patches/0140-borland-qualified-prototypes.patch`, with generated changes only to x86 `x86-16.cspec` and the existing patch-supplied `src/unittests/testsegmented.cc`; `tests/meson.build` may add the existing `x86-16-real.pspec` to its copied fixture list. This bounded expansion follows an actual missing-processor-fixture failure in the admitted Real Mode model test, verified by the root. No new driver or runtime API is added. Existing 0120 fmovmem and 0130 call-selector semantics remain unchanged.
+- Dependencies and parallelism: NATIVE-02 is committed and stable at `75a231058183d8a3fee02047f8eb5bd89a4e1710`; private engine replay/tests do not read live host edits. Root integrates the combined engine pin afterward.
+- Recon basis: the source extension's nine declarative prototype XML owners and current native exact-model lookup; root read all eight remaining XML definitions and verified both real/protected language IDs use this compiler specification. No new ABI or output guarantee is invented.
+- Acceptance/targeted validation: actual native model loading and parameter/return storage for the eight remaining names; correct near/far shifts/extrapop, return joins and preservation/clobber declarations; existing fmovmem and 12 native regressions retained. Use the registered native test driver with matching x86 specs; this proves native model semantics, not host recognition or caller propagation.
+- Status: complete and committed at engine `c899e59609033ff416e533cea24eab499ed469dc`.
+- Result: root inspected all model/test bytes, the one-line fixture-list correction and actual final native output. Fresh replay/build passed 14/14, including both Real/Protected model tests and the prior 12 regressions. All eight declarations match their source XML; the original fmovmem model remains unchanged. `stackshift` is preserved declared metadata ignored by the native decoder, not a fabricated runtime getter/property. Evidence: `/home/lucas/.cache/codex/native-transfer/abi-xwkq3mwo`.
+- Remaining frontier: host recognition and matching bridge/MCP integration remain separate.
+- Stop: new ABI behavior, inferred modern pointer semantics, generic conversion fallback, write/read dependency expansion or a new test driver.
+
+## NATIVE-05 — Build and exercise the existing native MCP stdio owner
+
+- Executor: `/root/native_transfer_mcp_worker` when dispatched.
+- Objective: establish native server build/protocol compatibility and actual target-qualified read observations before integrating the new host/engine behavior.
+- Write footprint: no repository source changes. Fresh task-cache MCP source/build/client outputs only, using MCP `d48d42b66af146edfdb5bac5b8127b911702ce8d` and the existing private host baseline under `/home/lucas/.cache/codex/native-workbench-probe-C1iVz7`. A discovered source correction requires a concrete root-admitted footprint first.
+- Dependencies and parallelism: NATIVE-03 is complete. This baseline protocol proof uses fixed private native libraries, not the host source being edited. Final NE/decompiler/persistence proof waits for the combined rebuild.
+- Recon basis: native MCP source/tool/lifecycle inspection and existing package-owned stdio client/tool mechanisms; no replacement transport is needed.
+- Acceptance/targeted validation: private native build, owned-process initialize/tools-list and explicit read-only binary loading/metadata/import/disassembly observations for both originals through real stdio; correct component/process/target identity and clean process closure. Clearly distinguish old loader limitations from protocol failures. No global config/install, HTTP expansion or hot-loaded Codex-tool claim.
+- Status: partially complete; exact SimTower input access is blocked by a pending current-user path-policy decision recorded in the canonical plan.
+- Result: native MCP 1.9.0 built against fixed RCore 6.2.5/ABI156; actual SDK stdio initialize, two-page 43-tool discovery, error controls, Johnny metadata/import/entry/bytes/disassembly and clean closure passed. Original descriptors/hashes were preserved. SimTower open was denied before any descriptor opened because its absolute path contains `.cache`, yet the tool reported `isError:false`; downstream reads are unrun. Both owned processes closed with exit 0. Evidence: `/home/lucas/.cache/codex/native-transfer/mcp-baseline-1xOMuQHf`. No repository source change was made.
+- Remaining frontier: current-user path-policy decision, then its exact existing-owner correction and real SimTower stdio proof; final p-code/context/project integration remains separate. The current ordinary tool catalogue lacks dedicated static-context/p-code/project operations; raw run tools were not enabled.
+- Stop: unsupported native API/dependency or stateful/auth/target ambiguity; do not patch outside an assigned source footprint or silently select a different backend.
+
+## NATIVE-06 — Native whole-family fmovmem recognition/application
+
+- Executor: `/root/native_transfer_helpers_worker` when dispatched.
+- Objective: implement the first automatic qualified helper family through the established RAnal plugin lifecycle and `a:` command boundary, applying the core/wrapper's explicit native convention names and typed storage records without destructive analysis replacement.
+- Write footprint: host `libr/anal/p/anal_borland.c`, `libr/anal/p/borland.mk`, `libr/anal/meson.build`, the plugin-pointer declaration only in `libr/include/r_anal.h`, registration lines in `dist/plugins-cfg/plugins.def.cfg` and `plugins.static.cfg`, focused `test/unit/test_anal_borland.c` and its `test/unit/meson.build` membership. No other public API, NE source, MCP/bridge/engine source or lead-owned record is assigned.
+- Dependencies and parallelism: implementation is disjoint from NATIVE-01 and NATIVE-04/05. Host production validation waits for stable NATIVE-01 source/commit; model/decompiler integration waits for NATIVE-04 and the matching bridge. Use a fresh private full-host build, not another Worker's changing source/build tree.
+- Recon basis: `/root/native_transfer_profiles_recon` plus root's direct RAnal plugin/JNI/registration, function-signature, call-convention, current I/O and `a:` dispatcher inspection. Existing signatures only locate candidates; the new cohesive Borland plugin owns qualification/application because JNI/FLIRT are not that responsibility. Reuse native type/search/function/hint/reference owners, not another parser or provenance subsystem.
+- Acceptance/targeted validation: all128 current bytes and both instruction/context sequences plus actual PUSH-CS/near-CALL relationship qualify before applying either family contract; exact89/39body extents, four-byte offset/selector record, correct core/wrapper parameter order/return/convention. Rerun is idempotent. Independently preserve conflicting names, prototypes/variables, bodies, flow/hints and references; non-equivalent existing types are not overwritten. No SourceType priority is inferred from signature origin or a generic name. Demonstrate both real SimTower copies at the new mapped addresses once the host is stable, and focused native production-boundary controls for patched bytes, internal context and independently edited state.
+- Status: partial handoff; fresh full-host Make passed at `/home/lucas/.cache/codex/native-transfer/helpers-kcsCkmVk` after two bounded local compile corrections applied before the Worker received the hold. Runtime/unit validation remains unrun. Further source edits and new validation are on hold with the canonical plan's current-user decision; retain this Worker path and its safe source/cache state.
+- Result: none yet.
+- Remaining frontier: first cohesive native plugin, focused tests and actual helper observations; other admitted helper/profile families are not silently dropped.
+- Stop: need for another owner/public API/provenance ledger or an unrepresentable native contract; report the exact boundary rather than inventing state or generic fallback.
+
+## Remaining admitted packages
+
+The other qualified helper/profile families and final native MCP/persistence integration remain high-level admitted work packages in the Intent Contract. The root will add bounded entries as the current owner evidence and completed dependencies supply their concrete direction and footprints. This is not a deferral or narrowing of the required result.

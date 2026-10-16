@@ -1,6 +1,6 @@
 # Native RE framework transfer — Intent Contract
 
-Status: active
+Status: on-hold
 Task mode: Doctrine
 Lifecycle phase: Implementation
 Strategy epoch: native-transfer-1
@@ -94,7 +94,17 @@ Non-goals include rewriting the decompiler, replacing RCore/project storage, rep
 The root-owned Microtask Program sizes implementation after activation. The runtime does not expose `update_plan`, so the one subordinate execution annex retains the current bounded footprints, dependencies, results and remaining frontier across this multi-repository task. It is not another intent or proof owner. Independent source footprints can proceed in parallel; validation waits for stable dependencies. The root retains integration, Git lifecycle and final proof.
 
 Plan Gate: `PROCEED` from `/root/native_transfer_plan_audit`, local `Senior Plan Auditor / Intent contract audit`, Doctrine / Initial; complete required Intent-field coverage, no blocking findings. The sole transition places the plan on hold in Initial; the current user's explicit conditional authorization then activates Implementation. The review's sole continuity note is resolved by recording that later authority and Code Gate choice here.
-Implementation authority: active on the actual `PROCEED`, under the current-user message at `2026-10-16T18:53:57.443-03:00` above.
+Implementation authority: obtained and initially activated on the actual `PROCEED`, under the current-user message at `2026-10-16T18:53:57.443-03:00` above; further source mutation is currently suspended by the pending decision and on-hold status.
 Code Gate: first task change-set review selected as local `Senior Code Reviewer` by that same message; no terminal result yet.
-Blocker: none at activation; execution and runtime proof remain outstanding.
-Next high-level action: dispatch the bounded NE host and call-stack engine slices and establish the selected native MCP checkout; reconcile native profile-owner evidence before dispatching that transfer.
+Blocker: current-user decision on the native MCP's path policy. The real stdio open of the supplied SimTower original is refused because `src/path.inc.c:108` unconditionally rejects hidden path components such as `.cache`; its tool response incorrectly reports `isError:false`. The root has not changed that policy or aliased/copied the input. Existing validated checkpoints and the in-flight helper validation remain preserved; no further source mutation is authorized while this decision is pending.
+Next high-level action: ask whether explicit canonical sandbox roots supplied with existing `-s` may admit hidden descendants, while retaining default hidden-path refusal and outside-root/traversal rejection. Record the user's decision before assigning the MCP correction at its existing owner; false-success reporting must be corrected with that admitted operation.
+
+## Pending current-user decision — native MCP input access
+
+Classification: `current_user_decision`, with a separately verified error-reporting defect. Required property: read both supplied original inputs through native MCP without changing or relocating the originals. Observed fact: the private native server builds and serves Johnny successfully, but rejects the exact SimTower `.cache` path before opening a descriptor. This is an actual integration conflict with an existing intentional access policy, not a claim that every hidden-path restriction is defective.
+
+Protected property and deployment: local stdio file-access scope for the current user's RE client, with originals opened read-only. The client can request a filesystem path through `open_file`. The present hidden-component rule prevents reads of hidden assets but also excludes this admitted executable; existing `-s` separately enforces a canonical root boundary. Permitting hidden descendants of an explicitly selected root changes access to those assets, so the root does not silently delete the restriction. No internet-facing or multi-tenant deployment is assumed.
+
+Recommended closure: `modify_existing_owner` at MCP `src/path.inc.c` and its direct response/test followers. Retain the default hidden-path denial when no explicit sandbox root is configured. When the operator supplies `-s`, use the existing canonical containment check to admit paths inside that selected root, including hidden components; keep absolute-path, traversal and outside-root rejection. Select a task-owned root rather than a broad home directory. Report refused/failed opens as errors, not successful tool results. This reuses the existing owner and CLI option; it adds no server, protocol, parser, fallback, path alias or global exemption.
+
+Impact if deferred: SimTower's MCP read observations and later combined workflow remain incomplete. Falsifier: successful real stdio `open_file` on that exact supplied path under the existing unmodified policy. Evidence: `/home/lucas/.cache/codex/native-transfer/mcp-baseline-1xOMuQHf`, verified source `r2mcp/src/path.inc.c:101–115`, `src/r2api.inc.c:144–238`, and `src/tools.c:1450–1515`. Current-user decision: pending; no new Gate has started and the selected first local Code Gate remains pending.
