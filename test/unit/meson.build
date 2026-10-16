@@ -4,6 +4,7 @@ if get_option('enable_tests')
     'addr_interval',
     'agraph',
     'anal_block',
+    'anal_borland',
     'anal_cc',
     'anal_class_graph',
     'anal_function',

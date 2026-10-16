@@ -1864,6 +1864,7 @@ extern RAnalPlugin r_anal_plugin_sbpf;
 extern RAnalPlugin r_anal_plugin_tcc;
 extern RAnalPlugin r_anal_plugin_gopclntab;
 extern RAnalPlugin r_anal_plugin_jni;
+extern RAnalPlugin r_anal_plugin_borland;
 extern RAnalPlugin r_anal_plugin_six;
 extern RAnalPlugin r_anal_plugin_thumb;
 extern RAnalPlugin r_anal_plugin_tp;
