@@ -1,8 +1,8 @@
 # Nested native workspace — Intent Contract
 
-Status: active
+Status: complete
 Task mode: Doctrine
-Lifecycle phase: Implementation
+Lifecycle phase: Closeout
 Strategy epoch: native-layout-1
 Plan kind: Operations / Tooling Plan
 Secondary kind: Instruction / Policy Plan
@@ -12,7 +12,7 @@ Active annexes: none
 
 Make `/home/lucas/work/radare2` the native RE workspace and the current user's normal Codex entry point. Relocate the three existing independent repositories into this exact hierarchy: radare2 at the workspace root, r2ghidra at `r2ghidra/`, and the editable native engine at `r2ghidra/ghidra-native/`. Preserve each repository's Git history, branch, remotes and task commits. Do not create a fourth repository, submodules or replacement clones.
 
-Add the two root-anchored parent ignore rules so nested repositories are not accidentally tracked by their parents. Extend the existing radare2 `AGENTS.md` into the principal workspace map while preserving its useful repo guidance. Create one `AGENTS.md` in each child repository, with explicit local ownership, conventions, navigation and validation boundaries. Keep compiler/RE knowledge implemented at its current code owners rather than duplicating it in instruction prose. Correct the one active product-document source path affected by nesting.
+Add the two root-anchored parent ignore rules so nested repositories are not accidentally tracked by their parents. Extend the existing radare2 `AGENTS.md` into the principal workspace map while preserving its useful repo guidance. Create one `AGENTS.md` in each child repository, with explicit local ownership, conventions, navigation and validation boundaries. Keep compiler/RE knowledge implemented at its current code owners rather than duplicating it in instruction prose. Correct the active product-document source paths affected by nesting.
 
 The primary kind is Operations / Tooling because the result changes the operator's workspace location and navigation, not runtime behavior. The instruction secondary aspect is material because three independent code owners will have a root/child instruction topology. It does not import a separate workflow or plan.
 
@@ -57,9 +57,9 @@ The completed first-slice plan and task log, prior reviewer ranges, rollout refe
 
 ## Scope, constraints and failure boundary
 
-Scope contains the three checkout relocations, the two parent ignore owners, three root/child `AGENTS.md` owners, the direct product-document path correction, and this task's plan/log/changelog. The destination must remain unoccupied at the operation boundary. Preserve any newly observed unrelated work; do not overwrite a destination, discard Git state, delete data, or add a fallback layout. If a move stops partway, preserve completed moves and report the exact remaining source/destination state rather than repeating an ambiguous operation.
+Scope contains the three checkout relocations, the two parent ignore owners, three root/child `AGENTS.md` owners, the direct product-document path corrections, and this task's plan/log/changelog. The destination must remain unoccupied at the operation boundary. Preserve any newly observed unrelated work; do not overwrite a destination, discard Git state, delete data, or add a fallback layout. If a move stops partway, preserve completed moves and report the exact remaining source/destination state rather than repeating an ambiguous operation.
 
-Non-goals are functional code changes, new architecture support, extension/MCP migration, changing the engine pin, rebuilding/installing, pushing, changing Codex-global instructions or runtime settings, broad README/documentation migration, unrelated cleanup, and a fourth repository. Existing test/build READMEs inspected during recon are product procedures, not replacement agent instruction owners, and remain intact.
+Non-goals are functional code changes, new architecture support, extension/MCP migration, changing the engine pin, rebuilding/installing, pushing, changing Codex-global instructions or runtime settings, broad README/documentation migration, unrelated cleanup, and a fourth repository. Existing test/build READMEs remain product procedures at their existing owners, not replacement agent instruction owners. The reviewer-enumerated XPS source-path correction does not migrate or replace that product document.
 
 After relocation, this same plan moves with the primary radare2 repository. Its final path is `/home/lucas/work/radare2/.sangoi/planning/2026-10-16-native-workspace-layout.md`; publish the updated continuity locator when that path changes. New instruction discovery in a fresh Codex session at the new root is not proven by static file review; validate it when available or disclose the new-session requirement explicitly.
 
@@ -73,8 +73,8 @@ After relocation, this same plan moves with the primary radare2 repository. Its 
 Plan Gate: `PROCEED` from `/root/native_layout_plan_audit`, local `Senior Plan Auditor / Intent contract audit`, Doctrine / Initial. The reviewer covered every required Intent field, verified the user anchors and decisive owner/path premises, and found no material findings or evidence-blocked required field. The sole matching transition places the plan on-hold in Initial, without authorizing implementation.
 Implementation authority: active under the later current-user instruction above, after the actual Plan Gate `PROCEED`.
 Relocation result: the three existing checkouts now occupy `/home/lucas/work/radare2`, `r2ghidra/`, and `r2ghidra/ghidra-native/` beneath it. Same-filesystem renames preserved every repository's exact pre-move HEAD, branch, all Git references, remotes, and root/`.git` inode identity. The three old paths are absent; the eight other reference-directory names are unchanged. The canonical plan locator was republished for the new workspace root.
-Code Gate: local `Senior Code Reviewer / Task change-set review`, explicitly selected for this task in turn `01a14679-0d44-7481-9548-2bcff2156b79`; not yet launched.
-Blocker: none at implementation start.
+Code Gate: `PROCEED_AFTER_FIXES` from `/root/native_layout_code_review`, local `Senior Code Reviewer / Task change-set review`, selected in turn `01a14679-0d44-7481-9548-2bcff2156b79`. The reviewer completed all four partitions and nine changed files plus direct followers, identifying one mechanically unequivocal correction in the newly linked bridge `r2plugin/README.md`. The Worker applied that exact one-line XPS target correction; the root verified its exact diff, resolved target and existing bridge Makefile, four console-block syntax checks, and whitespace. The sole transition's local-fix/mechanical-verification obligations are satisfied; it enters Closeout without another semantic review. The underlying verdict remains `PROCEED_AFTER_FIXES`, not `PROCEED`.
+Blocker: none for the completed layout task.
 Implementation result: all three scoped instruction owners and both parent ignore rules are in place. The active product document uses the editable direct-child engine source while retaining the managed build destination and unchanged pin. Native Git checks verified independent roots, preserved ancestry/branches/remotes, parent ignore behavior, and no selected nested tracked contents or gitlinks. Original host guidance is unchanged below the new map; local instruction links resolve and all three product shell blocks pass syntax checks. Runtime/build sources and pin are unchanged; no build or game replay was run.
-Next high-level action: checkpoint the coherent owner changes and run the selected local Code Gate on the committed layout/instruction object. Fresh-session automatic instruction discovery remains unverified and must be disclosed at handoff.
-Review status: Plan Gate complete; implementation statically validated; local Code Gate pending.
+Next high-level action: no further mutation is authorized by this completed task. Use `/home/lucas/work/radare2` for the next user session; fresh-session automatic instruction discovery remains unverified. Publishing commits or changing runtime behavior requires separate authority.
+Review status: Plan Gate complete; local Code Gate semantically complete; its enumerated local fix is applied and mechanically verified. Only factual closeout bookkeeping follows the reviewed object and exact correction.
