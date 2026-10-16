@@ -4,6 +4,11 @@
 #include "../i/private.h"
 #include "../format/ne/ne.h"
 
+static Sdb *get_sdb(RBinFile *bf) {
+	r_bin_ne_obj_t *ne = bf && bf->bo? bf->bo->bin_obj: NULL;
+	return ne? ne->kv: NULL;
+}
+
 static bool check(RBinFile *bf, RBuffer *b) {
 	ut64 length = r_buf_size (b);
 	if (length < 0x40) {
@@ -218,6 +223,7 @@ RBinPlugin r_bin_plugin_ne = {
 		.author = "GustavoLCR",
 		.license = "LGPL-3.0-only",
 	},
+	.get_sdb = &get_sdb,
 	.check = &check,
 	.load = &load,
 	.destroy = &destroy,

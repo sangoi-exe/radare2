@@ -32,6 +32,7 @@ typedef struct {
 	ut8 *entry_table;
 	ut8 *resident_name_table;
 	RBuffer *buf;
+	Sdb *kv;
 	RList *resources;
 	RVecNEEntry entries; // Indexed by entry ordinal minus one, including unused ordinals.
 	RVecRBinImport imports;

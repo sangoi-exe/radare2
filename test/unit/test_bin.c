@@ -112,6 +112,7 @@ bool test_r_bin_ne_segmented_relocations(void) {
 		2, 0, 0x2c, 0, 2, 0, 0, 0,
 		5, 0, 0x2e, 0, 0xff, 0, 2, 0,
 		3, 7, 0x31, 0, 1, 0, 0, 0,
+		0x7f, 0x80, 0x36, 0, 2, 0, 0, 0,
 	};
 	r_write_le16 (bytes + 0x140, sizeof (records) / 8);
 	memcpy (bytes + 0x142, records, sizeof (records));
@@ -170,6 +171,47 @@ bool test_r_bin_ne_segmented_relocations(void) {
 	RVecRBinReloc *relocs = r_bin_patch_relocs (r_bin_cur (bin));
 	mu_assert_notnull (relocs, "patch NE relocations");
 	mu_assert_eq (RVecRBinReloc_length (relocs), 9, "expanded relocation chain, no undefined ordinal or OS import");
+	RBinFile *bf = r_bin_cur (bin);
+	Sdb *db = bf->sdb_info;
+	mu_assert_notnull (db, "NE parser information database");
+	mu_assert ("NE information is reachable through the plugin boundary", db == bf->bo->plugin->get_sdb (bf));
+	mu_assert_eq (sdb_num_get (db, "ne.relocs.count", NULL), 11, "all original records remain observable");
+	mu_assert_eq (sdb_num_get (db, "ne.reloc.1.count", NULL), 11, "per-segment raw record count");
+	mu_assert_eq (sdb_num_get (db, "ne.reloc.1.0.paddr", NULL), 0x142, "raw record file coordinate");
+	mu_assert_eq (sdb_num_get (db, "ne.reloc.1.0.source_segment", NULL), 1, "original source segment");
+	mu_assert_eq (sdb_num_get (db, "ne.reloc.1.0.record_index", NULL), 0, "record index is zero-based");
+	mu_assert_eq (sdb_num_get (db, "ne.reloc.1.0.type", NULL), 3, "original source type");
+	mu_assert_eq (sdb_num_get (db, "ne.reloc.1.0.source_offset", NULL), 1, "original chain head survives expansion");
+	mu_assert_eq (sdb_num_get (db, "ne.reloc.1.0.target_word0", NULL), 2, "direct target discriminator");
+	mu_assert_eq (sdb_num_get (db, "ne.reloc.1.0.target_word1", NULL), 0, "direct target offset");
+	mu_assert_eq (sdb_num_get (db, "ne.reloc.1.0.application_count", NULL), 2, "one raw record has two expanded applications");
+	mu_assert_eq (sdb_num_get (db, "ne.reloc.1.0.application.0.paddr", NULL), 0x101, "application physical source");
+	mu_assert_eq (sdb_num_get (db, "ne.reloc.1.0.application.1.vaddr", NULL), 0x10011, "chained application virtual source");
+	mu_assert_eq (sdb_num_get (db, "ne.reloc.1.0.application.1.target_vaddr", NULL), 0x20000, "chained application resolved target");
+	mu_assert_eq (sdb_num_get (db, "ne.reloc.1.0.application.0.width", NULL), 4, "native relocation field width");
+	mu_assert_streq (sdb_const_get (db, "ne.reloc.1.0.application.0.original", NULL), "11000000", "original chain link, not patched memory");
+	mu_assert_streq (sdb_const_get (db, "ne.reloc.1.0.application.1.original", NULL), "ffff0000", "original chained field bytes");
+	mu_assert_eq (sdb_num_get (db, "ne.reloc.1.1.target_word0", NULL), 0xff, "movable ordinal discriminator");
+	mu_assert_eq (sdb_num_get (db, "ne.reloc.1.1.target_word1", NULL), 3, "original ordinal is independent of resolved coordinates");
+	mu_assert_eq (sdb_num_get (db, "ne.reloc.1.1.target_vaddr", NULL), 0x20010, "ordinal resolves through the native entry owner");
+	mu_assert_eq (sdb_num_get (db, "ne.reloc.1.2.flags", NULL), 1, "original import flags");
+	mu_assert_eq (sdb_num_get (db, "ne.reloc.1.2.import_ordinal", NULL), 91, "qualified import ordinal");
+	mu_assert_streq (sdb_const_get (db, "ne.reloc.1.2.import_name", NULL), RVecRBinImport_at (imports, 0)->name->oname, "resolved import identity");
+	mu_assert_eq (sdb_num_get (db, "ne.reloc.1.2.application.0.target_vaddr", NULL), 0x30000, "import application target");
+	mu_assert_eq (sdb_num_get (db, "ne.reloc.1.6.flags", NULL), 4, "original additive flags");
+	mu_assert_eq (sdb_num_get (db, "ne.reloc.1.6.additive", NULL), 1, "native additive interpretation");
+	mu_assert_streq (sdb_const_get (db, "ne.reloc.1.6.application.0.original", NULL), "0500", "original additive field bytes");
+	mu_assert_eq (sdb_num_get (db, "ne.reloc.1.8.source_offset", NULL), 0x2e, "unresolved source remains observable");
+	mu_assert_eq (sdb_num_get (db, "ne.reloc.1.8.target_word1", NULL), 2, "unresolved ordinal remains original");
+	mu_assert_streq (sdb_const_get (db, "ne.reloc.1.8.application_count", NULL), "0", "unresolved ordinal has no fabricated application");
+	mu_assert_null (sdb_const_get (db, "ne.reloc.1.8.target_vaddr", NULL), "unresolved target remains unknown");
+	mu_assert_eq (sdb_num_get (db, "ne.reloc.1.9.flags", NULL), 7, "OS fixup retains full flags");
+	mu_assert_eq (sdb_num_get (db, "ne.reloc.1.9.target_word0", NULL), 1, "OS target word remains original");
+	mu_assert_eq (sdb_num_get (db, "ne.reloc.1.9.application_count", NULL), 0, "OS fixup is not an applied address relocation");
+	mu_assert_null (sdb_const_get (db, "ne.reloc.1.9.import_name", NULL), "OS fixup does not invent an import");
+	mu_assert_eq (sdb_num_get (db, "ne.reloc.1.10.type", NULL), 0x7f, "unsupported type remains observable");
+	mu_assert_eq (sdb_num_get (db, "ne.reloc.1.10.flags", NULL), 0x80, "unknown flag bits remain original");
+	mu_assert_eq (sdb_num_get (db, "ne.reloc.1.10.application_count", NULL), 0, "unsupported type has no fabricated application");
 	ut8 patched[0x40];
 	mu_assert_true (r_io_read_at (io, 0x10000, patched, sizeof (patched)), "read relocated analysis view");
 	mu_assert_eq (r_read_le32 (patched + 1), 0x20000, "movable source uses direct target discriminator");

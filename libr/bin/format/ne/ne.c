@@ -501,7 +501,41 @@ static RBinImport *ne_reloc_import(r_bin_ne_obj_t *bin, NE_image_reloc_item *rel
 	return imp;
 }
 
+static void ne_reloc_record(r_bin_ne_obj_t *bin, const char *key, const NE_image_reloc_item *rel, ut64 paddr, size_t segment, int index) {
+	r_strf_buffer (128);
+	sdb_num_set (bin->kv, r_strf ("%s.paddr", key), paddr, 0);
+	sdb_num_set (bin->kv, r_strf ("%s.source_segment", key), segment, 0);
+	sdb_num_set (bin->kv, r_strf ("%s.record_index", key), index, 0);
+	sdb_num_set (bin->kv, r_strf ("%s.type", key), rel->type, 0);
+	sdb_num_set (bin->kv, r_strf ("%s.flags", key), rel->flags, 0);
+	sdb_num_set (bin->kv, r_strf ("%s.source_offset", key), rel->offset, 0);
+	sdb_num_set (bin->kv, r_strf ("%s.target_word0", key), rel->index, 0);
+	sdb_num_set (bin->kv, r_strf ("%s.target_word1", key), rel->func_ord, 0);
+	sdb_num_set (bin->kv, r_strf ("%s.additive", key), !!(rel->flags & ADDITIVE), 0);
+	sdb_num_set (bin->kv, r_strf ("%s.application_count", key), 0, 0);
+}
+
+static void ne_reloc_application(r_bin_ne_obj_t *bin, const char *record_key, size_t index, const RBinReloc *reloc, ut64 target) {
+	r_strf_buffer (128);
+	r_strf_var (key, 96, "%s.application.%zu", record_key, index);
+	sdb_num_set (bin->kv, r_strf ("%s.paddr", key), reloc->paddr, 0);
+	sdb_num_set (bin->kv, r_strf ("%s.vaddr", key), reloc->vaddr, 0);
+	sdb_num_set (bin->kv, r_strf ("%s.target_vaddr", key), target, 0);
+	int width = reloc->type / 8;
+	sdb_num_set (bin->kv, r_strf ("%s.width", key), width, 0);
+	ut8 original[6];
+	if (r_buf_read_at (bin->buf, reloc->paddr, original, width) == width) {
+		char hex[13];
+		r_hex_bin2str (original, width, hex);
+		sdb_set (bin->kv, r_strf ("%s.original", key), hex, 0);
+	}
+	sdb_num_set (bin->kv, r_strf ("%s.application_count", record_key), index + 1, 0);
+}
+
 static void ne_load_relocs(r_bin_ne_obj_t *bin) {
+	r_strf_buffer (128);
+	size_t record_count = 0;
+	sdb_num_set (bin->kv, "ne.relocs.count", 0, 0);
 	ut64 bufsz = r_buf_size (bin->buf);
 	HtUU *imports_by_key = ht_uu_new0 ();
 	if (!imports_by_key) {
@@ -531,12 +565,17 @@ static void ne_load_relocs(r_bin_ne_obj_t *bin) {
 			R_LOG_WARN ("Truncated NE relocation records for segment %zu", index + 1);
 			continue;
 		}
+		sdb_num_set (bin->kv, r_strf ("ne.reloc.%zu.count", index + 1), 0, 0);
 		int i;
 		for (i = 0; i < count; i++, off += sizeof (NE_image_reloc_item)) {
 			NE_image_reloc_item rel = {0};
 			if (r_buf_fread_at (bin->buf, off, (ut8 *)&rel, "2c3s", 1) != sizeof (rel)) {
 				break;
 			}
+			r_strf_var (record_key, 64, "ne.reloc.%zu.%d", index + 1, i);
+			ne_reloc_record (bin, record_key, &rel, off, index + 1, i);
+			record_count++;
+			sdb_num_set (bin->kv, r_strf ("ne.reloc.%zu.count", index + 1), i + 1, 0);
 			RBinReloc reloc = {0};
 			reloc.ntype = rel.type;
 			switch (rel.type) {
@@ -587,7 +626,15 @@ static void ne_load_relocs(r_bin_ne_obj_t *bin) {
 				R_LOG_WARN ("Unresolved NE relocation target at 0x%" PFMT64x, off);
 				continue;
 			}
+			sdb_num_set (bin->kv, r_strf ("%s.target_vaddr", record_key), target, 0);
+			if (reloc.import) {
+				sdb_set (bin->kv, r_strf ("%s.import_name", record_key), r_bin_name_tostring (reloc.import->name), 0);
+				if ((rel.flags & 3) == IMPORTED_ORD) {
+					sdb_num_set (bin->kv, r_strf ("%s.import_ordinal", record_key), rel.func_ord, 0);
+				}
+			}
 			reloc.additive = !!(rel.flags & ADDITIVE);
+			size_t application_count = 0;
 			ut32 source = rel.offset;
 			RBitset *visited = r_bitset_new ();
 			while (source < size && r_bitset_set (visited, source)) {
@@ -602,6 +649,7 @@ static void ne_load_relocs(r_bin_ne_obj_t *bin) {
 					break;
 				}
 				*copy = reloc;
+				ne_reloc_application (bin, record_key, application_count++, &reloc, target);
 				if (reloc.import) {
 					copy->import = r_bin_import_clone (reloc.import);
 				}
@@ -616,6 +664,7 @@ static void ne_load_relocs(r_bin_ne_obj_t *bin) {
 			r_bitset_free (visited);
 		}
 	}
+	sdb_num_set (bin->kv, "ne.relocs.count", record_count, 0);
 	ht_uu_free (imports_by_key);
 }
 
@@ -714,6 +763,7 @@ void __init(RBuffer *buf, r_bin_ne_obj_t *bin) {
 
 void r_bin_ne_free(r_bin_ne_obj_t *bin) {
 	r_list_free (bin->resources);
+	sdb_free (bin->kv);
 	RVecNEEntry_fini (&bin->entries);
 	RVecRBinImport_fini (&bin->imports);
 	RVecRBinReloc_free (bin->relocs);
@@ -726,6 +776,7 @@ void r_bin_ne_free(r_bin_ne_obj_t *bin) {
 
 r_bin_ne_obj_t *r_bin_ne_new_buf(RBuffer *buf, bool verbose) {
 	r_bin_ne_obj_t *bin = R_NEW0 (r_bin_ne_obj_t);
+	bin->kv = sdb_new0 ();
 	RVecNEEntry_init (&bin->entries);
 	RVecRBinImport_init (&bin->imports);
 	__init (buf, bin);

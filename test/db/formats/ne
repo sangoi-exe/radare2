@@ -164,3 +164,42 @@ format   ne
 2
 EOF
 RUN
+
+NAME=NE native relocation observations survive overlay application
+FILE=bins/ne/anim8.exe
+ARGS=-e bin.relocs.apply=true
+CMDS=<<EOF
+ik info/ne.relocs.count
+ik info/ne.reloc.1.0.paddr
+ik info/ne.reloc.1.0.type
+ik info/ne.reloc.1.0.flags
+ik info/ne.reloc.1.0.source_segment
+ik info/ne.reloc.1.0.source_offset
+ik info/ne.reloc.1.0.target_word0
+ik info/ne.reloc.1.0.target_word1
+ik info/ne.reloc.1.0.import_name
+ik info/ne.reloc.1.0.import_ordinal
+ik info/ne.reloc.1.0.application_count
+ik info/ne.reloc.1.0.application.0.vaddr
+ik info/ne.reloc.1.0.application.0.target_vaddr
+ik info/ne.reloc.1.0.application.0.original
+p8 4 @0x10001
+EOF
+EXPECT=<<EOF
+718
+0x5ef0
+0x3
+0x1
+0x1
+0x1
+0x1
+0x5b
+KERNEL.INITTASK
+0x5b
+1
+0x10001
+0x30000
+ffff0000
+00000300
+EOF
+RUN
