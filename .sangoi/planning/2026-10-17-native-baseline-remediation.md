@@ -102,4 +102,4 @@ The active execution annex is `.sangoi/planning/2026-10-17-native-baseline-remed
 
 Runtime continuity caveat: the on-disk resident/shared instruction files now describe automatic implementation activation after PROCEED, while this session's injected shared instructions still require a later current-user authorization. Do not treat the revised disk instructions as active without the required session reload. This task does not edit the global instruction corpus or use that drift as an override.
 
-Blocker: none for the selected Route A. The exact footprint uses the existing opaque per-object slot as one ABI-preserving private sidecar with independent trycatch and loader-baseline members. Next high-level action: dispatch the bounded Route A Worker entry.
+Blocker: none. Route A is committed at host `374cd7d` and its focused host validation passes. Next high-level action: run the fresh combined host, bridge, engine and MCP qualification before fixing the Code Gate candidate.
