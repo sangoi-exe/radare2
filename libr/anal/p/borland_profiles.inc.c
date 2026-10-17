@@ -49,7 +49,7 @@ static int borland_profiles(RAnal *anal) {
 	int count = 0;
 	size_t i;
 	for (i = 0; i < R_ARRAY_SIZE (scrantic_functions); i++) {
-		bool applied = profile_function (&ctx, scrantic_functions[i].start, scrantic_functions[i].end - scrantic_functions[i].start, scrantic_functions[i].name, scrantic_functions[i].known_zero, scrantic_functions[i].comment);
+		bool applied = profile_function (&ctx, scrantic_functions[i].start, scrantic_functions[i].end - scrantic_functions[i].start, scrantic_functions[i].name, scrantic_functions[i].known_zero? 0: R_ANAL_CC_STACK_POP_UNKNOWN, scrantic_functions[i].comment);
 		if (applied) {
 			accepted |= 1u << i;
 			count++;

@@ -9,21 +9,22 @@
 #define PROFILE_ADDR 0x10000
 #define PROFILE_NAME "qualified_test_profile"
 
-static BorlandProfileContext local_profile(void) {
+static BorlandProfileContext local_profile_bytes(const ut8 *bytes, int size) {
 	RCore *core = r_core_new ();
 	core->io->va = true;
-	RIODesc *desc = r_io_open_at (core->io, "malloc://64", R_PERM_RWX, 0, PROFILE_ADDR);
+	char *uri = r_str_newf ("malloc://%d", size);
+	RIODesc *desc = r_io_open_at (core->io, uri, R_PERM_RWX, 0, PROFILE_ADDR);
+	free (uri);
 	r_config_set (core->config, "asm.arch", "x86");
 	r_config_set_i (core->config, "asm.bits", 16);
-	ut8 bytes[64] = { 0x55, 0x8b, 0xec, 0x74, 0x01, 0x90, 0x5d, 0xcb };
-	r_io_write_at (core->io, PROFILE_ADDR, bytes, sizeof (bytes));
+	r_io_write_at (core->io, PROFILE_ADDR, bytes, size);
 	desc->perm = R_PERM_R;
 	static RBinPlugin plugin = { .meta = { .name = "ne" } };
 	RBinFile *file = R_NEW0 (RBinFile);
 	file->bo = R_NEW0 (RBinObject);
 	file->bo->plugin = &plugin;
 	file->bo->relocs = RVecRBinReloc_new ();
-	file->buf = r_buf_new_with_bytes (bytes, sizeof (bytes));
+	file->buf = r_buf_new_with_bytes (bytes, size);
 	file->fd = desc->fd;
 	file->sdb_info = sdb_new0 ();
 	file->rbin = core->bin;
@@ -32,10 +33,15 @@ static BorlandProfileContext local_profile(void) {
 	RBinSection *section = RVecRBinSection_emplace_back (&file->bo->sections_vec);
 	section->name = strdup ("code");
 	section->vaddr = PROFILE_ADDR;
-	section->size = section->vsize = sizeof (bytes);
+	section->size = section->vsize = size;
 	section->perm = R_PERM_RX;
 	sdb_num_set (file->sdb_info, "ne.reloc.1.count", 0, 0);
 	return (BorlandProfileContext){ core->anal, file, file->sdb_info };
+}
+
+static BorlandProfileContext local_profile(void) {
+	ut8 bytes[64] = { 0x55, 0x8b, 0xec, 0x74, 0x01, 0x90, 0x5d, 0xcb };
+	return local_profile_bytes (bytes, sizeof (bytes));
 }
 
 static void local_free(BorlandProfileContext *ctx) {
@@ -51,7 +57,7 @@ static void local_free(BorlandProfileContext *ctx) {
 }
 
 static bool local_apply(BorlandProfileContext *ctx, bool known_zero) {
-	return profile_function (ctx, 0, 8, PROFILE_NAME, known_zero, "qualified local extent; no modern ABI");
+	return profile_function (ctx, 0, 8, PROFILE_NAME, known_zero? 0: R_ANAL_CC_STACK_POP_UNKNOWN, "qualified local extent; no modern ABI");
 }
 
 static int reference_type(RAnal *anal, ut64 from, ut64 to) {
@@ -225,8 +231,51 @@ static bool test_profile_mapping_preservation(void) {
 	mu_end;
 }
 
-static RCore *original_core(void) {
-	const char *path = getenv ("R2_TEST_SCRANTIC");
+static bool test_profile_current_without_code(void) {
+	BorlandProfileContext ctx = local_profile ();
+	ut8 current[64];
+	HelperOp ops[64];
+	mu_assert_true (profile_current (&ctx, 0, 64, PROFILE_ADDR, current), "raw current bytes qualify without complete instruction coverage");
+	mu_assert_false (profile_code (&ctx, 63, 1, PROFILE_ADDR + 63, ops), "one trailing opcode byte is not a complete instruction");
+	mu_assert_true (profile_current (&ctx, 63, 1, PROFILE_ADDR + 63, current), "same partial observation qualifies as bytes only");
+	mu_assert_null (r_anal_get_function_at (ctx.anal, PROFILE_ADDR), "byte/code qualification creates no function");
+	r_anal_hint_set_bits (ctx.anal, PROFILE_ADDR + 63, 32);
+	mu_assert_false (profile_current (&ctx, 0, 64, PROFILE_ADDR, current), "byte-only observations retain internal context checks");
+	mu_assert_true (profile_code (&ctx, 0, 8, PROFILE_ADDR, ops), "context beyond the selected window is not its context");
+	r_anal_hint_set_bits (ctx.anal, PROFILE_ADDR + 3, 32);
+	mu_assert_false (profile_code (&ctx, 0, 8, PROFILE_ADDR, ops), "code uses the same interior context refusal");
+	local_free (&ctx);
+	mu_end;
+}
+
+static bool test_profile_long_body_and_integer_purge(void) {
+	static const int purges[] = { 6, 10, 12 };
+	int i;
+	for (i = 0; i < R_ARRAY_SIZE (purges); i++) {
+		ut8 bytes[256];
+		memset (bytes, 0x90, sizeof (bytes));
+		bytes[253] = 0xc2;
+		bytes[254] = purges[i];
+		bytes[255] = 0;
+		BorlandProfileContext ctx = local_profile_bytes (bytes, sizeof (bytes));
+		mu_assert_true (profile_function (&ctx, 0, sizeof (bytes), PROFILE_NAME, purges[i], NULL), "long complete body with exact integer purge");
+		RAnalFunction *fcn = r_anal_get_function_at (ctx.anal, PROFILE_ADDR);
+		mu_assert_eq (r_anal_function_realsize (fcn), sizeof (bytes), "body has no 128-byte ceiling");
+		mu_assert_eq (fcn->meta.stack_pop, purges[i], "known nonzero purge");
+		mu_assert_true (profile_function (&ctx, 0, sizeof (bytes), PROFILE_NAME, purges[i], NULL), "long body rerun retains instruction boundaries");
+		fcn->meta.stack_pop = 0;
+		mu_assert_false (profile_function (&ctx, 0, sizeof (bytes), PROFILE_NAME, purges[i], NULL), "independent known-zero conflicts with nonzero source purge");
+		mu_assert_eq (fcn->meta.stack_pop, 0, "conflicting integer retained");
+		mu_assert_true (profile_function (&ctx, 0, sizeof (bytes), PROFILE_NAME, R_ANAL_CC_STACK_POP_UNKNOWN, NULL), "UNKNOWN does not override zero");
+		RAnalBlock *bb = r_list_first (fcn->bbs);
+		r_anal_bb_set_offset (bb, 200, 201);
+		mu_assert_false (profile_function (&ctx, 0, sizeof (bytes), PROFILE_NAME, R_ANAL_CC_STACK_POP_UNKNOWN, NULL), "long-body internal instruction edits preserved");
+		local_free (&ctx);
+	}
+	mu_end;
+}
+
+static RCore *original_core_path(const char *path) {
 	if (!path) {
 		return NULL;
 	}
@@ -238,6 +287,148 @@ static RCore *original_core(void) {
 	}
 	r_config_set_b (core->config, "io.va", true);
 	return core;
+}
+
+static RCore *original_core(void) {
+	return original_core_path (getenv ("R2_TEST_SCRANTIC"));
+}
+
+static const BorlandProfileRange simtower_main_ranges[] = { { 0x420a, 26 }, { 0x426e, 1069 } };
+
+static bool simtower_main(BorlandProfileContext *ctx) {
+	return profile_function_ranges (ctx, simtower_main_ranges, R_ARRAY_SIZE (simtower_main_ranges), "simtower_crt45_candidate_VPRINTER", 12, "Selected exact union; not full CRT semantics.");
+}
+
+static bool simtower_context(RCore *core, BorlandProfileContext *ctx) {
+	return profile_identity (core->anal, ctx, "ne", 6566400, "2825a3c53f77945c63b6d72e26faa7dde5ddd56c31ca668e67a12576d7feca96");
+}
+
+static bool test_simtower_selected_code(void) {
+	if (!getenv ("R2_TEST_SIMTOWER")) {
+		eprintf ("SimTower selected-code original proof not run: set R2_TEST_SIMTOWER to the read-only original\n");
+		mu_end;
+	}
+	RCore *core = original_core_path (getenv ("R2_TEST_SIMTOWER"));
+	mu_assert_notnull (core, "real SimTower native load");
+	BorlandProfileContext ctx;
+	mu_assert_true (simtower_context (core, &ctx), "literal SimTower original identity");
+	mu_assert_eq (profile_mapped (&ctx, 0x2200, 378, true), 0x10000, "canonical startup mapping");
+	ut8 startup_bytes[378];
+	mu_assert_true (profile_current (&ctx, 0x2200, 378, 0x10000, startup_bytes), "current relocated startup bytes and context");
+	HelperOp startup[378];
+	mu_assert_true (profile_code (&ctx, 0x2200, 378, 0x10000, startup), "complete startup observation beyond former ceiling");
+	mu_assert_null (r_anal_get_function_at (core->anal, 0x10000), "observed startup is not an invented complete function");
+	ut8 current[70];
+	mu_assert_true (profile_current (&ctx, 0x65030, 70, 0x520030, current), "data bytes use the same native original/current qualifier");
+	mu_assert_true (profile_current (&ctx, 0x6029a, 5, 0x4f009a, current), "separate selector/offset current fields qualify without code coverage");
+	mu_assert_true (profile_function (&ctx, 0x4224, 13, "simtower_vprinter_scan_entry", R_ANAL_CC_STACK_POP_UNKNOWN, NULL), "independent scanner");
+	mu_assert_true (profile_function (&ctx, 0x423a, 52, "simtower_vprinter_flush_entry", R_ANAL_CC_STACK_POP_UNKNOWN, NULL), "independent flush and shared RET");
+	mu_assert_true (profile_function (&ctx, 0x4231, 9, "simtower_vprinter_emit_entry", R_ANAL_CC_STACK_POP_UNKNOWN, NULL), "exclusive emitter has valid external edges");
+	RAnalFunction *flush = r_anal_get_function_at (core->anal, 0x1203a);
+	RAnalFunction *emitter = r_anal_get_function_at (core->anal, 0x12031);
+	RAnalBlock *emit = r_list_first (emitter->bbs);
+	mu_assert_eq (emit->jump, 0x1206d, "emitter conditional edge to shared RET");
+	mu_assert_eq (emit->fail, 0x1203a, "emitter falls through to separate flush");
+	mu_assert_eq (r_anal_function_realsize (emitter), 9, "external edges do not absorb flush");
+	mu_assert_true (simtower_main (&ctx), "complete VPRINTER exact union");
+	RAnalFunction *main = r_anal_get_function_at (core->anal, 0x1200a);
+	mu_assert_eq (r_anal_function_realsize (main), 1095, "union byte count excludes74 independent bytes");
+	RListIter *iter;
+	RAnalBlock *bb;
+	r_list_foreach (main->bbs, iter, bb) {
+		mu_assert_true (bb->addr + bb->size <= 0x12024 || bb->addr >= 0x1206e, "no main block owns scanner/emitter/flush/shared RET");
+	}
+	RAnalBlock *entry = r_list_first (main->bbs);
+	mu_assert_eq (entry->jump, 0x1206e, "original EB4A remains a branch to the second range");
+	mu_assert_eq (R_ANAL_REF_TYPE_MASK (reference_type (core->anal, 0x12022, 0x1206e)), R_ANAL_REF_TYPE_CODE, "union JMP is not rewritten as a call");
+	mu_assert_ptreq (r_anal_get_function_at (core->anal, 0x1203a), flush, "flush owner retained");
+	mu_assert_true (simtower_main (&ctx), "exact union rerun");
+	mu_assert_ptreq (r_anal_get_function_at (core->anal, 0x1200a), main, "union not recreated");
+	r_core_cmd0 (core, "afbt tbl=0x1249b esz=2 n=24 base=0x10000 @0x120db");
+	RList *dispatch_blocks = r_anal_get_blocks_in (core->anal, 0x120db);
+	RAnalBlock *dispatch = r_list_first (dispatch_blocks);
+	mu_assert_notnull (dispatch, "actual dispatch instruction block");
+	RAnalSwitchOp *switch_op = dispatch->switch_op;
+	mu_assert_notnull (switch_op, "native switch owner reads actual24-WORD table");
+	mu_assert_eq (r_list_length (switch_op->cases), 24, "native switch retains24 cells including repeated targets");
+	int switch_reference = reference_type (core->anal, 0x120db, 0x120f9);
+	mu_assert_eq (R_ANAL_REF_TYPE_MASK (switch_reference), R_ANAL_REF_TYPE_CODE, "native switch has a real case reference");
+	mu_assert_true (simtower_main (&ctx), "independent native switch metadata does not alone reject the exact body");
+	mu_assert_ptreq (dispatch->switch_op, switch_op, "switch metadata is not deleted/recreated");
+	mu_assert_eq (r_list_length (switch_op->cases), 24, "independent switch cases retained");
+	mu_assert_eq (reference_type (core->anal, 0x120db, 0x120f9), switch_reference, "native switch reference retained");
+	r_list_free (dispatch_blocks);
+	mu_assert_true (profile_function (&ctx, 0x5024, 69, "simtower_sprintf_copy_callback", 10, NULL), "actual known callback purge10");
+	mu_assert_true (profile_function (&ctx, 0x606f, 124, "simtower_crt45_candidate_exit_local_helper", 6, NULL), "actual known EXIT local purge6");
+	mu_assert_eq (main->meta.stack_pop, 12, "actual VPRINTER purge12");
+	mu_assert_eq (r_anal_get_function_at (core->anal, 0x12e24)->meta.stack_pop, 10, "callback purge is distinct");
+	mu_assert_eq (r_anal_get_function_at (core->anal, 0x13e6f)->meta.stack_pop, 6, "EXIT purge is distinct");
+	mu_assert_true (profile_number_is (&ctx, "ne.reloc.1.6", "flags", 7), "actual OS instruction-fixup record");
+	mu_assert_true (profile_number_is (&ctx, "ne.reloc.1.6", "application_count", 0), "native loader intentionally does not address-relocate OS instructions");
+	mu_assert_true (profile_current (&ctx, 0x23a9, 2, 0x101a9, current), "unchanged OS instruction bytes qualify against original");
+	ut8 patch = current[0] ^ 0xff;
+	core->anal->iob.overlay_write_at (core->io, 0x101a9, &patch, 1);
+	mu_assert_false (profile_current (&ctx, 0x23a9, 2, 0x101a9, current), "OS instruction patches are not normalized away");
+	r_core_free (core);
+	mu_end;
+}
+
+static bool test_simtower_code_preservation(void) {
+	if (!getenv ("R2_TEST_SIMTOWER")) {
+		mu_end;
+	}
+	int scenario;
+	for (scenario = 0; scenario < 5; scenario++) {
+		RCore *core = original_core_path (getenv ("R2_TEST_SIMTOWER"));
+		mu_assert_notnull (core, "read-only original for preservation");
+		BorlandProfileContext ctx;
+		mu_assert_true (simtower_context (core, &ctx), "preservation original identity");
+		ut8 entry_bytes[26];
+		mu_assert_eq (profile_mapped (&ctx, 0x420a, 26, true), 0x1200a, "canonical main entry mapping");
+		mu_assert_true (profile_current (&ctx, 0x420a, 26, 0x1200a, entry_bytes), "current main entry bytes and context");
+		mu_assert_true (simtower_main (&ctx), "initial exact main body");
+		RAnalFunction *fcn = r_anal_get_function_at (core->anal, 0x1200a);
+		RAnalBlock *entry = r_list_first (fcn->bbs);
+		switch (scenario) {
+		case 0: r_anal_hint_set_type (core->anal, 0x12022, R_ANAL_OP_TYPE_CALL); break;
+		case 1: entry->jump = 0x12024; break;
+		case 2: fcn->meta.stack_pop = 0; break;
+		case 3: r_anal_hint_set_bits (core->anal, 0x1200b, 32); r_anal_hint_set_bits (core->anal, 0x1200c, 16); break;
+		case 4: {
+			ut8 zero = 0;
+			core->anal->iob.overlay_write_at (core->io, 0x12499, &zero, 1);
+			break;
+		}
+		}
+		ut64 jump = entry->jump;
+		int pop = fcn->meta.stack_pop;
+		mu_assert_false (simtower_main (&ctx), "override-only hint, flow, cleanup, context or RET12-to-RET0 patch refuses");
+		mu_assert_ptreq (r_anal_get_function_at (core->anal, 0x1200a), fcn, "conflicted function retained");
+		mu_assert_eq (entry->jump, jump, "independent flow retained");
+		mu_assert_eq (fcn->meta.stack_pop, pop, "independent cleanup retained");
+		mu_assert_eq (r_anal_function_realsize (fcn), 1095, "conflicted union remains intact");
+		if (!scenario) {
+			RAnalHint *hint = r_anal_hint_get (core->anal, 0x12022);
+			mu_assert_notnull (hint, "override-only native hint retained");
+			mu_assert_eq (hint->type, R_ANAL_OP_TYPE_CALL, "hint was not silently cleared");
+			r_anal_hint_free (hint);
+		}
+		r_core_free (core);
+	}
+	RCore *core = original_core_path (getenv ("R2_TEST_SIMTOWER"));
+	mu_assert_notnull (core, "ordinary selected native analysis input");
+	BorlandProfileContext ctx;
+	mu_assert_true (simtower_context (core, &ctx), "ordinary analysis original identity");
+	r_core_cmd0 (core, "af @0x1206e");
+	RAnalFunction *continuation = r_anal_get_function_at (core->anal, 0x1206e);
+	mu_assert_notnull (continuation, "native independent continuation owner");
+	ut64 size = r_anal_function_realsize (continuation);
+	mu_assert_false (simtower_main (&ctx), "independent native continuation cannot be absorbed or deleted");
+	mu_assert_ptreq (r_anal_get_function_at (core->anal, 0x1206e), continuation, "ordinary continuation remains separately owned");
+	mu_assert_eq (r_anal_function_realsize (continuation), size, "ordinary incomplete analysis is not repaired");
+	mu_assert_null (r_anal_get_function_at (core->anal, 0x1200a), "refused union does not create an entry");
+	r_core_free (core);
+	mu_end;
 }
 
 static bool test_scrantic_production(void) {
@@ -304,7 +495,7 @@ static bool test_scrantic_production_preservation(void) {
 		mu_assert_notnull (core, "real read-only preservation input");
 		BorlandProfileContext ctx;
 		mu_assert_true (profile_identity (core->anal, &ctx, "ne", 295952, "f0552c281a2a9b367ad5f41402a907a3c99e73ad0a221ba14d063e31cff594ac"), "literal original identity");
-		mu_assert_true (profile_function (&ctx, 0x2eb8, 73, scrantic_functions[1].name, true, scrantic_functions[1].comment), "qualified initial FHEAP73 body");
+		mu_assert_true (profile_function (&ctx, 0x2eb8, 73, scrantic_functions[1].name, 0, scrantic_functions[1].comment), "qualified initial FHEAP73 body");
 		RAnalFunction *fcn = r_anal_get_function_at (core->anal, 0x126b8);
 		RAnalBlock *bb = r_list_first (fcn->bbs);
 		switch (scenario) {
@@ -360,8 +551,12 @@ int all_tests(void) {
 	mu_run_test (test_profile_unknown_is_no_override);
 	mu_run_test (test_profile_mapping_preservation);
 	mu_run_test (test_profile_relocation_limits);
+	mu_run_test (test_profile_current_without_code);
+	mu_run_test (test_profile_long_body_and_integer_purge);
 	mu_run_test (test_scrantic_production);
 	mu_run_test (test_scrantic_production_preservation);
+	mu_run_test (test_simtower_selected_code);
+	mu_run_test (test_simtower_code_preservation);
 	return tests_passed != tests_run;
 }
 

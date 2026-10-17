@@ -199,52 +199,104 @@ static void borland_comment(RAnal *anal, ut64 addr, const char *text) {
 	free (comment);
 }
 
-static bool borland_body(RAnalFunction *fcn, ut64 family, int start, int size, const HelperOp *ops) {
-	bool covered[128] = {0};
+typedef struct {
+	ut64 address;
+	int size;
+	HelperOp *ops;
+} BorlandCodeRange;
+
+static bool borland_ends_block(const HelperOp *op) {
+	return op->type == R_ANAL_OP_TYPE_JMP || op->type == R_ANAL_OP_TYPE_CJMP
+		|| op->type == R_ANAL_OP_TYPE_UJMP || op->type == R_ANAL_OP_TYPE_UCJMP || op->type == R_ANAL_OP_TYPE_RET;
+}
+
+static void borland_edges(const HelperOp *op, ut64 end, ut64 *jump, ut64 *fail) {
+	*jump = UT64_MAX;
+	*fail = UT64_MAX;
+	if (op->type == R_ANAL_OP_TYPE_JMP || op->type == R_ANAL_OP_TYPE_CJMP
+			|| op->type == R_ANAL_OP_TYPE_UJMP || op->type == R_ANAL_OP_TYPE_UCJMP) {
+		*jump = op->jump;
+		*fail = op->fail;
+	} else if (op->type != R_ANAL_OP_TYPE_RET) {
+		*jump = end;
+	}
+}
+
+static bool borland_body_ranges(RAnalFunction *fcn, const BorlandCodeRange *ranges, int count) {
+	size_t total = 0;
+	int i, j;
+	for (i = 0; i < count; i++) {
+		if (ranges[i].size < 1 || ranges[i].address > UT64_MAX - ranges[i].size
+				|| r_add_overflow (total, (size_t)ranges[i].size, &total)) {
+			return false;
+		}
+		for (j = 0; j < i; j++) {
+			if (ranges[i].address < ranges[j].address + ranges[j].size && ranges[j].address < ranges[i].address + ranges[i].size) {
+				return false;
+			}
+		}
+	}
+	if (!total) {
+		return false;
+	}
+	bool *covered = calloc (total, sizeof (bool));
+	if (!covered) {
+		return false;
+	}
+	bool valid = false;
 	RListIter *iter;
 	RAnalBlock *bb;
 	r_list_foreach (fcn->bbs, iter, bb) {
-		if (bb->addr < family + start || bb->addr >= family + start + size
-				|| !bb->size || bb->size > family + start + size - bb->addr || bb->switch_op) {
-			return false;
+		size_t index = 0;
+		for (i = 0; i < count; i++) {
+			if (bb->addr >= ranges[i].address && bb->addr - ranges[i].address < ranges[i].size) {
+				break;
+			}
+			index += ranges[i].size;
 		}
-		int off = bb->addr - family, end = off + bb->size, n = 0;
+		if (i == count || !bb->size || bb->size > ranges[i].size - (bb->addr - ranges[i].address)) {
+			goto beach;
+		}
+		const BorlandCodeRange *range = &ranges[i];
+		int off = bb->addr - range->address, end = off + bb->size, n = 0;
 		const HelperOp *last = NULL;
 		while (off < end) {
-			last = &ops[off];
-			if (!last->size || off + last->size > end || r_anal_bb_opaddr_i (bb, n++) != family + off) {
-				return false;
+			last = &range->ops[off];
+			if (last->size < 1 || last->size > end - off || r_anal_bb_opaddr_i (bb, n++) != range->address + off) {
+				goto beach;
 			}
-			int j;
 			for (j = off; j < off + last->size; j++) {
-				if (covered[j]) {
-					return false;
+				if (covered[index + j]) {
+					goto beach;
 				}
-				covered[j] = true;
+				covered[index + j] = true;
 			}
 			off += last->size;
-			if (off < end && (last->type == R_ANAL_OP_TYPE_JMP || last->type == R_ANAL_OP_TYPE_CJMP || last->type == R_ANAL_OP_TYPE_RET)) {
-				return false;
+			if (off < end && borland_ends_block (last)) {
+				goto beach;
 			}
 		}
-		ut64 jump = UT64_MAX, fail = UT64_MAX;
-		if (last->type == R_ANAL_OP_TYPE_JMP || last->type == R_ANAL_OP_TYPE_CJMP) {
-			jump = last->jump;
-			fail = last->fail;
-		} else if (last->type != R_ANAL_OP_TYPE_RET) {
-			jump = family + end;
-		}
+		ut64 jump, fail;
+		borland_edges (last, range->address + end, &jump, &fail);
 		if (bb->jump != jump || bb->fail != fail || bb->ninstr != n) {
-			return false;
+			goto beach;
 		}
 	}
-	int i;
-	for (i = start; i < start + size; i++) {
-		if (!covered[i]) {
-			return false;
+	size_t k;
+	for (k = 0; k < total; k++) {
+		if (!covered[k]) {
+			goto beach;
 		}
 	}
-	return true;
+	valid = true;
+beach:
+	free (covered);
+	return valid;
+}
+
+static bool borland_body(RAnalFunction *fcn, ut64 family, int start, int size, const HelperOp *ops) {
+	BorlandCodeRange range = { family + start, size, (HelperOp *)ops + start };
+	return borland_body_ranges (fcn, &range, 1);
 }
 
 static bool borland_generic_name(const char *name) {
