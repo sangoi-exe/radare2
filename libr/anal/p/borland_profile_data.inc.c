@@ -6,10 +6,10 @@ typedef struct {
 	ut64 end;
 	const char *type;
 	const RAnalBaseType *layout;
-	bool raw_array;
+	ut64 element_size;
 	bool linked;
 	bool defined;
-	bool head_field;
+	bool link_only;
 	bool conflict;
 } BorlandDataCheck;
 
@@ -83,8 +83,13 @@ static bool profile_data_meta(RIntervalNode *node, void *user) {
 	if (item->type == R_META_TYPE_COMMENT || item->type == R_META_TYPE_HIGHLIGHT) {
 		return true;
 	}
-	if (item->type == R_META_TYPE_STRING && node->start >= check->address && node->end < check->end) {
-		if (check->raw_array || profile_data_field (check, node, true)) {
+	if (item->type == R_META_TYPE_STRING) {
+		if (check->element_size) {
+			// The complete native STRING view is independent of the qualified array link.
+			check->link_only = true;
+			return true;
+		}
+		if (node->start >= check->address && node->end < check->end && profile_data_field (check, node, true)) {
 			return true;
 		}
 	}
@@ -93,8 +98,10 @@ static bool profile_data_meta(RIntervalNode *node, void *user) {
 			check->defined = true;
 			return true;
 		}
-		if (profile_data_field (check, node, false)) {
-			check->head_field |= node->start == check->address;
+		bool element = check->element_size && node->start >= check->address && node->end < check->end
+			&& (node->start - check->address) % check->element_size == 0 && node->end - node->start + 1 == check->element_size;
+		if (element || profile_data_field (check, node, false)) {
+			check->link_only |= node->start == check->address;
 			return true;
 		}
 	}
@@ -103,7 +110,7 @@ static bool profile_data_meta(RIntervalNode *node, void *user) {
 	return false;
 }
 
-static bool profile_data(BorlandProfileContext *ctx, ut64 physical, int size, const char *type) {
+static bool profile_data_region(BorlandProfileContext *ctx, ut64 physical, int size, const char *type, ut64 element_size) {
 	RAnal *anal = ctx->anal;
 	ut64 address = profile_mapped (ctx, physical, size, false);
 	if (size < 1 || address == UT64_MAX || r_type_get_bitsize (anal->sdb_types, type) != (ut64)size * 8) {
@@ -115,12 +122,10 @@ static bool profile_data(BorlandProfileContext *ctx, ut64 physical, int size, co
 	if (!qualified) {
 		return false;
 	}
-	char raw_array[64];
-	snprintf (raw_array, sizeof (raw_array), "uint8_t [%d]", size);
 	RAnalBaseType *layout = r_anal_get_base_type (anal, type);
 	BorlandDataCheck check = {
 		.anal = anal, .address = address, .end = address + size, .type = type, .layout = layout,
-		.raw_array = !strcmp (type, raw_array) && r_type_get_bitsize (anal->sdb_types, "uint8_t") == 8
+		.element_size = element_size
 	};
 	check.conflict |= !sdb_foreach (anal->sdb_types, profile_data_link, &check);
 	// Query the native interval tree directly: a selected metadata space must not hide other owners.
@@ -143,6 +148,21 @@ static bool profile_data(BorlandProfileContext *ctx, ut64 physical, int size, co
 	if (!check.linked && !r_anal_types_set_link (anal, type, address)) {
 		return false;
 	}
-	// Same-type/start metadata setters would resize a retained first field; the aggregate link already carries its layout.
-	return check.defined || check.head_field || r_meta_set (anal, R_META_TYPE_DATA, address, size, NULL);
+	// Preserve first-field DATA widths and complete overlapping STRING views; the native link carries the aggregate layout.
+	return check.defined || check.link_only || r_meta_set (anal, R_META_TYPE_DATA, address, size, NULL);
+}
+
+static bool profile_data(BorlandProfileContext *ctx, ut64 physical, int size, const char *type) {
+	return profile_data_region (ctx, physical, size, type, 0);
+}
+
+static bool profile_data_array(BorlandProfileContext *ctx, ut64 physical, const char *element_type, ut32 count) {
+	ut64 bits = r_type_get_bitsize (ctx->anal->sdb_types, element_type), total;
+	if (!count || !bits || bits % 8 || r_mul_overflow (bits / 8, (ut64)count, &total) || total > INT_MAX) {
+		return false;
+	}
+	char *type = r_str_newf ("%s [%u]", element_type, count);
+	bool applied = type && profile_data_region (ctx, physical, total, type, bits / 8);
+	free (type);
+	return applied;
 }

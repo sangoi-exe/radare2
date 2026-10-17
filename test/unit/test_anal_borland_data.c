@@ -113,16 +113,16 @@ static bool test_data_types_and_equivalent_state(void) {
 	mu_assert_true (profile_data (&ctx, 32, 70, "StartupData70Partial"), "equivalent region rerun");
 	mu_assert_eq (r_anal_types_dirty_epoch (ctx.anal), epoch, "equivalent types/links are not saved again");
 	mu_assert_ptreq (r_meta_get_at (ctx.anal, LOCAL_DATA, R_META_TYPE_DATA, NULL), meta, "equivalent metadata not recreated");
-	mu_assert_false (profile_data (&ctx, 32, 70, "uint8_t [70]"), "different linked type preserved despite equal extent");
+	mu_assert_false (profile_data_array (&ctx, 32, "uint8_t", 70), "different linked type preserved despite equal extent");
 	const HelperMember conflict[] = { { "different", "uint8_t", 27, 42 } };
 	mu_assert_false (borland_record (ctx.anal, "StartupData70Partial", 560, conflict, 1), "conflicting type never overwritten");
 	mu_assert_eq (r_anal_types_dirty_epoch (ctx.anal), epoch, "conflict has no type mutation");
 	local_free (&ctx);
 	ctx = local_data ();
 	r_anal_types_prepare (ctx.anal);
-	mu_assert_true (profile_data (&ctx, 32, 48, "uint16_t [24]"), "native plain WORD array needs no wrapper record");
+	mu_assert_true (profile_data_array (&ctx, 32, "uint16_t", 24), "native plain WORD array needs no wrapper record");
 	epoch = r_anal_types_dirty_epoch (ctx.anal);
-	mu_assert_true (profile_data (&ctx, 32, 48, "uint16_t [24]"), "equivalent plain array");
+	mu_assert_true (profile_data_array (&ctx, 32, "uint16_t", 24), "equivalent plain array");
 	mu_assert_eq (r_anal_types_dirty_epoch (ctx.anal), epoch, "array link not recreated");
 	local_free (&ctx);
 	mu_end;
@@ -224,14 +224,15 @@ static bool test_data_declared_byte_array_string_views(void) {
 		case 1: start--; size++; break;
 		case 2: start = LOCAL_DATA + 2; size = 2; break;
 		case 3: start = LOCAL_DATA; size = 1; break;
-		case 4: type = "uint8_t [70]"; start = LOCAL_DATA + 1; size = 1; break;
+		case 4: start = LOCAL_DATA + 1; size = 1; break;
 		case 5: start++; size = 5; break;
 		}
 		r_meta_set_with_subtype (ctx.anal, R_META_TYPE_STRING, 1, start, size, "independent string view");
 		RIntervalNode *node = r_meta_get_in (ctx.anal, start, R_META_TYPE_STRING);
 		mu_assert_notnull (node, "existing native string node");
 		RAnalMetaItem *item = node->data;
-		mu_assert_eq (profile_data (&ctx, 32, 70, type), compatible, "only a wholly contained declared raw BYTE-array view coexists");
+		bool applied = scenario == 4? profile_data_array (&ctx, 32, "uint8_t", 70): profile_data (&ctx, 32, 70, type);
+		mu_assert_eq (applied, compatible, "only a wholly contained declared raw BYTE-array view coexists");
 		mu_assert_ptreq (r_meta_get_in (ctx.anal, start, R_META_TYPE_STRING), node, "STRING node retained, not converted");
 		mu_assert_ptreq (node->data, item, "STRING item not recreated");
 		mu_assert_eq (item->type, R_META_TYPE_STRING, "STRING type retained");
@@ -241,6 +242,120 @@ static bool test_data_declared_byte_array_string_views(void) {
 		mu_assert_eq (node->end, start + size - 1, "STRING full extent retained");
 		local_free (&ctx);
 	}
+	mu_end;
+}
+
+static bool test_data_array_element_views(void) {
+	int scenario;
+	for (scenario = 0; scenario < 10; scenario++) {
+		BorlandProfileContext ctx = local_data ();
+		r_anal_types_prepare (ctx.anal);
+		ut64 start = LOCAL_DATA, size = 2;
+		bool compatible = scenario < 3;
+		switch (scenario) {
+		case 1: start += 46; break;
+		case 2: r_spaces_push (&ctx.anal->meta_spaces, "independent"); break;
+		case 3: start++; break;
+		case 4: size = 1; break;
+		case 5: size = 4; break;
+		case 6: start--; break;
+		case 7: start += 46; size = 4; break;
+		case 8: break;
+		case 9: break;
+		}
+		const char *content = scenario == 9? "independent typed data": NULL;
+		int subtype = scenario == 8? 1: 0;
+		mu_assert_true (r_meta_set_with_subtype (ctx.anal, R_META_TYPE_DATA, subtype, start, size, content), "independent array-element candidate");
+		RIntervalNode *node = r_meta_get_in (ctx.anal, start, R_META_TYPE_DATA);
+		mu_assert_notnull (node, "existing DATA node");
+		RAnalMetaItem *item = node->data;
+		const RSpace *space = item->space;
+		if (scenario == 2) {
+			r_spaces_pop (&ctx.anal->meta_spaces);
+			r_spaces_push (&ctx.anal->meta_spaces, "selected");
+		}
+		r_anal_xrefs_set (ctx.anal, LOCAL_DATA - 4, start, R_ANAL_REF_TYPE_DATA);
+		r_anal_xrefs_set (ctx.anal, start, LOCAL_DATA + 80, R_ANAL_REF_TYPE_CODE);
+		ut64 epoch = r_anal_types_dirty_epoch (ctx.anal);
+		mu_assert_eq (profile_data_array (&ctx, 32, "uint16_t", 24), compatible, "only exact aligned plain element DATA coexists");
+		if (compatible) {
+			mu_assert_streq (sdb_const_get (ctx.anal->sdb_types, "link.00010020", NULL), "uint16_t [24]", "complete array linked natively");
+			epoch = r_anal_types_dirty_epoch (ctx.anal);
+			mu_assert_true (profile_data_array (&ctx, 32, "uint16_t", 24), "array element rerun");
+		}
+		mu_assert_eq (r_anal_types_dirty_epoch (ctx.anal), epoch, "refusal or equivalent rerun changes no links");
+		if (scenario == 2) {
+			r_spaces_pop (&ctx.anal->meta_spaces);
+			r_spaces_push (&ctx.anal->meta_spaces, "independent");
+		}
+		mu_assert_ptreq (r_meta_get_in (ctx.anal, start, R_META_TYPE_DATA), node, "DATA node identity retained");
+		mu_assert_ptreq (node->data, item, "DATA item identity retained");
+		mu_assert_ptreq (item->space, space, "DATA space retained");
+		mu_assert_eq (node->start, start, "DATA start retained");
+		mu_assert_eq (node->end, start + size - 1, "first element not resized to aggregate extent");
+		mu_assert_eq (item->subtype, subtype, "DATA subtype retained");
+		if (content) {
+			mu_assert_streq (item->str, content, "DATA content retained");
+		} else {
+			mu_assert_null (item->str, "plain DATA content retained");
+		}
+		mu_assert_eq (R_ANAL_REF_TYPE_MASK (reference_type (ctx.anal, LOCAL_DATA - 4, start)), R_ANAL_REF_TYPE_DATA, "element incoming reference retained");
+		mu_assert_eq (R_ANAL_REF_TYPE_MASK (reference_type (ctx.anal, start, LOCAL_DATA + 80)), R_ANAL_REF_TYPE_CODE, "element outgoing reference retained");
+		local_free (&ctx);
+	}
+	mu_end;
+}
+
+static bool test_data_array_string_and_guards(void) {
+	int scenario;
+	for (scenario = 0; scenario < 8; scenario++) {
+		BorlandProfileContext ctx = local_data ();
+		r_anal_types_prepare (ctx.anal);
+		ut64 start = LOCAL_DATA - 3, size = 12;
+		mu_assert_true (r_meta_set_with_subtype (ctx.anal, R_META_TYPE_STRING, 1, start, size, "independent overlapping string"), "complete independent STRING view");
+		RIntervalNode *node = r_meta_get_in (ctx.anal, start, R_META_TYPE_STRING);
+		RAnalMetaItem *item = node->data;
+		const RSpace *space = item->space;
+		RAnalBlock *code = NULL;
+		switch (scenario) {
+		case 1: r_anal_types_set_link (ctx.anal, "uint8_t [6]", LOCAL_DATA); break;
+		case 2: r_anal_types_set_link (ctx.anal, "uint16_t", LOCAL_DATA + 2); break;
+		case 3: r_meta_set (ctx.anal, R_META_TYPE_DATA, LOCAL_DATA + 1, 2, NULL); break;
+		case 4: code = r_anal_create_block (ctx.anal, LOCAL_DATA + 2, 2); break;
+		case 5: r_anal_create_function (ctx.anal, "independent_array_entry", LOCAL_DATA + 2, R_ANAL_FCN_TYPE_FCN, NULL); break;
+		case 6: {
+			ut8 patch = 1;
+			ctx.anal->iob.overlay_write_at (ctx.anal->iob.io, LOCAL_DATA + 3, &patch, 1);
+			break;
+		}
+		case 7: r_anal_hint_set_bits (ctx.anal, LOCAL_DATA + 3, 32); break;
+		}
+		ut64 epoch = r_anal_types_dirty_epoch (ctx.anal);
+		mu_assert_eq (profile_data_array (&ctx, 32, "uint16_t", 2), !scenario, "independent STRING alone coexists; other owners/current bytes/hints still refuse");
+		mu_assert_null (r_meta_get_at (ctx.anal, LOCAL_DATA, R_META_TYPE_DATA, NULL), "no overlapping aggregate DATA marker");
+		if (scenario) {
+			mu_assert_eq (r_anal_types_dirty_epoch (ctx.anal), epoch, "refusal changes no existing type link");
+		} else {
+			mu_assert_streq (sdb_const_get (ctx.anal->sdb_types, "link.00010020", NULL), "uint16_t [2]", "whole array represented by type link alone");
+		}
+		mu_assert_ptreq (r_meta_get_in (ctx.anal, start, R_META_TYPE_STRING), node, "whole STRING node retained");
+		mu_assert_ptreq (node->data, item, "STRING item identity retained");
+		mu_assert_ptreq (item->space, space, "STRING space retained");
+		mu_assert_eq (node->start, start, "STRING prefix outside array retained");
+		mu_assert_eq (node->end, start + size - 1, "STRING tail outside array retained");
+		mu_assert_eq (item->subtype, 1, "STRING subtype retained");
+		mu_assert_streq (item->str, "independent overlapping string", "STRING content retained");
+		if (code) {
+			r_unref (code);
+		}
+		local_free (&ctx);
+	}
+	BorlandProfileContext ctx = local_data ();
+	r_anal_types_prepare (ctx.anal);
+	mu_assert_false (profile_data_array (&ctx, 32, "uint16_t", 0), "empty array refuses");
+	mu_assert_false (profile_data_array (&ctx, 32, "uint64_t", UT32_MAX), "oversized array refuses before allocation");
+	mu_assert_false (profile_data_array (&ctx, 32, "unknown_element", 2), "unknown native element width refuses");
+	local_free (&ctx);
 	mu_end;
 }
 
@@ -362,16 +477,18 @@ static bool test_actual_selected_data_shapes(void) {
 		r_anal_xrefs_set (core->anal, 0x10030 + i, field_addresses[i], R_ANAL_REF_TYPE_DATA);
 		r_anal_xrefs_set (core->anal, field_addresses[i], field_targets[i], R_ANAL_REF_TYPE_CODE);
 	}
-	const struct { ut64 physical; int size; const char *type; } regions[] = {
-		{ 0x65030, 70, "StartupData70Partial" }, { 0x469b, 48, "uint16_t [24]" },
-		{ 0x65b5c, 7, "uint8_t [7]" }, { 0x65b63, 96, "uint8_t [96]" },
-		{ 0x66036, 14, "ExitData14Partial" }, { 0x60266, 42, "uint8_t [42]" },
+	const struct { ut64 physical; int size; const char *type; ut32 count; } regions[] = {
+		{ 0x65030, 70, "StartupData70Partial" }, { 0x469b, 48, "uint16_t", 24 },
+		{ 0x65b5c, 7, "uint8_t", 7 }, { 0x65b63, 96, "uint8_t", 96 },
+		{ 0x66036, 14, "ExitData14Partial" }, { 0x60266, 42, "uint8_t", 42 },
 		{ 0x657ec, 296, "XxvInitialized296Partial" }
 	};
 	for (i = 0; i < R_ARRAY_SIZE (regions); i++) {
-		mu_assert_true (profile_data (&ctx, regions[i].physical, regions[i].size, regions[i].type), "actual selected data shape without functions or BSS placement");
+		bool applied = regions[i].count? profile_data_array (&ctx, regions[i].physical, regions[i].type, regions[i].count): profile_data (&ctx, regions[i].physical, regions[i].size, regions[i].type);
+		mu_assert_true (applied, "actual selected data shape without functions or BSS placement");
 		ut64 epoch = r_anal_types_dirty_epoch (core->anal);
-		mu_assert_true (profile_data (&ctx, regions[i].physical, regions[i].size, regions[i].type), "actual equivalent region");
+		applied = regions[i].count? profile_data_array (&ctx, regions[i].physical, regions[i].type, regions[i].count): profile_data (&ctx, regions[i].physical, regions[i].size, regions[i].type);
+		mu_assert_true (applied, "actual equivalent region");
 		mu_assert_eq (r_anal_types_dirty_epoch (core->anal), epoch, "actual equivalent link not rewritten");
 	}
 	mu_assert_true (r_list_empty (core->anal->fcns), "data observations never create functions");
@@ -410,6 +527,157 @@ static bool test_actual_selected_data_shapes(void) {
 	r_meta_get_at (core->anal, 0x521036, R_META_TYPE_DATA, &meta_size);
 	mu_assert_eq (meta_size, 4, "first EXIT field retained instead of a destructive DATA14 resize");
 	r_core_free (core);
+	mu_end;
+}
+
+static bool test_actual_bcc_array_views(void) {
+	const struct { const char *env; int size; const char *sha256; } images[] = {
+		{ "R2_TEST_BCC31", 672150, "87c6dfbad817eeca31c069043f08063f7122663e51932ad089e6d1c563450d3b" },
+		{ "R2_TEST_BCC45", 768026, "6e58346640ca94e32b547c4df872d06905e58c5ef6d473d0b6a6a3903d640a46" }
+	};
+	const ut64 callbacks[][2] = { { 0x19574, 0x1965a }, { 0x16fb2, 0x1751c } };
+	size_t image;
+	for (image = 0; image < R_ARRAY_SIZE (images); image++) {
+		const char *path = getenv (images[image].env);
+		if (!path) {
+			eprintf ("Actual BCC array proof not run: set %s to the read-only original; local scenarios do not establish original behavior\n", images[image].env);
+			continue;
+		}
+		RCore *core = r_core_new ();
+		r_config_set_b (core->config, "bin.relocs.apply", true);
+		mu_assert_notnull (r_core_file_open (core, path, R_PERM_RX, 0), "read-only actual BCC original");
+		mu_assert_true (r_core_bin_load (core, path, UT64_MAX), "ordinary native BCC loading");
+		r_config_set_b (core->config, "io.va", true);
+		BorlandProfileContext ctx;
+		mu_assert_true (profile_identity (core->anal, &ctx, "ne", images[image].size, images[image].sha256), "exact BCC original identity");
+		r_anal_types_prepare (core->anal);
+		const HelperMember far[] = { { "offset", "uint16_t", 0 }, { "selector", "uint16_t", 2 } };
+		mu_assert_true (borland_record (core->anal, "FarStorage16", 32, far, R_ARRAY_SIZE (far)), "source-established native FAR storage element");
+		mu_assert_eq (r_type_get_bitsize (core->anal->sdb_types, "FarStorage16"), 32, "native element width4");
+		size_t family;
+		for (family = 0; family < 2; family++) {
+			ut64 physical = callbacks[image][family];
+			ut64 address = profile_mapped (&ctx, physical, 104, false);
+			mu_assert_neq (address, UT64_MAX, "actual complete104-byte source-array mapping");
+			RVecIntervalNodePtr *nodes = r_meta_get_all_intersect (core->anal, address, 104, R_META_TYPE_DATA);
+			mu_assert_notnull (nodes, "ordinary native callback DATA views");
+			mu_assert_eq (RVecIntervalNodePtr_length (nodes), 26, "ordinary loader's26 per-element DATA nodes");
+			RIntervalNode *field_nodes[26];
+			RAnalMetaItem *field_items[26];
+			const RSpace *field_spaces[26];
+			ut64 starts[26];
+			size_t i;
+			for (i = 0; i < 26; i++) {
+				RIntervalNode *node = *RVecIntervalNodePtr_at (nodes, i);
+				field_nodes[i] = node;
+				field_items[i] = node->data;
+				field_spaces[i] = field_items[i]->space;
+				starts[i] = node->start;
+				mu_assert_eq ((node->start - address) % 4, 0, "native DATA is at a declared element boundary");
+				mu_assert_eq (node->end, node->start + 3, "native DATA is exactly one FAR element");
+				mu_assert_eq (field_items[i]->subtype, 0, "native DATA is untyped");
+				mu_assert_null (field_items[i]->str, "native DATA has no content to overwrite");
+				r_anal_xrefs_set (core->anal, address - 10 - i, starts[i], R_ANAL_REF_TYPE_DATA);
+				r_anal_xrefs_set (core->anal, starts[i], address + 200 + i, R_ANAL_REF_TYPE_CODE);
+			}
+			RVecIntervalNodePtr_free (nodes);
+			mu_assert_true (profile_data_array (&ctx, physical, "FarStorage16", 26), "actual26-element FAR array coexists with native per-element views");
+			ut64 epoch = r_anal_types_dirty_epoch (core->anal);
+			mu_assert_true (profile_data_array (&ctx, physical, "FarStorage16", 26), "actual array equivalent rerun");
+			mu_assert_eq (r_anal_types_dirty_epoch (core->anal), epoch, "actual array link not rewritten");
+			char *linked = r_type_link_at (core->anal->sdb_types, address);
+			mu_assert_streq (linked, "FarStorage16 [26]", "native linked element type and count26");
+			mu_assert_eq (r_type_get_bitsize (core->anal->sdb_types, linked), 832, "native aggregate width104");
+			free (linked);
+			nodes = r_meta_get_all_intersect (core->anal, address, 104, R_META_TYPE_DATA);
+			mu_assert_eq (RVecIntervalNodePtr_length (nodes), 26, "link-only aggregate adds no DATA104 marker");
+			for (i = 0; i < 26; i++) {
+				RIntervalNode **node;
+				bool retained = false;
+				R_VEC_FOREACH (nodes, node) {
+					retained |= *node == field_nodes[i];
+				}
+				mu_assert_true (retained, "actual element node remains in native tree");
+				mu_assert_ptreq (field_nodes[i]->data, field_items[i], "actual element item retained");
+				mu_assert_ptreq (field_items[i]->space, field_spaces[i], "actual element space retained");
+				mu_assert_eq (field_nodes[i]->start, starts[i], "actual element start retained");
+				mu_assert_eq (field_nodes[i]->end, starts[i] + 3, "actual element extent not resized");
+				mu_assert_eq (field_items[i]->type, R_META_TYPE_DATA, "actual element DATA type retained");
+				mu_assert_eq (field_items[i]->subtype, 0, "actual element subtype retained");
+				mu_assert_null (field_items[i]->str, "actual element content retained");
+				mu_assert_eq (R_ANAL_REF_TYPE_MASK (reference_type (core->anal, address - 10 - i, starts[i])), R_ANAL_REF_TYPE_DATA, "actual element incoming independent reference retained");
+				mu_assert_eq (R_ANAL_REF_TYPE_MASK (reference_type (core->anal, starts[i], address + 200 + i)), R_ANAL_REF_TYPE_CODE, "actual element outgoing independent reference retained");
+			}
+			RVecIntervalNodePtr_free (nodes);
+			ut8 patch;
+			r_io_read_at (core->io, address + 103, &patch, 1);
+			patch ^= 0xff;
+			core->anal->iob.overlay_write_at (core->io, address + 103, &patch, 1);
+			mu_assert_false (profile_data_array (&ctx, physical, "FarStorage16", 26), "actual array refuses changed current tail byte");
+			mu_assert_eq (r_anal_types_dirty_epoch (core->anal), epoch, "actual patched rerun does not rewrite existing link");
+		}
+		if (!image) {
+			RAnalBaseType *code = r_anal_base_type_new (R_ANAL_BASE_TYPE_KIND_ENUM);
+			code->name = strdup ("bcc31_EventBranchCode");
+			code->size = 16;
+			RAnalEnumCase je = { strdup ("JE"), 0xa }, jne = { strdup ("JNE"), 0xb };
+			RVecAnalEnumCase_push_back (&code->enum_data.cases, &je);
+			RVecAnalEnumCase_push_back (&code->enum_data.cases, &jne);
+			r_anal_save_base_type (core->anal, code);
+			r_anal_base_type_free (code);
+			const struct { ut64 physical; const char *element; int size; ut64 start; ut64 end; } strings[] = {
+				{ 0x194a2, "uint8_t", 2, 0x9589c, 0x958ac },
+				{ 0x19560, "bcc31_EventBranchCode", 4, 0x95960, 0x95969 }
+			};
+			size_t i;
+			for (i = 0; i < R_ARRAY_SIZE (strings); i++) {
+				ut64 address = profile_mapped (&ctx, strings[i].physical, strings[i].size, false);
+				RIntervalNode *node = r_meta_get_in (core->anal, address, R_META_TYPE_STRING);
+				mu_assert_notnull (node, "ordinary loading's actual overlapping STRING view");
+				RAnalMetaItem *item = node->data;
+				int subtype = item->subtype;
+				const RSpace *space = item->space;
+				char *content = strdup (item->str);
+				mu_assert_eq (node->start, strings[i].start, "actual STRING begins outside or at source array");
+				mu_assert_eq (node->end, strings[i].end, "actual STRING extends beyond source array");
+				ut8 bytes[4];
+				mu_assert_true (profile_current (&ctx, strings[i].physical, strings[i].size, address, bytes), "source-established table current bytes");
+				if (i) {
+					mu_assert_eq (r_read_le16 (bytes), 0xb, "source-established JNE inverse code");
+					mu_assert_eq (r_read_le16 (bytes + 2), 0xa, "source-established JE inverse code");
+				} else {
+					mu_assert_eq (bytes[0], 0x74, "source-established JE opcode");
+					mu_assert_eq (bytes[1], 0x75, "source-established JNE opcode");
+				}
+				r_anal_xrefs_set (core->anal, 0x10024 + i, node->start, R_ANAL_REF_TYPE_DATA);
+				r_anal_xrefs_set (core->anal, node->end, 0x10030 + i, R_ANAL_REF_TYPE_CODE);
+				mu_assert_true (profile_data_array (&ctx, strings[i].physical, strings[i].element, 2), "actual BYTE/enum-WORD array link coexists with complete STRING view");
+				ut64 epoch = r_anal_types_dirty_epoch (core->anal);
+				mu_assert_true (profile_data_array (&ctx, strings[i].physical, strings[i].element, 2), "actual overlapping STRING array equivalent rerun");
+				mu_assert_eq (r_anal_types_dirty_epoch (core->anal), epoch, "actual STRING array link not rewritten");
+				char *expected = r_str_newf ("%s [2]", strings[i].element);
+				char *linked = r_type_link_at (core->anal->sdb_types, address);
+				mu_assert_streq (linked, expected, "native linked table element type/count2");
+				mu_assert_eq (r_type_get_bitsize (core->anal->sdb_types, linked), strings[i].size * 8, "native table aggregate width");
+				free (linked);
+				free (expected);
+				mu_assert_null (r_meta_get_at (core->anal, address, R_META_TYPE_DATA, NULL), "no DATA aggregate over actual STRING");
+				mu_assert_ptreq (r_meta_get_in (core->anal, address, R_META_TYPE_STRING), node, "actual complete STRING node retained");
+				mu_assert_ptreq (node->data, item, "actual STRING item retained");
+				mu_assert_ptreq (item->space, space, "actual STRING metadata space retained");
+				mu_assert_eq (item->type, R_META_TYPE_STRING, "actual STRING remains STRING");
+				mu_assert_eq (item->subtype, subtype, "actual STRING subtype retained");
+				mu_assert_eq (node->start, strings[i].start, "actual STRING prefix retained");
+				mu_assert_eq (node->end, strings[i].end, "actual STRING tail retained");
+				mu_assert_streq (item->str, content, "actual complete STRING content retained");
+				mu_assert_eq (R_ANAL_REF_TYPE_MASK (reference_type (core->anal, 0x10024 + i, node->start)), R_ANAL_REF_TYPE_DATA, "actual STRING incoming independent reference retained");
+				mu_assert_eq (R_ANAL_REF_TYPE_MASK (reference_type (core->anal, node->end, 0x10030 + i)), R_ANAL_REF_TYPE_CODE, "actual STRING tail outgoing independent reference retained");
+				free (content);
+			}
+		}
+		mu_assert_true (r_list_empty (core->anal->fcns), "array observations do not create functions");
+		r_core_free (core);
+	}
 	mu_end;
 }
 
@@ -490,7 +758,7 @@ static bool test_actual_pointer_valued_dispatch_conflict(void) {
 	RAnalMetaItem *meta = r_meta_get_at (core->anal, 0x1249b, R_META_TYPE_DATA, NULL);
 	r_anal_xrefs_set (core->anal, 0x120db, 0x1249b, R_ANAL_REF_TYPE_DATA);
 	r_anal_xrefs_set (core->anal, 0x1249b, 0x120f9, R_ANAL_REF_TYPE_CODE);
-	mu_assert_false (profile_data (&ctx, 0x469b, 48, "uint16_t [24]"), "real pointer-valued cell blocks whole-array replacement");
+	mu_assert_false (profile_data_array (&ctx, 0x469b, "uint16_t", 24), "real pointer-valued cell blocks whole-array replacement");
 	mu_assert_streq (sdb_const_get (core->anal->sdb_types, "link.0001249b", NULL), "uint16_t *", "pointer link preserved");
 	ut64 size;
 	mu_assert_ptreq (r_meta_get_at (core->anal, 0x1249b, R_META_TYPE_DATA, &size), meta, "pointer metadata not recreated");
@@ -506,8 +774,11 @@ int all_tests(void) {
 	mu_run_test (test_data_conflicting_extents_and_references);
 	mu_run_test (test_data_prototype_and_pointer_categories);
 	mu_run_test (test_data_declared_byte_array_string_views);
+	mu_run_test (test_data_array_element_views);
+	mu_run_test (test_data_array_string_and_guards);
 	mu_run_test (test_local_native_chained_application);
 	mu_run_test (test_actual_selected_data_shapes);
+	mu_run_test (test_actual_bcc_array_views);
 	mu_run_test (test_actual_native_fields_and_patches);
 	mu_run_test (test_actual_stored_near_and_converted_relations);
 	mu_run_test (test_actual_pointer_valued_dispatch_conflict);
