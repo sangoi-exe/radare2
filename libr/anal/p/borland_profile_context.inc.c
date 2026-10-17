@@ -4,6 +4,7 @@ typedef struct {
 	RAnal *anal;
 	RBinFile *file;
 	Sdb *ne;
+	bool bcc20_static_views;
 } BorlandProfileContext;
 
 static bool profile_identity(RAnal *anal, BorlandProfileContext *ctx, const char *format, int size, const char *sha256) {
@@ -42,21 +43,40 @@ static ut64 profile_mapped(BorlandProfileContext *ctx, ut64 physical, int size, 
 			|| !anal->iob.map_get_at || !anal->iob.bank_get || !anal->iob.map_get || !anal->iob.io->va) {
 		return UT64_MAX;
 	}
-	ut64 address = UT64_MAX;
-	RBinSection *section;
-	R_VEC_FOREACH (&ctx->file->bo->sections_vec, section) {
-		if (!section->add) {
-			continue;
+	ut64 address = UT64_MAX, cursor = physical, end = physical + size;
+	while (cursor < end) {
+		RBinSection *selected = NULL, *section;
+		ut64 next = end;
+		R_VEC_FOREACH (&ctx->file->bo->sections_vec, section) {
+			ut64 length = R_MIN (section->size, section->vsize);
+			if (!section->add || !length || section->paddr >= end
+					|| (section->paddr < physical && physical - section->paddr >= length)) {
+				continue;
+			}
+			if (section->paddr > UT64_MAX - length || section->vaddr > UT64_MAX - length
+					|| (executable && !(section->perm & R_PERM_X))) {
+				return UT64_MAX;
+			}
+			if (section->paddr > cursor) {
+				next = R_MIN (next, section->paddr);
+			} else if (cursor - section->paddr < length) {
+				if (selected) {
+					return UT64_MAX;
+				}
+				selected = section;
+				next = R_MIN (next, section->paddr + length);
+			}
 		}
-		ut64 length = R_MIN (section->size, section->vsize);
-		if (!length || section->paddr >= physical + size || (section->paddr < physical && physical - section->paddr >= length)) {
-			continue;
-		}
-		if (address != UT64_MAX || physical < section->paddr || size > length - (physical - section->paddr)
-				|| section->vaddr > UT64_MAX - length || (executable && !(section->perm & R_PERM_X))) {
+		if (!selected) {
 			return UT64_MAX;
 		}
-		address = section->vaddr + physical - section->paddr;
+		ut64 current = selected->vaddr + cursor - selected->paddr;
+		if (address == UT64_MAX) {
+			address = current;
+		} else if (address > UT64_MAX - (cursor - physical) || current != address + cursor - physical) {
+			return UT64_MAX;
+		}
+		cursor = next;
 	}
 	RIOBank *bank = anal->iob.bank_get (anal->iob.io, anal->iob.io->bank);
 	if (address == UT64_MAX || !bank) {
@@ -274,6 +294,15 @@ static bool profile_code(BorlandProfileContext *ctx, ut64 physical, int size, ut
 		RAnalOp op = {0};
 		int length = r_anal_op (ctx->anal, &op, address + off, current + off, size - off, R_ARCH_OP_MASK_BASIC);
 		valid = length > 0 && length <= size - off && op.type != R_ANAL_OP_TYPE_ILL && op.type != R_ANAL_OP_TYPE_UNK && ctx->anal->config->bits == 16;
+		// Qualified BCC2.0 raw FBOV views have no runtime selector binding outside their own 16-bit window.
+		if (ctx->bcc20_static_views && address >= 0x40010000 && address < 0x40100000) {
+			if (op.jump != UT64_MAX && op.jump >> 16 != address >> 16) {
+				op.jump = UT64_MAX;
+			}
+			if (op.fail != UT64_MAX && op.fail >> 16 != address >> 16) {
+				op.fail = UT64_MAX;
+			}
+		}
 		ops[off] = (HelperOp){ length, op.type & R_ANAL_OP_TYPE_MASK, op.jump, op.fail };
 		r_anal_op_fini (&op);
 		off += length;

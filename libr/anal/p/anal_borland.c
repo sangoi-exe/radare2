@@ -559,6 +559,7 @@ static bool borland_tlink_writer(BorlandProfileContext *ctx, ut64 physical, cons
 }
 
 #include "borland_profile_tlink401.inc.c"
+#include "borland_profile_bcc20.inc.c"
 #include "borland_profile_bcc31.inc.c"
 #include "borland_profile_bcc45.inc.c"
 #include "borland_profiles.inc.c"

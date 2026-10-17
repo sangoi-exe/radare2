@@ -6,6 +6,7 @@ if get_option('enable_tests')
     'anal_block',
     'anal_borland',
     'anal_borland_bcc',
+    'anal_borland_bcc20',
     'anal_borland_contract',
     'anal_borland_data',
     'anal_borland_profiles',
