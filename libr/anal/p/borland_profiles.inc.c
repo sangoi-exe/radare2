@@ -88,8 +88,9 @@ static int borland_scrantic_profile(RAnal *anal) {
 #undef SCRANTIC_MARKER
 
 #include "borland_profile_simtower.inc.c"
+#include "borland_profile_tasm31.inc.c"
 
 static int borland_profiles(RAnal *anal) {
 	return borland_scrantic_profile (anal) + borland_simtower_profile (anal)
-		+ borland_bcc31_profile (anal) + borland_bcc45_profile (anal);
+		+ borland_bcc31_profile (anal) + borland_bcc45_profile (anal) + borland_tasm31_profile (anal);
 }
