@@ -550,7 +550,11 @@ static void ne_load_relocs(r_bin_ne_obj_t *bin) {
 	size_t index;
 	for (index = 0; index < bin->ne_header->SegCount; index++) {
 		NE_image_segment_entry *seg = &bin->segment_entries[index];
-		if (!(seg->flags & RELOCINFO) || !seg->offset) {
+		if (!(seg->flags & RELOCINFO)) {
+			sdb_num_set (bin->kv, r_strf ("ne.reloc.%zu.count", index + 1), 0, 0);
+			continue;
+		}
+		if (!seg->offset) {
 			continue;
 		}
 		ut64 paddr = (ut64)seg->offset * bin->alignment;
@@ -571,6 +575,7 @@ static void ne_load_relocs(r_bin_ne_obj_t *bin) {
 		for (i = 0; i < count; i++, off += sizeof (NE_image_reloc_item)) {
 			NE_image_reloc_item rel = {0};
 			if (r_buf_fread_at (bin->buf, off, (ut8 *)&rel, "2c3s", 1) != sizeof (rel)) {
+				sdb_unset (bin->kv, r_strf ("ne.reloc.%zu.count", index + 1), 0);
 				break;
 			}
 			r_strf_var (record_key, 64, "ne.reloc.%zu.%d", index + 1, i);

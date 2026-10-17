@@ -76,6 +76,11 @@ static st64 nb02_incomplete_read(RBuffer *buf, ut8 *bytes, ut64 length) {
 	return nb02_full_read (buf, bytes, length == 0x240? length - 1: length);
 }
 
+static st64 ne_incomplete_reloc_read(RBuffer *buf, ut8 *bytes, ut64 length) {
+	bool record = length == 1 && r_buf_seek (buf, 0, R_BUF_CUR) == 0x14a;
+	return nb02_full_read (buf, bytes, record? length - 1: length);
+}
+
 bool test_r_bin_ne_segmented_relocations(void) {
 	ut8 bytes[0x240] = {0};
 	memcpy (bytes, "MZ", 2);
@@ -185,6 +190,7 @@ bool test_r_bin_ne_segmented_relocations(void) {
 	mu_assert ("NE information is reachable through the plugin boundary", db == bf->bo->plugin->get_sdb (bf));
 	mu_assert_eq (sdb_num_get (db, "ne.relocs.count", NULL), 11, "all original records remain observable");
 	mu_assert_eq (sdb_num_get (db, "ne.reloc.1.count", NULL), 11, "per-segment raw record count");
+	mu_assert_streq (sdb_const_get (db, "ne.reloc.2.count", NULL), "0", "segment without relocation information proves an explicit empty set");
 	mu_assert_eq (sdb_num_get (db, "ne.reloc.1.0.paddr", NULL), 0x142, "raw record file coordinate");
 	mu_assert_eq (sdb_num_get (db, "ne.reloc.1.0.source_segment", NULL), 1, "original source segment");
 	mu_assert_eq (sdb_num_get (db, "ne.reloc.1.0.record_index", NULL), 0, "record index is zero-based");
@@ -252,9 +258,45 @@ bool test_r_bin_ne_segmented_relocations(void) {
 	mu_assert_memeq (original, bytes + 0x100, 0x40, "NE relocation does not write backing descriptor");
 	r_bin_free (bin);
 	r_io_free (io);
+	for (i = 0; i < 2; i++) {
+		ut8 incomplete_bytes[sizeof (bytes)];
+		memcpy (incomplete_bytes, bytes, sizeof (bytes));
+		r_write_le16 (incomplete_bytes + 0x8c, 0x1100);
+		if (i) {
+			r_write_le16 (incomplete_bytes + 0x8a, 0x40);
+		} else {
+			r_write_le16 (incomplete_bytes + 0x88, 0);
+		}
+		RBuffer *evidence_buf = r_buf_new_with_bytes (incomplete_bytes, sizeof (incomplete_bytes));
+		RBin *evidence_bin = r_bin_new ();
+		RIO *evidence_io = r_io_new ();
+		r_io_bind (evidence_io, &evidence_bin->iob);
+		r_bin_file_options_init (&opt, -1, 0, 0, 0);
+		opt.filename = "missing-relocations.ne";
+		opt.pluginname = "ne";
+		mu_assert_true (r_bin_open_buf (evidence_bin, evidence_buf, &opt), "open NE with missing or truncated flagged relocation table");
+		Sdb *evidence = r_bin_cur (evidence_bin)->sdb_info;
+		mu_assert_null (sdb_const_get (evidence, "ne.reloc.2.count", NULL), "flagged missing or truncated table does not prove an empty set");
+		mu_assert_eq (sdb_num_get (evidence, "ne.reloc.1.count", NULL), 11, "unrelated nonempty evidence remains complete");
+		r_bin_free (evidence_bin);
+		r_io_free (evidence_io);
+		r_unref (evidence_buf);
+	}
 	const RBufferMethods *methods = buf->methods;
 	RBufferMethods incomplete = *methods;
 	nb02_full_read = methods->read;
+	incomplete.read = ne_incomplete_reloc_read;
+	buf->methods = &incomplete;
+	bin = r_bin_new ();
+	io = r_io_new ();
+	r_io_bind (io, &bin->iob);
+	r_bin_file_options_init (&opt, -1, 0, 0, 0);
+	opt.filename = "short-relocations.ne";
+	opt.pluginname = "ne";
+	mu_assert_true (r_bin_open_buf (bin, buf, &opt), "open NE with a short raw relocation record read");
+	mu_assert_null (sdb_const_get (r_bin_cur (bin)->sdb_info, "ne.reloc.1.count", NULL), "partial raw-record prefix is not complete per-segment evidence");
+	r_bin_free (bin);
+	r_io_free (io);
 	incomplete.read = nb02_incomplete_read;
 	buf->methods = &incomplete;
 	bin = r_bin_new ();
