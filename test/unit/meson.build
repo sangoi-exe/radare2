@@ -5,6 +5,7 @@ if get_option('enable_tests')
     'agraph',
     'anal_block',
     'anal_borland',
+    'anal_borland_bcc',
     'anal_borland_data',
     'anal_borland_profiles',
     'anal_borland_simtower',

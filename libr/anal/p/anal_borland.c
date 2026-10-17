@@ -138,6 +138,39 @@ static bool borland_record(RAnal *anal, const char *name, int bits, const Helper
 	return true;
 }
 
+typedef struct {
+	const char *name;
+	int value;
+} BorlandEnumCase;
+
+static bool borland_enum(RAnal *anal, const char *name, int bits, const BorlandEnumCase *cases, size_t count) {
+	RAnalBaseType *type = r_anal_get_base_type (anal, name);
+	size_t i;
+	if (type) {
+		bool valid = type->kind == R_ANAL_BASE_TYPE_KIND_ENUM && type->size == bits
+			&& RVecAnalEnumCase_length (&type->enum_data.cases) == count;
+		for (i = 0; valid && i < count; i++) {
+			RAnalEnumCase *entry = RVecAnalEnumCase_at (&type->enum_data.cases, i);
+			valid = !strcmp (entry->name, cases[i].name) && entry->val == cases[i].value;
+		}
+		r_anal_base_type_free (type);
+		return valid;
+	}
+	if (sdb_const_get (anal->sdb_types, name, NULL)) {
+		return false;
+	}
+	type = r_anal_base_type_new (R_ANAL_BASE_TYPE_KIND_ENUM);
+	type->name = strdup (name);
+	type->size = bits;
+	for (i = 0; i < count; i++) {
+		RAnalEnumCase entry = { .name = strdup (cases[i].name), .val = cases[i].value };
+		RVecAnalEnumCase_push_back (&type->enum_data.cases, &entry);
+	}
+	r_anal_save_base_type (anal, type);
+	r_anal_base_type_free (type);
+	return true;
+}
+
 static bool borland_type(RAnal *anal, const char *name) {
 	if (!strcmp (name, "void")) {
 		return true;
@@ -492,6 +525,8 @@ static int borland_scan(RAnal *anal) {
 #include "borland_profile_context.inc.c"
 #include "borland_profile_data.inc.c"
 #include "borland_profile_bindings.inc.c"
+#include "borland_profile_bcc31.inc.c"
+#include "borland_profile_bcc45.inc.c"
 #include "borland_profiles.inc.c"
 
 static bool borland_pre_analysis(RAnal *anal) {
