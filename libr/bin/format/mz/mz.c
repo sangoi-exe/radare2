@@ -1,6 +1,7 @@
 /* radare - LGPL - Copyright 2015-2026 nodepad, pancake */
 
 #include "mz.h"
+#include "../nb02.h"
 #include <r_list.h>
 
 static ut64 r_bin_mz_va_to_la(const ut16 segment, const ut16 offset) {
@@ -298,6 +299,11 @@ static bool r_bin_mz_init(struct r_bin_mz_obj_t *bin) {
 	bin->kv = sdb_new0 ();
 	if (!r_bin_mz_init_hdr (bin)) {
 		R_LOG_WARN ("File is not MZ");
+		return false;
+	}
+	if (!bin_nb02_observe (bin->b, bin->kv)) {
+		sdb_free (bin->kv);
+		bin->kv = NULL;
 		return false;
 	}
 	return true;

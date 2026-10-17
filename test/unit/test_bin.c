@@ -70,6 +70,12 @@ bool test_r_bin_plan9_symbol_names(void) {
 	mu_end;
 }
 
+static RBufferRead nb02_full_read;
+
+static st64 nb02_incomplete_read(RBuffer *buf, ut8 *bytes, ut64 length) {
+	return nb02_full_read (buf, bytes, length == 0x240? length - 1: length);
+}
+
 bool test_r_bin_ne_segmented_relocations(void) {
 	ut8 bytes[0x240] = {0};
 	memcpy (bytes, "MZ", 2);
@@ -116,6 +122,8 @@ bool test_r_bin_ne_segmented_relocations(void) {
 	};
 	r_write_le16 (bytes + 0x140, sizeof (records) / 8);
 	memcpy (bytes + 0x142, records, sizeof (records));
+	memcpy (bytes + 0x200, "NB02", 4);
+	memset (bytes + 0x204, 0xff, 12);
 	RBuffer *buf = r_buf_new_with_bytes (bytes, sizeof (bytes));
 	RBin *bin = r_bin_new ();
 	RIO *io = r_io_new ();
@@ -212,6 +220,15 @@ bool test_r_bin_ne_segmented_relocations(void) {
 	mu_assert_eq (sdb_num_get (db, "ne.reloc.1.10.type", NULL), 0x7f, "unsupported type remains observable");
 	mu_assert_eq (sdb_num_get (db, "ne.reloc.1.10.flags", NULL), 0x80, "unknown flag bits remain original");
 	mu_assert_eq (sdb_num_get (db, "ne.reloc.1.10.application_count", NULL), 0, "unsupported type has no fabricated application");
+	mu_assert_eq (sdb_num_get (db, "nb02.initial.count", NULL), 1, "NE observes the complete original NB02 marker");
+	mu_assert_eq (sdb_num_get (db, "nb02.initial.0.offset", NULL), 0x200, "NB02 offset belongs to the original buffer");
+	mu_assert_false (sdb_bool_get (db, "nb02.footer.present", NULL), "initial marker does not fabricate a footer");
+	ut8 changed[16] = {0};
+	const ut8 zeroes[16] = {0};
+	mu_assert_true (r_io_vwrite_to_overlay_at (io, 0x20000, changed, sizeof (changed)), "modify the current marker view only");
+	mu_assert_true (r_io_read_at (io, 0x20000, changed, sizeof (changed)), "read current marker view");
+	mu_assert_memeq (changed, zeroes, sizeof (changed), "current view differs from original marker");
+	mu_assert_eq (sdb_num_get (db, "nb02.initial.count", NULL), 1, "NB02 observations do not follow overlay changes");
 	ut8 patched[0x40];
 	mu_assert_true (r_io_read_at (io, 0x10000, patched, sizeof (patched)), "read relocated analysis view");
 	mu_assert_eq (r_read_le32 (patched + 1), 0x20000, "movable source uses direct target discriminator");
@@ -235,7 +252,105 @@ bool test_r_bin_ne_segmented_relocations(void) {
 	mu_assert_memeq (original, bytes + 0x100, 0x40, "NE relocation does not write backing descriptor");
 	r_bin_free (bin);
 	r_io_free (io);
+	const RBufferMethods *methods = buf->methods;
+	RBufferMethods incomplete = *methods;
+	nb02_full_read = methods->read;
+	incomplete.read = nb02_incomplete_read;
+	buf->methods = &incomplete;
+	bin = r_bin_new ();
+	io = r_io_new ();
+	r_io_bind (io, &bin->iob);
+	r_bin_file_options_init (&opt, -1, 0, 0, 0);
+	opt.filename = "incomplete.ne";
+	opt.pluginname = "ne";
+	mu_assert_false (r_bin_open_buf (bin, buf, &opt), "incomplete original NB02 window read fails the load visibly");
+	r_bin_free (bin);
+	r_io_free (io);
+	buf->methods = methods;
 	r_unref (buf);
+	mu_end;
+}
+
+bool test_r_bin_mz_nb02(void) {
+	const size_t size = 0x10040;
+	ut8 *bytes = calloc (1, size);
+	mu_assert_notnull (bytes, "MZ NB02 input");
+	const struct {
+		ut32 distance;
+		bool footer;
+		bool linked;
+		bool exact_boundary;
+		bool incomplete;
+	} cases[] = {
+		{ 0x48, true, true, false, false },
+		{ UT32_MAX, true, false, false, false },
+		{ 8, true, false, false, false },
+		{ 0x40, true, false, false, false },
+		{ 0, false, false, false, false },
+		{ 24, true, true, true, false },
+		{ 0x48, true, false, false, true },
+	};
+	size_t i;
+	for (i = 0; i < R_ARRAY_SIZE (cases); i++) {
+		memset (bytes, 0, size);
+		memcpy (bytes, "MZ", 2);
+		r_write_le16 (bytes + 4, 1);
+		r_write_le16 (bytes + 8, 4);
+		r_write_le16 (bytes + 0x18, 0x1c);
+		bytes[0x40] = 0xc3;
+		size_t offsets[] = { 0xfff8, 0x10020 };
+		size_t count = R_ARRAY_SIZE (offsets);
+		if (cases[i].exact_boundary) {
+			offsets[0] = size - 24;
+			count = 1;
+		}
+		size_t j;
+		for (j = 0; j < count; j++) {
+			memcpy (bytes + offsets[j], "NB02", 4);
+			memset (bytes + offsets[j] + 4, 0xff, 12);
+			if (cases[i].incomplete) {
+				bytes[offsets[j] + 15] = 0;
+			}
+		}
+		if (cases[i].footer) {
+			memcpy (bytes + size - 8, "NB02", 4);
+			r_write_le32 (bytes + size - 4, cases[i].distance);
+		}
+		RBuffer *buf = r_buf_new_with_bytes (bytes, size);
+		RBin *bin = r_bin_new ();
+		RIO *io = r_io_new ();
+		r_io_bind (io, &bin->iob);
+		RBinFileOptions opt = {0};
+		r_bin_file_options_init (&opt, -1, 0, 0, 0);
+		opt.filename = "nb02.mz";
+		opt.pluginname = "mz";
+		mu_assert_true (r_bin_open_buf (bin, buf, &opt), "open MZ with retained overlay bytes");
+		Sdb *db = r_bin_cur (bin)->sdb_info;
+		mu_assert_eq (sdb_num_get (db, "nb02.retained_size", NULL), size, "observe retained size, not DOS load-module length");
+		mu_assert_eq (sdb_num_get (db, "nb02.initial.count", NULL), cases[i].incomplete? 0: count, "only complete markers, including window crossing, counted once");
+		mu_assert_eq (sdb_bool_get (db, "nb02.footer.present", NULL), cases[i].footer, "only final eight bytes qualify as a footer");
+		if (!cases[i].incomplete) {
+			mu_assert_eq (sdb_num_get (db, "nb02.initial.0.offset", NULL), offsets[0], "retained-input marker offset");
+		}
+		if (cases[i].footer) {
+			mu_assert_eq (sdb_num_get (db, "nb02.footer.offset", NULL), size - 8, "terminal footer offset");
+			mu_assert_eq (sdb_num_get (db, "nb02.footer.distance", NULL), cases[i].distance, "unsigned little-endian DWORD distance");
+			mu_assert_eq (sdb_bool_get (db, "nb02.footer.relation_qualified", NULL), cases[i].linked, "range and complete-marker relation are both required");
+			if (cases[i].distance == UT32_MAX) {
+				mu_assert_streq (sdb_const_get (db, "nb02.footer.target", NULL), "-0xfffeffbf", "negative target is not a wrapped file offset");
+			}
+		} else {
+			mu_assert_null (sdb_const_get (db, "nb02.footer.target", NULL), "no arithmetic invented without a terminal footer");
+		}
+		mu_assert_notnull (strstr (sdb_const_get (db, "nb02.scope", NULL), "retained original input buffer"), "offset scope is explicit");
+		mu_assert_notnull (strstr (sdb_const_get (db, "nb02.limit", NULL), "removed/truncated/absent debug information"), "structural limitations remain explicit");
+		mu_assert_true (RVecRBinSymbol_empty (r_bin_get_symbols_vec (bin)), "NB02 does not create symbols");
+		mu_assert_true (RVecRBinImport_empty (r_bin_get_imports_vec (bin)), "NB02 does not create imports");
+		r_bin_free (bin);
+		r_io_free (io);
+		r_unref (buf);
+	}
+	free (bytes);
 	mu_end;
 }
 
@@ -791,6 +906,7 @@ bool all_tests(void) {
 	mu_run_test(test_r_bin);
 	mu_run_test(test_r_bin_plan9_symbol_names);
 	mu_run_test(test_r_bin_ne_segmented_relocations);
+	mu_run_test(test_r_bin_mz_nb02);
 	mu_run_test(test_r_bin_mach0_chained_fixups);
 	mu_run_test(test_r_bin_jni_language);
 	mu_run_test(test_r_bin_languages);

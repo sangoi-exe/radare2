@@ -1,6 +1,7 @@
 /* radare - LGPL - Copyright 2019-2025 - GustavoLCR */
 
 #include "ne.h"
+#include "../nb02.h"
 #include <sdb/ht_uu.h>
 
 static bool ne_header_at(RBuffer *buf, ut64 offset) {
@@ -780,5 +781,9 @@ r_bin_ne_obj_t *r_bin_ne_new_buf(RBuffer *buf, bool verbose) {
 	RVecNEEntry_init (&bin->entries);
 	RVecRBinImport_init (&bin->imports);
 	__init (buf, bin);
+	if (!bin_nb02_observe (buf, bin->kv)) {
+		r_bin_ne_free (bin);
+		return NULL;
+	}
 	return bin;
 }
