@@ -1370,7 +1370,7 @@ WARN: Truncated signal record at 0x00000029
 EOF
 RUN
 
-NAME=newprj restore retains normal NE loading and effective virtual edits without saved config
+NAME=newprj snapshot and restore retain normal NE loading and effective virtual edits without saved config
 FILE=bins/ne/anim8.exe
 ARGS=-e bin.relocs.apply=true
 CMDS=<<EOF
@@ -1394,7 +1394,7 @@ tcc- projectopaque
 axd 0x10030 0x10020
 ahi 7 @ 0x10020
 e asm.lines=true
-prj save .tmp/newprj-restore-ne.prj
+prj snapshot .tmp/newprj-restore-ne.prj
 !r2 -NNq -e bin.relocs.apply=true -c 'e asm.lines=false;prj restore .tmp/newprj-restore-ne.prj;i~format;p8 4 @0x10001;p8 4 @0x10020;p8 1 @0x10030;f~persisted.flag;afl~persisted.native;afb @0x10020;CC. @0x10020;Ct. @0x10020;afc @0x10020;tsc ProjectPair;axf @0x10020~[0-1];ah. @0x10020;e asm.lines' bins/ne/anim8.exe
 rm .tmp/newprj-restore-ne.prj
 EOF
@@ -1419,7 +1419,7 @@ false
 EOF
 RUN
 
-NAME=newprj restore supports an explicitly opened read-only raw input
+NAME=newprj snapshot and restore support an explicitly opened read-only raw input
 FILE=bins/ne/anim8.exe
 ARGS=-n -a x86 -b 16
 CMDS=<<EOF
@@ -1431,13 +1431,90 @@ wx aabb @ 0x21
 wc++
 wx cc @ 0x22
 f raw.saved=0x20
-prj save .tmp/newprj-restore-raw.prj
+prj snapshot .tmp/newprj-restore-raw.prj
 !r2 -NNnq -a x86 -b 16 -c 'prj restore .tmp/newprj-restore-raw.prj;p8 4 @0x20;f~raw.saved' bins/ne/anim8.exe
 rm .tmp/newprj-restore-raw.prj
 EOF
 EXPECT=<<EOF
 11aacc44
 0x00000020 1 raw.saved
+EOF
+RUN
+
+NAME=newprj snapshot refuses malloc input without creating or replacing a generic project
+FILE=malloc://0x100
+CMDS=<<EOF
+mkdir .tmp
+rm .tmp/newprj-snapshot-malloc.prj
+f malloc.saved=0x20
+prj snapshot .tmp/newprj-snapshot-malloc.prj || echo snapshot-refused
+ls .tmp~newprj-snapshot-malloc
+prj save .tmp/newprj-snapshot-malloc.prj && echo generic-saved
+f-*
+f malloc.rejected=0x30
+prj snapshot .tmp/newprj-snapshot-malloc.prj || echo snapshot-refused
+f-*
+prj load .tmp/newprj-snapshot-malloc.prj && echo previous-project-loaded
+f~malloc.
+rm .tmp/newprj-snapshot-malloc.prj
+EOF
+EXPECT=<<EOF
+snapshot-refused
+generic-saved
+snapshot-refused
+previous-project-loaded
+0x00000020 1 malloc.saved
+EOF
+EXPECT_ERR=<<EOF
+ERROR: Cannot save snapshot: requires a restorable read-only original and valid virtual edits
+ERROR: Cannot save snapshot: requires a restorable read-only original and valid virtual edits
+EOF
+RUN
+
+NAME=newprj snapshot refuses slurped input while generic save remains available
+FILE=slurp://bins/ne/anim8.exe
+ARGS=-n
+CMDS=<<EOF
+mkdir .tmp
+rm .tmp/newprj-snapshot-slurp.prj
+f slurp.saved=0x20
+prj snapshot .tmp/newprj-snapshot-slurp.prj || echo snapshot-refused
+ls .tmp~newprj-snapshot-slurp
+prj save .tmp/newprj-snapshot-slurp.prj && echo generic-saved
+f-*
+prj load .tmp/newprj-snapshot-slurp.prj
+f~slurp.saved
+rm .tmp/newprj-snapshot-slurp.prj
+EOF
+EXPECT=<<EOF
+snapshot-refused
+generic-saved
+0x00000020 1 slurp.saved
+EOF
+EXPECT_ERR=<<EOF
+ERROR: Cannot save snapshot: requires a restorable read-only original and valid virtual edits
+EOF
+RUN
+
+NAME=newprj generic save replaces the previous complete project
+FILE=malloc://0x100
+CMDS=<<EOF
+mkdir .tmp
+rm .tmp/newprj-save-replace.prj
+f replaced.old=0x20
+prj save .tmp/newprj-save-replace.prj
+f-*
+f replaced.new=0x30
+prj save .tmp/newprj-save-replace.prj && echo project-replaced
+f-*
+prj load .tmp/newprj-save-replace.prj
+f~replaced.
+ls .tmp~newprj-save-replace.prj.tmp.
+rm .tmp/newprj-save-replace.prj
+EOF
+EXPECT=<<EOF
+project-replaced
+0x00000030 1 replaced.new
 EOF
 RUN
 

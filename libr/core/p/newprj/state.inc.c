@@ -60,10 +60,13 @@ static bool rprj_state_current(RPrjCursor *cur, RPrjState *state, const char **l
 	return ok;
 }
 
-static bool rprj_state_write(RPrjCursor *cur) {
+static bool rprj_state_write(RPrjCursor *cur, bool snapshot) {
 	RPrjState state = {0};
 	const char *loader = "";
 	if (!rprj_state_current (cur, &state, &loader)) {
+		if (snapshot) {
+			return false;
+		}
 		state = (RPrjState) {0};
 	}
 	state.loader = rprj_st_append (cur->st, loader);

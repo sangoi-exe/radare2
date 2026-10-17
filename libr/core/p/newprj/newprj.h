@@ -339,7 +339,7 @@ static void rprj_mods_rebase(RPrjCursor *cur);
 static bool rprj_info_read(RBuffer *b, R2ProjectInfo *info);
 static ut8 *rprj_find(RBuffer *b, ut32 type, ut32 *size);
 
-static bool r_core_newprj_save(RCore *core, const char *file);
+static bool r_core_newprj_save(RCore *core, const char *file, bool snapshot);
 static char *r_core_newprj_load(RCore *core, const char *file, int mode);
 
 #endif

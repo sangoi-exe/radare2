@@ -16,6 +16,7 @@ static RCoreHelpMessage help_msg_prj = {
 	"Usage:", "prj [action] [file]", "Manage project files",
 	"prj list", "", "list all projects",
 	"prj save", " [file]", "save current state into a project file",
+	"prj snapshot", " [file]", "save a restorable snapshot of the read-only original and current virtual edits",
 	"prj info", " [file]", "show information about the project file",
 	"prj load", " [file]", "merge project information into the current session",
 	"prj restore", " [file]", "restore analysis and virtual edits onto the matching read-only original, already loaded normally; no saved commands, config or file opens",
@@ -35,7 +36,7 @@ static RCmdResult prj_load(RCmdContext *ctx, const char *file, int mode) {
 	return (RCmdResult) { 0 };
 }
 
-static RCmdResult prj_save(RCmdContext *ctx, const char *file) {
+static RCmdResult prj_save(RCmdContext *ctx, const char *file, bool snapshot) {
 	RCore *core = ctx->user;
 	const bool exists = r_file_exists (file);
 	if (exists && r_config_get_b (core->config, "scr.interactive")
@@ -43,10 +44,7 @@ static RCmdResult prj_save(RCmdContext *ctx, const char *file) {
 		R_LOG_ERROR ("File exists");
 		return (RCmdResult) { .status = 1 };
 	}
-	if (exists) {
-		r_file_rm (file);
-	}
-	return (RCmdResult) { .status = r_core_newprj_save (core, file)? 0: 1 };
+	return (RCmdResult) { .status = r_core_newprj_save (core, file, snapshot)? 0: 1 };
 }
 
 static RCmdResult prj_open(RCmdContext *ctx, const char *file) {
@@ -103,7 +101,10 @@ static RCmdResult prj_callback(RCmdContext *ctx) {
 	}
 	const char *file = args[1].a;
 	if (r_strs_equals_str (args[0], "save")) {
-		return prj_save (ctx, file);
+		return prj_save (ctx, file, false);
+	}
+	if (r_strs_equals_str (args[0], "snapshot")) {
+		return prj_save (ctx, file, true);
 	}
 	if (r_strs_equals_str (args[0], "load")) {
 		return prj_load (ctx, file, R_CORE_NEWPRJ_MODE_LOAD | R_CORE_NEWPRJ_MODE_CMD);

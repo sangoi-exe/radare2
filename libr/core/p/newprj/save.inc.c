@@ -545,7 +545,80 @@ static void rprj_write_entry(RPrjCursor *cur, ut32 type, RPrjEntryWriter fn) {
 	}
 }
 
-static bool r_core_newprj_save(RCore *core, const char *file) {
+static bool rprj_publish(const char *file, const ut8 *data, ut64 size) {
+	if (R_STR_ISEMPTY (file) || !data || size > SIZE_MAX) {
+		return false;
+	}
+	char *path = *file == '~'? r_file_home (file): strdup (file);
+	if (!path) {
+		return false;
+	}
+	if (!r_sandbox_check_writepath (path)
+			&& (!r_sandbox_check (R_SANDBOX_GRAIN_FILES | R_SANDBOX_GRAIN_DISK) || r_sandbox_enable (false))) {
+		free (path);
+		return false;
+	}
+	char *temporary = r_str_newf ("%s.tmp.%d.%08x", path, r_sys_getpid (), (ut32)r_num_rand (INT_MAX));
+	if (!temporary) {
+		free (path);
+		return false;
+	}
+#if R2__WINDOWS__
+	wchar_t *wpath = r_utf8_to_utf16 (path);
+	wchar_t *wtemporary = r_utf8_to_utf16 (temporary);
+	if (!wpath || !wtemporary) {
+		free (wpath);
+		free (wtemporary);
+		free (temporary);
+		free (path);
+		return false;
+	}
+#endif
+	const int fd = r_sandbox_open (temporary, O_CREAT | O_EXCL | O_WRONLY | O_BINARY, 0600);
+	bool ok = false;
+	if (fd != -1) {
+#if R2__WINDOWS__
+		FILE *stream = _fdopen (fd, "wb");
+#else
+		FILE *stream = fdopen (fd, "wb");
+#endif
+		if (stream) {
+			ok = fwrite (data, 1, (size_t)size, stream) == size && !ferror (stream);
+			if (fclose (stream) != 0) {
+				ok = false;
+			}
+		} else {
+			close (fd);
+		}
+		// The scoped destination must still qualify before native replacement.
+		if (ok && !r_sandbox_check_writepath (path) && r_sandbox_enable (false)) {
+			ok = false;
+		}
+		if (ok) {
+#if R2__WINDOWS__
+			ok = MoveFileExW (wtemporary, wpath, MOVEFILE_REPLACE_EXISTING) != 0;
+#else
+			ok = rename (temporary, path) == 0;
+#endif
+		}
+		if (!ok) {
+#if R2__WINDOWS__
+			DeleteFileW (wtemporary);
+#else
+			unlink (temporary);
+#endif
+		}
+	}
+#if R2__WINDOWS__
+	free (wpath);
+	free (wtemporary);
+#endif
+	free (temporary);
+	free (path);
+	return ok;
+}
+
+static bool r_core_newprj_save(RCore *core, const char *file, bool snapshot) {
 	RBuffer *b = r_buf_new ();
 	rprj_header_write (b);
 	R2ProjectStringTable st = {0};
@@ -557,8 +630,8 @@ static bool r_core_newprj_save(RCore *core, const char *file) {
 	RVecPrjMod_init (&cur.mods);
 	ut64 state_at;
 	rprj_entry_begin (b, &state_at, RPRJ_STATE, 1);
-	if (!rprj_state_write (&cur)) {
-		R_LOG_ERROR ("Cannot save original identity and virtual edits");
+	if (!rprj_state_write (&cur, snapshot)) {
+		R_LOG_ERROR ("%s", snapshot? "Cannot save snapshot: requires a restorable read-only original and valid virtual edits": "Cannot save original identity and virtual edits");
 		r_unref (b);
 		free (st.data);
 		RVecPrjMod_fini (&cur.mods);
@@ -586,9 +659,9 @@ static bool r_core_newprj_save(RCore *core, const char *file) {
 	RVecPrjMap_free (cur.maps);
 	ut64 size;
 	const ut8 *data = r_buf_data (b, &size);
-	const bool ok = r_file_dump (file, data, size, false);
+	const bool ok = rprj_publish (file, data, size);
 	if (!ok) {
-		R_LOG_ERROR ("Cannot write file");
+		R_LOG_ERROR ("Cannot publish project file '%s'", file);
 	}
 	r_unref (b);
 	RVecPrjMod_fini (&cur.mods);
