@@ -56,17 +56,20 @@ static int borland_profiles(RAnal *anal) {
 		}
 		R_LOG_INFO ("Borland scrantic-runtime-qualified: FILE 0x%08"PFMT64x" %s", scrantic_functions[i].start, applied? "qualified (including unchanged)": "preserved/refused; dependent facts skipped");
 	}
-	if ((accepted & 2) && profile_binding (&ctx, 0x2ee3, 0, 13, 0x7e5, 0x179e5)) {
+	const BorlandProfileBinding getmem = { 3, 0, 13, 0x7e5, 0x179e5, NULL, true, true, true };
+	const BorlandProfileBinding rlsmem = { 3, 0, 13, 0x962, 0x17b62, NULL, true, true, true };
+	if ((accepted & 2) && profile_binding (&ctx, 0x2ee3, &getmem)) {
 		accepted |= 128;
 	}
-	if ((accepted & 4) && profile_binding (&ctx, 0x2f98, 0, 13, 0x962, 0x17b62)) {
+	if ((accepted & 4) && profile_binding (&ctx, 0x2f98, &rlsmem)) {
 		accepted |= 256;
 	}
 	static const struct { ut64 physical; int ordinal; unsigned owner; unsigned binding; } imports[] = {
 		{ 0x2aa7, 5, 8, 512 }, { 0x2ada, 6, 16, 1024 }, { 0x2af1, 5, 32, 2048 }, { 0x2b00, 7, 64, 4096 }
 	};
 	for (i = 0; i < R_ARRAY_SIZE (imports); i++) {
-		if ((accepted & imports[i].owner) && profile_binding (&ctx, imports[i].physical, 1, 3, imports[i].ordinal, UT64_MAX)) {
+		BorlandProfileBinding fact = { 3, 1, 3, imports[i].ordinal, UT64_MAX, "KERNEL", true, true, false };
+		if ((accepted & imports[i].owner) && profile_binding (&ctx, imports[i].physical, &fact)) {
 			accepted |= imports[i].binding;
 		}
 	}

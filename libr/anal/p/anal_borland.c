@@ -99,18 +99,26 @@ typedef struct {
 	const char *name;
 	const char *type;
 	int offset;
+	size_t count;
 } HelperMember;
 
 static bool borland_record(RAnal *anal, const char *name, int bits, const HelperMember *members, int count) {
+	int i;
+	for (i = 0; i < count; i++) {
+		ut64 width = r_type_get_bitsize (anal->sdb_types, members[i].type);
+		if (!width || members[i].offset < 0 || (members[i].count && r_mul_overflow (width, (ut64)members[i].count, &width))
+				|| bits < 1 || (ut64)members[i].offset * 8 > bits || width > bits - (ut64)members[i].offset * 8) {
+			return false;
+		}
+	}
 	RAnalBaseType *type = r_anal_get_base_type (anal, name);
 	if (type) {
 		bool valid = type->kind == R_ANAL_BASE_TYPE_KIND_STRUCT && type->size == bits
 			&& RVecAnalTypeMember_length (&type->struct_data.members) == count;
-		int i;
 		for (i = 0; valid && i < count; i++) {
 			RAnalTypeMember *member = RVecAnalTypeMember_at (&type->struct_data.members, i);
 			valid = !strcmp (member->name, members[i].name) && !strcmp (member->type, members[i].type)
-				&& member->offset == members[i].offset && !member->count && !member->bitsize;
+				&& member->offset == members[i].offset && member->count == members[i].count && !member->bitsize;
 		}
 		r_anal_base_type_free (type);
 		return valid;
@@ -121,9 +129,8 @@ static bool borland_record(RAnal *anal, const char *name, int bits, const Helper
 	type = r_anal_base_type_new (R_ANAL_BASE_TYPE_KIND_STRUCT);
 	type->name = strdup (name);
 	type->size = bits;
-	int i;
 	for (i = 0; i < count; i++) {
-		RAnalTypeMember member = { .name = strdup (members[i].name), .type = strdup (members[i].type), .offset = members[i].offset };
+		RAnalTypeMember member = { .name = strdup (members[i].name), .type = strdup (members[i].type), .offset = members[i].offset, .count = members[i].count };
 		RVecAnalTypeMember_push_back (&type->struct_data.members, &member);
 	}
 	r_anal_save_base_type (anal, type);
@@ -483,6 +490,8 @@ static int borland_scan(RAnal *anal) {
 }
 
 #include "borland_profile_context.inc.c"
+#include "borland_profile_data.inc.c"
+#include "borland_profile_bindings.inc.c"
 #include "borland_profiles.inc.c"
 
 static bool borland_pre_analysis(RAnal *anal) {
