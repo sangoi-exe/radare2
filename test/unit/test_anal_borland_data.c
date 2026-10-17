@@ -58,6 +58,7 @@ static BorlandProfileContext local_data(void) {
 	section->vaddr = LOCAL_BASE;
 	section->size = section->vsize = sizeof (bytes);
 	section->perm = R_PERM_R;
+	section->add = true;
 	sdb_num_set (file->sdb_info, "ne.reloc.1.count", 0, 0);
 	return (BorlandProfileContext){ core->anal, file, file->sdb_info };
 }

@@ -35,6 +35,7 @@ static BorlandProfileContext local_profile_bytes(const ut8 *bytes, int size) {
 	section->vaddr = PROFILE_ADDR;
 	section->size = section->vsize = size;
 	section->perm = R_PERM_RX;
+	section->add = true;
 	sdb_num_set (file->sdb_info, "ne.reloc.1.count", 0, 0);
 	return (BorlandProfileContext){ core->anal, file, file->sdb_info };
 }
@@ -186,6 +187,7 @@ static bool test_profile_relocation_limits(void) {
 			section->paddr = 2;
 			section->vaddr = PROFILE_ADDR + 0x100;
 			section->size = section->vsize = 2;
+			section->add = true;
 		}
 		mu_assert_false (local_apply (&ctx, true), "partial, unsupported, overlapping, unresolved or ambiguous native fields refuse");
 		mu_assert_null (r_anal_get_function_at (ctx.anal, PROFILE_ADDR), "field refusal has no function side effect");
@@ -220,6 +222,7 @@ static bool test_profile_mapping_preservation(void) {
 			RBinSection *section = RVecRBinSection_emplace_back (&ctx.file->bo->sections_vec);
 			section->vaddr = PROFILE_ADDR + 0x100;
 			section->size = section->vsize = 64;
+			section->add = true;
 		} else {
 			RAnalFunction *fcn = r_anal_create_function (ctx.anal, "manual_interior_entry", PROFILE_ADDR + 2, R_ANAL_FCN_TYPE_FCN, NULL);
 			mu_assert_notnull (fcn, "independent empty entry");
@@ -275,13 +278,13 @@ static bool test_profile_long_body_and_integer_purge(void) {
 	mu_end;
 }
 
-static RCore *original_core_path(const char *path) {
+static RCore *original_core_at(const char *path, ut64 base) {
 	if (!path) {
 		return NULL;
 	}
 	RCore *core = r_core_new ();
 	r_config_set_b (core->config, "bin.relocs.apply", true);
-	if (!r_core_file_open (core, path, R_PERM_RX, 0) || !r_core_bin_load (core, path, UT64_MAX)) {
+	if (!r_core_file_open (core, path, R_PERM_RX, 0) || !r_core_bin_load (core, path, base)) {
 		r_core_free (core);
 		return NULL;
 	}
@@ -289,8 +292,152 @@ static RCore *original_core_path(const char *path) {
 	return core;
 }
 
+static RCore *original_core_path(const char *path) {
+	return original_core_at (path, UT64_MAX);
+}
+
 static RCore *original_core(void) {
 	return original_core_path (getenv ("R2_TEST_SCRANTIC"));
+}
+
+static bool tasm_context(RCore *core, BorlandProfileContext *ctx) {
+	return profile_identity (core->anal, ctx, "mz", 129266, "80534cd6a1e2c2b4376ae3f21954c6dbfa77a6998d5e0bf8b8bee6153f3174ea");
+}
+
+static bool test_tasm_mz_current(void) {
+	if (!getenv ("R2_TEST_TASM31")) {
+		eprintf ("TASM MZ original proof not run: set R2_TEST_TASM31 to the read-only original\n");
+		mu_end;
+	}
+	RCore *core = original_core_path (getenv ("R2_TEST_TASM31"));
+	mu_assert_notnull (core, "native TASM MZ load");
+	BorlandProfileContext ctx;
+	mu_assert_true (tasm_context (core, &ctx), "literal TASM original identity");
+	mu_assert_eq (ctx.file->bo->baddr, UT64_MAX, "MZ without a baddr callback retains the unspecified-base sentinel");
+	mu_assert_eq (ctx.file->bo->baddr_shift, 0, "native MZ has no base shift");
+	mu_assert_eq (ctx.file->bo->loadaddr, 0, "native original load address");
+	mu_assert_null (sdb_const_get (ctx.ne, "ne.reloc.1.count", NULL), "MZ has no NE provenance obligation");
+	static const BorlandProfileRange ranges[] = { { 0x50cc, 22 }, { 0x50e2, 16 }, { 0x50f2, 40 }, { 0x1084b, 13 } };
+	HelperOp ops[40];
+	size_t i;
+	for (i = 0; i < R_ARRAY_SIZE (ranges); i++) {
+		ut64 address = ranges[i].physical - 0x800;
+		mu_assert_eq (profile_mapped (&ctx, ranges[i].physical, ranges[i].size, true), address, "native mapped segments ignore nonmapping text metadata");
+		mu_assert_true (profile_code (&ctx, ranges[i].physical, ranges[i].size, address, ops), "allocation union, independent clear and nonzero logical segment code qualify");
+		mu_assert_null (r_anal_get_function_at (core->anal, address), "code qualification does not manufacture a function");
+	}
+	static const ut64 pairs[] = { 0x4dec, 0x4e05, 0x4ee4, 0xfe96, 0xfeb1, 0x11ce0 };
+	static const ut64 targets[] = { 0x15fd2, 0x15fd2, 0x15fd2, 0x1004b, 0x1004b, 0x16def };
+	for (i = 0; i < R_ARRAY_SIZE (pairs); i++) {
+		int fields = 0;
+		RBinReloc *reloc;
+		R_VEC_FOREACH (ctx.file->bo->relocs, reloc) {
+			if (reloc->paddr == pairs[i] + 2) {
+				mu_assert_eq (reloc->type, R_BIN_RELOC_16, "actual MZ segment WORD record");
+				mu_assert_eq (reloc->ntype, 0, "MZ ntype zero is not NE byte relocation");
+				mu_assert_eq (reloc->vaddr, pairs[i] + 2 - 0x800, "actual zero-origin relocation coordinate");
+				fields++;
+			}
+		}
+		mu_assert_eq (fields, 1, "each selected FAR segment field has one native relocation");
+		ut8 current[4];
+		mu_assert_true (profile_current (&ctx, pairs[i], 4, pairs[i] - 0x800, current), "native unchanged FAR offset and paragraph qualify");
+		mu_assert_eq (r_read_le16 (current + 2), r_buf_read_le16_at (ctx.file->buf, pairs[i] + 2), "no invented DOS relocation arithmetic");
+		mu_assert_eq (((ut64)r_read_le16 (current + 2) << 4) + r_read_le16 (current), targets[i], "native zero-origin target differs from source FILE coordinate");
+		mu_assert_eq (profile_mapped (&ctx, targets[i] + 0x800, 1, true), targets[i], "original target FILE maps to the actual resident image");
+		mu_assert_false (profile_current (&ctx, pairs[i] + 2, 1, pairs[i] + 2 - 0x800, current), "partial relocation WORD does not qualify");
+		ut8 original = r_buf_read8_at (ctx.file->buf, pairs[i] + 2);
+		ut8 patch = original ^ 1;
+		core->anal->iob.overlay_write_at (core->io, pairs[i] + 2 - 0x800, &patch, 1);
+		mu_assert_false (profile_current (&ctx, pairs[i], 4, pairs[i] - 0x800, current), "edited relocation WORD is not normalized away");
+		core->anal->iob.overlay_write_at (core->io, pairs[i] + 2 - 0x800, &original, 1);
+	}
+	r_core_free (core);
+	core = original_core_at (getenv ("R2_TEST_TASM31"), 0);
+	mu_assert_notnull (core, "native MZ explicitly zero-based load");
+	mu_assert_true (tasm_context (core, &ctx), "zero-base original identity");
+	mu_assert_eq (ctx.file->bo->baddr, 0, "explicit zero base is retained without a callback");
+	mu_assert_eq (profile_mapped (&ctx, 0x50e2, 16, true), 0x48e2, "zero and unspecified bases share native resident coordinates");
+	mu_assert_true (profile_code (&ctx, 0x50e2, 16, 0x48e2, ops), "explicit zero base qualifies without a relocation delta");
+	r_core_free (core);
+	mu_end;
+}
+
+static bool test_tlink_mz_current(void) {
+	if (!getenv ("R2_TEST_TLINK401")) {
+		eprintf ("TLINK MZ original proof not run: set R2_TEST_TLINK401 to the read-only original\n");
+		mu_end;
+	}
+	RCore *core = original_core_path (getenv ("R2_TEST_TLINK401"));
+	mu_assert_notnull (core, "native TLINK401 MZ load");
+	BorlandProfileContext ctx;
+	mu_assert_true (profile_identity (core->anal, &ctx, "mz", 73401, "df1be38b22d43cc912992f1fcca93a5b630197721744ef2eea399f22d1415f0c"), "literal TLINK401 original identity");
+	static const BorlandProfileRange ranges[] = {
+		{ 0x3458, 0x96 }, { 0x3556, 0xcc }, { 0x6e8f, 0x19b }, { 0x70fb, 0x2c }, { 0x716e, 0x3eb },
+		{ 0x3a3a, 0x16d }, { 0x4ea, 0x4b }, { 0x974, 0xe2 }, { 0xafc, 0x77 }, { 0xca6, 0x43 }
+	};
+	HelperOp ops[0x3eb];
+	size_t i;
+	for (i = 0; i < R_ARRAY_SIZE (ranges); i++) {
+		ut64 address = ranges[i].physical - 0x400;
+		mu_assert_eq (profile_mapped (&ctx, ranges[i].physical, ranges[i].size, true), address, "TLINK selected native CS0 mapping");
+		mu_assert_true (profile_code (&ctx, ranges[i].physical, ranges[i].size, address, ops), "five complete functions and five partial windows qualify as code only");
+		mu_assert_null (r_anal_get_function_at (core->anal, address), "qualification does not promote a partial window to a function");
+	}
+	ut8 current[2];
+	mu_assert_true (profile_current (&ctx, 0x5ed, 2, 0x1ed, current), "actual startup DS relocation WORD qualifies");
+	mu_assert_eq (r_read_le16 (current), 0x11b1, "startup paragraph is unchanged by native MZ loader");
+	mu_assert_null (r_io_map_get_at (core->io, 0x11b10 + 0x17), "DS0017 outside initialized load image is not invented");
+	r_core_free (core);
+	mu_end;
+}
+
+static bool test_mz_current_preservation(void) {
+	if (!getenv ("R2_TEST_TASM31")) {
+		mu_end;
+	}
+	int scenario;
+	for (scenario = 0; scenario < 5; scenario++) {
+		RCore *core = original_core_path (getenv ("R2_TEST_TASM31"));
+		mu_assert_notnull (core, "real native MZ preservation input");
+		BorlandProfileContext ctx;
+		mu_assert_true (tasm_context (core, &ctx), "MZ preservation original identity");
+		mu_assert_true (profile_function (&ctx, 0x50e2, 16, PROFILE_NAME, 0, NULL), "independent clear function prerequisite");
+		RAnalFunction *fcn = r_anal_get_function_at (core->anal, 0x48e2);
+		RAnalBlock *bb = r_list_first (fcn->bbs);
+		RIOMap *map = NULL;
+		if (scenario == 0) {
+			ut8 patch = 0x90;
+			core->anal->iob.overlay_write_at (core->io, 0x48e4, &patch, 1);
+		} else if (scenario == 1) {
+			r_anal_hint_set_bits (core->anal, 0x48e4, 32);
+			r_anal_hint_set_bits (core->anal, 0x48e5, 16);
+		} else if (scenario == 2) {
+			map = r_io_map_add (core->io, ctx.file->fd, R_PERM_RX, 0x50e2, 0x30000, 16);
+		} else if (scenario == 3) {
+			mu_assert_notnull (r_io_open_at (core->io, "malloc://1", R_PERM_RWX, 0, 0x48e4), "competing active descriptor");
+		} else {
+			ctx.file->bo->baddr = 0x1000;
+		}
+		ut64 size = bb->size, jump = bb->jump;
+		mu_assert_false (profile_function (&ctx, 0x50e2, 16, PROFILE_NAME, 0, NULL), "changed bytes, interior context, competing image/FD or unsupported base refuse");
+		mu_assert_ptreq (r_anal_get_function_at (core->anal, 0x48e2), fcn, "refusal retains independent function");
+		mu_assert_eq (bb->size, size, "refusal retains body");
+		mu_assert_eq (bb->jump, jump, "refusal retains flow");
+		mu_assert_eq (fcn->meta.stack_pop, 0, "refusal retains cleanup");
+		if (scenario == 0) {
+			ut8 current;
+			r_io_read_at (core->io, 0x48e4, &current, 1);
+			mu_assert_eq (current, 0x90, "independent byte edit retained");
+		} else if (scenario == 1) {
+			mu_assert_eq (r_anal_hint_bits_at (core->anal, 0x48e4, NULL), 32, "interior context edit retained");
+		} else if (scenario == 2) {
+			mu_assert_notnull (map, "competing image map exists");
+			mu_assert_ptreq (r_io_map_get_at (core->io, 0x30000), map, "competing map retained");
+		}
+		r_core_free (core);
+	}
+	mu_end;
 }
 
 static const BorlandProfileRange simtower_main_ranges[] = { { 0x420a, 26 }, { 0x426e, 1069 } };
@@ -553,6 +700,9 @@ int all_tests(void) {
 	mu_run_test (test_profile_relocation_limits);
 	mu_run_test (test_profile_current_without_code);
 	mu_run_test (test_profile_long_body_and_integer_purge);
+	mu_run_test (test_tasm_mz_current);
+	mu_run_test (test_tlink_mz_current);
+	mu_run_test (test_mz_current_preservation);
 	mu_run_test (test_scrantic_production);
 	mu_run_test (test_scrantic_production_preservation);
 	mu_run_test (test_simtower_selected_code);

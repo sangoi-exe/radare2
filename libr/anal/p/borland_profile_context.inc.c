@@ -45,6 +45,9 @@ static ut64 profile_mapped(BorlandProfileContext *ctx, ut64 physical, int size, 
 	ut64 address = UT64_MAX;
 	RBinSection *section;
 	R_VEC_FOREACH (&ctx->file->bo->sections_vec, section) {
+		if (!section->add) {
+			continue;
+		}
 		ut64 length = R_MIN (section->size, section->vsize);
 		if (!length || section->paddr >= physical + size || (section->paddr < physical && physical - section->paddr >= length)) {
 			continue;
@@ -104,6 +107,11 @@ static bool profile_number_is(BorlandProfileContext *ctx, const char *key, const
 }
 
 static bool profile_relocated(BorlandProfileContext *ctx, ut64 physical, int size, ut64 address, ut8 *expected, bool *relocated) {
+	bool mz = !strcmp (ctx->file->bo->plugin->meta.name, "mz");
+	if (mz && ((ctx->file->bo->baddr && ctx->file->bo->baddr != UT64_MAX) || ctx->file->bo->baddr_shift || ctx->file->bo->loadaddr)) {
+		R_LOG_WARN ("Borland MZ profile requires the native zero-origin resident image");
+		return false;
+	}
 	RBinReloc *reloc;
 	R_VEC_FOREACH (ctx->file->bo->relocs, reloc) {
 		int width = reloc->type / 8;
@@ -114,33 +122,41 @@ static bool profile_relocated(BorlandProfileContext *ctx, ut64 physical, int siz
 				|| reloc->vaddr != address + reloc->paddr - physical) {
 			return false;
 		}
-		ut64 target = reloc->import? reloc->laddr: reloc->addend;
-		if (target == UT64_MAX) {
-			return false;
-		}
 		int off = reloc->paddr - physical;
-		switch (reloc->ntype) {
-		case 0:
-			if (width != 1) {
+		if (mz) {
+			// Native MZ records mark unchanged paragraph WORDs, not NE target applications.
+			if (reloc->type != R_BIN_RELOC_16 || reloc->ntype || reloc->additive || reloc->import || reloc->symbol
+					|| reloc->addend || reloc->laddr || reloc->is_ifunc) {
 				return false;
 			}
-			expected[off] = target + (reloc->additive? expected[off]: 0);
-			break;
-		case 2:
-		case 5:
-			if (width != 2) {
+		} else {
+			ut64 target = reloc->import? reloc->laddr: reloc->addend;
+			if (target == UT64_MAX) {
 				return false;
 			}
-			r_write_le16 (expected + off, (reloc->ntype == 2? target >> 16: target) + (reloc->additive? r_read_le16 (expected + off): 0));
-			break;
-		case 3:
-			if (width != 4) {
+			switch (reloc->ntype) {
+			case 0:
+				if (width != 1) {
+					return false;
+				}
+				expected[off] = target + (reloc->additive? expected[off]: 0);
+				break;
+			case 2:
+			case 5:
+				if (width != 2) {
+					return false;
+				}
+				r_write_le16 (expected + off, (reloc->ntype == 2? target >> 16: target) + (reloc->additive? r_read_le16 (expected + off): 0));
+				break;
+			case 3:
+				if (width != 4) {
+					return false;
+				}
+				r_write_le32 (expected + off, target + (reloc->additive? r_read_le32 (expected + off): 0));
+				break;
+			default:
 				return false;
 			}
-			r_write_le32 (expected + off, target + (reloc->additive? r_read_le32 (expected + off): 0));
-			break;
-		default:
-			return false;
 		}
 		int i;
 		for (i = off; i < off + width; i++) {
@@ -149,6 +165,9 @@ static bool profile_relocated(BorlandProfileContext *ctx, ut64 physical, int siz
 			}
 			relocated[i] = true;
 		}
+	}
+	if (mz) {
+		return true;
 	}
 	char segment[48];
 	snprintf (segment, sizeof (segment), "ne.reloc.%"PFMT64u, address >> 16);
