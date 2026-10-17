@@ -1,8 +1,8 @@
 # Native fork master consolidation — Intent Contract
 
-Status: on-hold
+Status: active
 Task mode: Doctrine
-Lifecycle phase: Initial
+Lifecycle phase: Implementation
 Strategy epoch: native-master-1
 Plan kind: Operations / Tooling Plan
 Secondary kinds: none
@@ -21,7 +21,7 @@ The primary kind is Operations / Tooling because Git refs, publication and the f
 - Request: turn `01a14ae8-e8e3-7dd3-8464-b8452167934a`, message `msg_01a14ae8-e99d-7d01-b2f3-13aa13e52268`, `2026-10-17T14:29:00.573-03:00` (America/Sao_Paulo), current rollout line21414: keep only master in each fork, create it where missing, and put all commits there.
 - Explicit paraphrase confirmation and route selection: turn `01a14aef-831e-7652-83f3-9ab1c69840b3`, message `msg_01a14aef-83b0-7210-b763-7351a9978d37`, `2026-10-17T14:36:13.233-03:00` (America/Sao_Paulo), current rollout line21538: “sim, confirmo, só nosso trabalho”. The preceding proposal states one master locally/on GitHub, all our work plus current principal history, the host's two remote commits retained by normal merge, recoverable backup before deleting169 extra remote branches, and exclusion of inherited experiments, tags and upstream repositories.
 - This is explicit authority for the named fork publications, default-branch change and branch deletions within this envelope. It is not permission to lose unique history without the selected backup, force-rewrite master, change tags, mutate upstream, alter global configuration or expand runtime behavior.
-- The confirmation authorizes the local Initial Intent Contract audit. A normal Plan Gate `PROCEED` still requires later current-user implementation authorization. The Code Gate for this new task has not been selected; the previous transfer task's local choice expired at its terminal result.
+- The confirmation authorized the local Initial Intent Contract audit. After its `PROCEED`, turn `01a14af8-3ed0-7f41-9832-419c92e3f0de`, message `msg_01a14af8-3f6b-7191-9169-38ea44e5ab89`, `2026-10-17T14:45:45.580-03:00` (America/Sao_Paulo), raw rollout21670, says “pode executar” in response to the exact backup/consolidation/publication/cleanup and local Code Gate proposal at21663. This is the later implementation authorization and this task's local Code Gate selection. The previous transfer's expired selection is not reused.
 
 ## Canonical owners and observed inputs
 
@@ -80,7 +80,7 @@ The destructive frontier is precisely all nonmaster local branch references and 
 The root retains Git lifecycle, external/destructive actions, integration, final validation and documentary meaning. Workers may change only their admitted source/documentary footprints; they do not fetch, switch branches, stage, commit, push, change defaults or delete refs. The Microtask Program remains root-owned and proportional; no execution annex is needed for this bounded task.
 
 Plan Gate: `/root/native_master_plan_audit` returned `PROCEED` for the local Doctrine / Initial / Intent contract audit at host `a14824fa4809ec1070506f776a6b29133d42e1b6`, with complete required-field coverage and no material findings or required correction. The reviewer verified the exact request/paraphrase/confirmation source sequence and current principal/work ancestry. The sole matching resident transition places the plan on-hold, retains Initial and requires later current-user implementation authorization; no rerun is required.
-Implementation authority: pending the normal post-audit current-user checkpoint. Only administrative plan preparation has occurred; no implementation fetch, branch consolidation, merge, push, default change or deletion has occurred.
-Code Gate: not selected for this task; ask the current user for local Senior Code Reviewer, ChatGPT Web Extra High or ChatGPT Web Pro before that new Gate.
-Blocker: later current-user implementation authorization is pending. Missing remote host-master object remains a known execution input, not established mergeability. No consolidation or external action is authorized by the audit alone.
-Next high-level action: obtain the later current-user implementation authorization and select this task's Code Gate before execution/review as applicable. Preserve the selected Scope and closed interpretation; do not ask the user to confirm that paraphrase again.
+Implementation authority: active under the later current-user message at `2026-10-17T14:45:45.580-03:00`, raw21670. The plan enters Implementation before the first consolidation mutation.
+Code Gate: local `Senior Code Reviewer / Task change-set review` selected for this task's next committed-candidate review by the same message in response to the exact local/Extra High/Pro proposal. No override or review waiver is supplied.
+Blocker: none. Missing remote host-master object remains a known execution input, not established mergeability. No source, remote publication, default or deletion result is claimed before observation.
+Next high-level action: capture fresh exact refs and identity, acquire required origin objects and verify standalone recovery bundles, then prepare ancestry-preserving local masters and the bounded guide/host-integration proof. Preserve the selected Scope and closed interpretation.
