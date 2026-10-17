@@ -1,8 +1,8 @@
 # Intent Contract: native baseline remediation
 
-Status: on-hold
+Status: active
 Task mode: Doctrine
-Lifecycle phase: Strategy reset
+Lifecycle phase: Implementation
 Strategy epoch: 3
 Plan kind: Bugfix / Regression Plan
 Secondary kind: Instruction / Policy Plan, limited to prospective commit attribution.
@@ -96,10 +96,10 @@ Do not correct the unresolved signature-assignment policy, recognized-image mixe
 3. Rebuild the host in a fresh task-scoped cache, require all 65 project tests plus the focused loader-baseline adversarial cases, then rerun the already-qualified bridge, engine and MCP followers against the stabilized host.
 4. Commit the validated host candidate with the exact Codex trailer, obtain the Code Gate required by the active resident instructions, then finish task-log/changelog bookkeeping and final Git verification.
 
-Material decisions still open: none for the confirmed result or selected Route A. Residual-risk acceptances: none. The previous Strategy-reset Plan Gate produced `PROCEED` for epoch 2 on `/root/native_baseline_plan_audit` at `2026-10-17T18:58:06.598-03:00`; the user then activated that implementation at `2026-10-17T18:59:35.079-03:00`, turn `01a14bde-a311-7332-b37f-1c137c212c08`, rollout line 23781. The 64/65 M06 result supplied new factual evidence that changed the host architecture/owner chain. The replacement epoch-3 Strategy-reset audit on the same task path produced `PROCEED` at `2026-10-17T19:51:07.979-03:00`, turn `01a14c0c-0630-7813-901c-7511f102619b`, rollout line 24895, with complete Intent Contract coverage and no material findings. This normal Gate result places the plan on hold in Strategy reset. The user's Route A selection preceded the Gate and does not supply the later implementation checkpoint required by this session's loaded instructions. The cache-only M06 candidate is uncommitted and not accepted. Code Gate operation: not yet selected for the final candidate.
+Material decisions still open: none for the confirmed result or selected Route A. Residual-risk acceptances: none. The previous Strategy-reset Plan Gate produced `PROCEED` for epoch 2 on `/root/native_baseline_plan_audit` at `2026-10-17T18:58:06.598-03:00`; the user then activated that implementation at `2026-10-17T18:59:35.079-03:00`, turn `01a14bde-a311-7332-b37f-1c137c212c08`, rollout line 23781. The 64/65 M06 result supplied new factual evidence that changed the host architecture/owner chain. The replacement epoch-3 Strategy-reset audit on the same task path produced `PROCEED` at `2026-10-17T19:51:07.979-03:00`, turn `01a14c0c-0630-7813-901c-7511f102619b`, rollout line 24895, with complete Intent Contract coverage and no material findings. The user then authorized epoch-3 implementation with `sim, pode executar` at `2026-10-17T19:57:10.512-03:00`, turn `01a14c15-5942-7130-9095-ee0e704457f0`, rollout line 24955. The plan is active in Implementation. The cache-only M06 candidate remains uncommitted and not accepted; Route A must replace it. Code Gate operation: not yet selected for the final candidate.
 
 The active execution annex is `.sangoi/planning/2026-10-17-native-baseline-remediation-microtasks.md`. It records only the root-owned mutable Microtask Program and is current for this implementation. The runtime exposes no `update_plan` tool in this session, so this one subordinate annex carries the projection; it owns no Scope, strategy, lifecycle or acceptance.
 
 Runtime continuity caveat: the on-disk resident/shared instruction files now describe automatic implementation activation after PROCEED, while this session's injected shared instructions still require a later current-user authorization. Do not treat the revised disk instructions as active without the required session reload. This task does not edit the global instruction corpus or use that drift as an override.
 
-Blocker: Route A source mutation is suspended until a later unambiguous current-user implementation authorization. Next high-level action after that authorization: activate epoch 3, fix the exact load-lifecycle/consumer footprint, and dispatch the bounded Route A Worker entry.
+Blocker: none for the selected Route A. Next high-level action: fix the exact load-lifecycle/consumer footprint and dispatch the bounded Route A Worker entry.
