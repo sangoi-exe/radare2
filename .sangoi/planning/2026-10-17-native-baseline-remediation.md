@@ -1,8 +1,8 @@
 # Intent Contract: native baseline remediation
 
-Status: on-hold
+Status: active
 Task mode: Doctrine
-Lifecycle phase: Initial
+Lifecycle phase: Implementation
 Strategy epoch: 1
 Plan kind: Bugfix / Regression Plan
 Secondary kind: Instruction / Policy Plan, limited to prospective commit attribution.
@@ -81,8 +81,10 @@ Do not correct the unresolved signature-assignment policy, recognized-image mixe
 3. Integrate the canonical changes and dependency pin, build in fresh task-scoped cache destinations, and run the focused combined-runtime acceptance. Preserve existing sources, generated configuration and unrelated work.
 4. Commit coherent validated candidates in the correct repositories with the exact Codex trailer; obtain the Code Gate required by the active resident instructions, then finish task-log/changelog bookkeeping and final Git verification.
 
-Material decisions still open: none for the confirmed result or first slice. Implementation-specific evidence may expose a new boundary, which cannot be silently selected by a Worker or reviewer. Residual-risk acceptances: none. Plan Gate: `PROCEED`, task `/root/native_baseline_plan_audit`, observed on `2026-10-17`; complete Intent Contract coverage, no material findings and no implementation approval claimed. Implementation authorization after this result: not yet supplied. Code Gate operation: not yet selected for this candidate under the loaded session instructions.
+Material decisions still open: none for the confirmed result or first slice. Implementation-specific evidence may expose a new boundary, which cannot be silently selected by a Worker or reviewer. Residual-risk acceptances: none. Plan Gate: `PROCEED`, task `/root/native_baseline_plan_audit`, observed on `2026-10-17`; complete Intent Contract coverage, no material findings and no implementation approval claimed. After that result, the current user authorized implementation with `sim, por favor` at `2026-10-17T18:37:56.568-03:00`, turn `01a14bcc-d093-72f0-97dc-1b99dfecaa8f`, rollout line 23376. Code Gate operation: not yet selected for this candidate under the loaded session instructions.
+
+The active execution annex is `.sangoi/planning/2026-10-17-native-baseline-remediation-microtasks.md`. It records only the root-owned mutable Microtask Program and is current for this implementation. The runtime exposes no `update_plan` tool in this session, so this one subordinate annex carries the projection; it owns no Scope, strategy, lifecycle or acceptance.
 
 Runtime continuity caveat: the on-disk resident/shared instruction files now describe automatic implementation activation after PROCEED, while this session's injected shared instructions still require a later current-user authorization. Do not treat the revised disk instructions as active without the required session reload. This task does not edit the global instruction corpus or use that drift as an override.
 
-Blocker: awaiting the later current-user implementation authorization required by this session's loaded shared instructions. Next high-level action after that authorization: enter active Implementation and dispatch the bounded first slice and independent entries. The plan remains on-hold in Initial; no implementation Worker has been dispatched.
+Blocker: none for the first slice and independent entries. Next high-level action: dispatch the prospective attribution entry, then the disjoint correction entries, while retaining dependent project/API decisions at their owner boundary if new evidence requires them.

@@ -17,6 +17,10 @@ Validation entry points are the host Make build and `r2r`/unit tests below, brid
 
 Last reviewed: 2026-10-16 on `win16-fmovmem`. Maintainers changing topology, ownership, build/test entry points or dependency integration must refresh this map and the affected child guidance against live files; branch names and installed components are not proof that this map is current.
 
+## Shared prospective commit attribution
+
+Commits materially authored by Codex in any of the four native repositories must include the exact trailer `Co-authored-by: Codex <codex@openai.com>` unless the current user explicitly says otherwise. Apply this prospectively without rewriting existing history or changing Git author/committer configuration.
+
 ## radare2 host guide
 
 The remaining guidance applies to radare2-owned files, not the independent r2ghidra, ghidra-native or r2mcp repositories. Their local instructions own source style, builds and tests.
