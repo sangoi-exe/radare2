@@ -318,49 +318,6 @@ static void rprj_flag_load(RPrjCursor *cur, int mode, ut64 next_entry) {
 	r_list_free (seen);
 }
 
-static bool rprj_function_is_registered(RAnal *anal, RAnalFunction *fcn) {
-	if (!fcn) {
-		return false;
-	}
-	RListIter *iter;
-	RAnalFunction *it;
-	RList *fcns = r_anal_get_fcns (anal);
-	r_list_foreach (fcns, iter, it) {
-		if (it == fcn) {
-			return true;
-		}
-	}
-	return false;
-}
-
-static RAnalFunction *rprj_function_get_registered(RAnal *anal, ut64 addr) {
-	RAnalFunction *fcn = r_anal_get_function_at (anal, addr);
-	if (rprj_function_is_registered (anal, fcn)) {
-		return fcn;
-	}
-	if (fcn) {
-		ht_up_delete (anal->ht_addr_fun, addr);
-		if (fcn->name) {
-			ht_pp_delete (anal->ht_name_fun, fcn->name);
-		}
-	}
-	return NULL;
-}
-
-static void rprj_function_drop_stale_name(RAnal *anal, const char *name) {
-	if (!name) {
-		return;
-	}
-	bool found = false;
-	RAnalFunction *fcn = ht_pp_find (anal->ht_name_fun, name, &found);
-	if (found && !rprj_function_is_registered (anal, fcn)) {
-		ht_pp_delete (anal->ht_name_fun, name);
-		if (fcn) {
-			ht_up_delete (anal->ht_addr_fun, fcn->addr);
-		}
-	}
-}
-
 static void rprj_block_load(RPrjCursor *cur, RAnalFunction *fcn, R2ProjectBlock *pbb, int mode, ut64 fcn_addr, RColor *colors, ut32 ncolors) {
 	ut64 va = UT64_MAX;
 	ut64 jump = UT64_MAX;
@@ -383,24 +340,33 @@ static void rprj_block_load(RPrjCursor *cur, RAnalFunction *fcn, R2ProjectBlock 
 	if (!(mode & R_CORE_NEWPRJ_MODE_LOAD) || !fcn || !pbb->size || pbb->size > ST32_MAX) {
 		return;
 	}
-	RAnalBlock *bb = r_anal_function_bbget_at (cur->core->anal, fcn, va);
-	if (!bb) {
-		bb = r_anal_get_block_at (cur->core->anal, va);
-		if (!bb) {
-			bb = r_anal_create_block (cur->core->anal, va, pbb->size);
-		}
-		if (bb) {
-			r_anal_function_add_block (fcn, bb);
-		}
+	RAnalBlock *bb = r_anal_get_block_at (cur->core->anal, va);
+	const bool created = !bb;
+	if (created) {
+		bb = r_anal_create_block (cur->core->anal, va, pbb->size);
 	}
 	if (bb) {
+		r_anal_function_add_block (fcn, bb);
 		r_anal_block_set_size (bb, pbb->size);
+		free (bb->op_pos);
+		bb->op_pos = pbb->op_pos;
+		pbb->op_pos = NULL;
+		bb->ninstr = pbb->ninstr;
+		bb->op_pos_size = pbb->ninstr? pbb->ninstr - 1: 0;
+		RListIter *iter;
+		RAnalFunction *owner;
+		r_list_foreach (bb->fcns, iter, owner) {
+			owner->meta.numcallrefs = -1;
+		}
 		bb->jump = jump;
 		bb->fail = fail;
 		if (pbb->color < ncolors) {
 			bb->color = colors[pbb->color];
 		} else {
 			memset (&bb->color, 0, sizeof (bb->color));
+		}
+		if (created) {
+			r_unref (bb);
 		}
 	}
 }
@@ -422,6 +388,7 @@ static void rprj_function_attr_load(RPrjCursor *cur, RAnalFunction *fcn, R2Proje
 		fcn->type = attr->type;
 		fcn->bits = attr->bits;
 		fcn->maxstack = (int)(st64)attr->stack;
+		fcn->meta.stack_pop = attr->stack_pop;
 		if (R_STR_ISNOTEMPTY (cc)) {
 			// the project saves the name but not a custom definition, so the
 			// saved value is restored rather than validated away
@@ -471,6 +438,10 @@ static void rprj_var_load(RPrjCursor *cur, RAnalFunction *fcn, R2ProjectVar *pva
 		}
 	}
 	if ((mode & R_CORE_NEWPRJ_MODE_LOAD) && fcn) {
+		RAnalVar *existing = r_anal_function_get_var_byname (fcn, name);
+		if (existing && (existing->kind != pvar->kind || existing->delta != pvar->delta)) {
+			r_anal_var_delete (cur->core->anal, existing);
+		}
 		r_anal_function_set_var (fcn, pvar->delta, pvar->kind, type, -1, pvar->isarg, name);
 	}
 }
@@ -818,15 +789,14 @@ static bool rprj_function_resolve(RPrjCursor *cur, int mode, R2ProjectFunction *
 		R2ProjectDiffAddr *df = R_NEW (R2ProjectDiffAddr);
 		df->addr = va;
 		r_list_append (pfcns, df);
-		fcn = rprj_function_get_registered (core->anal, va);
+		fcn = r_anal_get_function_at (core->anal, va);
 	}
 	if (mode & R_CORE_NEWPRJ_MODE_SCRIPT) {
 		r_strbuf_appendf (cur->out, "'af+ 0x%08"PFMT64x" %s\n", va, name? name: "");
 	}
 	if (mode & R_CORE_NEWPRJ_MODE_LOAD) {
-		fcn = rprj_function_get_registered (core->anal, va);
+		fcn = r_anal_get_function_at (core->anal, va);
 		if (!fcn) {
-			rprj_function_drop_stale_name (core->anal, name);
 			R2ProjectFunctionAttr *attr = pfcn->attr < nattrs? attrs + pfcn->attr: NULL;
 			fcn = r_anal_create_function (core->anal, name, va, attr? attr->type: 0, NULL);
 		}
@@ -869,7 +839,7 @@ static void rprj_function_diff_var(RPrjCursor *cur, R2ProjectVar *pvar, RList *p
 	r_list_append (pvars, dvar);
 }
 
-static void rprj_function_load(RPrjCursor *cur, int mode, ut64 next_entry) {
+static bool rprj_function_load(RPrjCursor *cur, int mode, ut64 next_entry) {
 	RBuffer *b = cur->b;
 	RCore *core = cur->core;
 	ut32 count = 0;
@@ -879,19 +849,20 @@ static void rprj_function_load(RPrjCursor *cur, int mode, ut64 next_entry) {
 	RList *pfcns = NULL;
 	RList *pbbs = NULL;
 	RList *pvars = NULL;
+	bool valid = false;
 	if (!rprj_entry_has (b, next_entry, sizeof (ncolors)) || !rprj_read_le32 (b, &ncolors)) {
 		R_LOG_WARN ("Truncated function entry");
-		return;
+		return false;
 	}
 	ut64 remaining = rprj_entry_remaining (b, next_entry);
 	if (ncolors > remaining / RPRJ_COLOR_SIZE) {
 		R_LOG_WARN ("Invalid function color table size %u", ncolors);
-		return;
+		return false;
 	}
 	if (ncolors > 0) {
 		colors = R_NEWS0 (RColor, ncolors);
 		if (!colors) {
-			return;
+			return false;
 		}
 		ut32 i;
 		for (i = 0; i < ncolors; i++) {
@@ -912,7 +883,11 @@ static void rprj_function_load(RPrjCursor *cur, int mode, ut64 next_entry) {
 		goto cleanup;
 	}
 	if (nattrs > 0) {
-		attrs = R_NEWS0 (R2ProjectFunctionAttr, nattrs);
+		size_t size;
+		if (r_mul_overflow ((size_t)nattrs, sizeof (R2ProjectFunctionAttr), &size)) {
+			goto cleanup;
+		}
+		attrs = calloc (1, size);
 		if (!attrs) {
 			goto cleanup;
 		}
@@ -958,7 +933,7 @@ static void rprj_function_load(RPrjCursor *cur, int mode, ut64 next_entry) {
 		ut32 j;
 		for (j = 0; j < pfcn.nbbs && r_buf_at (b) < next_entry; j++) {
 			R2ProjectBlock pbb;
-			if (!rprj_entry_has (b, next_entry, RPRJ_BLOCK_SIZE) || !rprj_block_read (b, &pbb)) {
+			if (!rprj_entry_has (b, next_entry, RPRJ_BLOCK_SIZE) || !rprj_block_read (b, &pbb, next_entry)) {
 				R_LOG_WARN ("Truncated basic block record %u/%u in function %u/%u", j, pfcn.nbbs, i, count);
 				goto cleanup;
 			}
@@ -968,6 +943,7 @@ static void rprj_function_load(RPrjCursor *cur, int mode, ut64 next_entry) {
 				}
 				rprj_block_load (cur, fcn, &pbb, mode, va, colors, ncolors);
 			}
+			free (pbb.op_pos);
 		}
 		const st64 fstack = pfcn.attr < nattrs? (st64)attrs[pfcn.attr].stack: 0;
 		if (resolved && (mode & R_CORE_NEWPRJ_MODE_SCRIPT)) {
@@ -1020,12 +996,14 @@ static void rprj_function_load(RPrjCursor *cur, int mode, ut64 next_entry) {
 			}
 		}
 	}
+	valid = true;
 cleanup:
 	r_list_free (pvars);
 	r_list_free (pbbs);
 	r_list_free (pfcns);
 	free (attrs);
 	free (colors);
+	return valid;
 }
 
 static void rprj_info_load(RPrjCursor *cur, int mode, ut64 next_entry) {
@@ -1593,7 +1571,7 @@ static void rprj_restore_io_maps(RPrjCursor *cur) {
 	free (mapsbuf);
 }
 
-static void rprj_load_mods(RPrjCursor *cur, ut8 **out_buf) {
+static void rprj_load_mods(RPrjCursor *cur, ut8 **out_buf, bool rebase) {
 	ut32 modsize = 0;
 	*out_buf = rprj_find (cur->b, RPRJ_MODS, &modsize);
 	if (!*out_buf) {
@@ -1615,7 +1593,9 @@ static void rprj_load_mods(RPrjCursor *cur, ut8 **out_buf) {
 		*slot = mod;
 		n += RPRJ_MOD_SIZE;
 	}
-	rprj_mods_rebase (cur);
+	if (rebase) {
+		rprj_mods_rebase (cur);
+	}
 	r_unref (mods);
 }
 
@@ -1631,7 +1611,7 @@ static char *r_core_newprj_load(RCore *core, const char *file, int mode) {
 		r_unref (b);
 		return NULL;
 	}
-	if (hdr.version < 5 || hdr.version > RPRJ_VERSION) {
+	if (hdr.version != RPRJ_VERSION) {
 		R_LOG_ERROR ("Unsupported project version %d (this build understands version %d)", hdr.version, RPRJ_VERSION);
 		r_unref (b);
 		return NULL;
@@ -1653,6 +1633,7 @@ static char *r_core_newprj_load(RCore *core, const char *file, int mode) {
 	}
 	RVecPrjMod_init (&cur.mods);
 	ut8 *modsbuf = NULL;
+	ut8 *statebuf = NULL;
 	bool valid = false;
 	st.data = rprj_find (b, RPRJ_STRS, &st.size);
 	if (!st.data) {
@@ -1662,6 +1643,14 @@ static char *r_core_newprj_load(RCore *core, const char *file, int mode) {
 	if (!rprj_st_is_valid (&st)) {
 		R_LOG_ERROR ("Invalid string table (RPRJ_STRS) in project file");
 		goto done;
+	}
+	if (mode & R_CORE_NEWPRJ_MODE_RESTORE) {
+		ut32 size;
+		statebuf = rprj_find (b, RPRJ_STATE, &size);
+		if (!statebuf || !rprj_state_validate (&cur, statebuf, size)) {
+			R_LOG_ERROR ("Project restore requires the matching read-only original, loader and map layout, with valid saved virtual edits");
+			goto done;
+		}
 	}
 	if (mode & R_CORE_NEWPRJ_MODE_RIO) {
 		if (core->dbg) {
@@ -1674,7 +1663,7 @@ static char *r_core_newprj_load(RCore *core, const char *file, int mode) {
 		r_config_set (core->config, "prj.name", "");
 		rprj_restore_io_maps (&cur);
 	}
-	rprj_load_mods (&cur, &modsbuf);
+	rprj_load_mods (&cur, &modsbuf, !(mode & R_CORE_NEWPRJ_MODE_RESTORE));
 
 	R2ProjectEntry entry;
 	r_buf_seek (b, RPRJ_HEADER_SIZE, SEEK_SET);
@@ -1709,7 +1698,9 @@ static char *r_core_newprj_load(RCore *core, const char *file, int mode) {
 		case RPRJ_MAPS:
 			break;
 		case RPRJ_CMDS:
-			rprj_cmds_load (&cur, mode, next_entry);
+			if (!(mode & R_CORE_NEWPRJ_MODE_RESTORE)) {
+				rprj_cmds_load (&cur, mode, next_entry);
+			}
 			break;
 		case RPRJ_INFO:
 			rprj_info_load (&cur, mode, next_entry);
@@ -1736,13 +1727,18 @@ static char *r_core_newprj_load(RCore *core, const char *file, int mode) {
 			rprj_flag_load (&cur, mode, next_entry);
 			break;
 		case RPRJ_EVAL:
-			rprj_eval_load (&cur, mode, next_entry);
+			if (!(mode & R_CORE_NEWPRJ_MODE_RESTORE)) {
+				rprj_eval_load (&cur, mode, next_entry);
+			}
 			break;
 		case RPRJ_XREF:
 			rprj_xref_load (&cur, mode, next_entry);
 			break;
 		case RPRJ_FUNC:
-			rprj_function_load (&cur, mode, next_entry);
+			if (!rprj_function_load (&cur, mode, next_entry)) {
+				R_LOG_ERROR ("Cannot load function entry");
+				goto done;
+			}
 			break;
 		case RPRJ_HINT:
 			rprj_hint_load (&cur, mode, next_entry);
@@ -1764,8 +1760,9 @@ static char *r_core_newprj_load(RCore *core, const char *file, int mode) {
 	if (mode & R_CORE_NEWPRJ_MODE_LOG) {
 		r_strbuf_append (out, "}\n");
 	}
-	valid = true;
+	valid = !(mode & R_CORE_NEWPRJ_MODE_RESTORE) || rprj_state_restore (&cur, statebuf);
 done:
+	free (statebuf);
 	free (modsbuf);
 	RVecPrjMod_fini (&cur.mods);
 	free (st.data);

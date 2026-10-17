@@ -26,6 +26,7 @@ static const char *rprj_entry_type_tostring(int a) {
 	case RPRJ_TLNK: return "TypeLinks";
 	case RPRJ_FMT: return "Formats";
 	case RPRJ_GLOB: return "Globals";
+	case RPRJ_STATE: return "State";
 	}
 	return "UNKNOWN";
 }
@@ -293,10 +294,12 @@ static bool rprj_function_attr_read(RBuffer *b, R2ProjectFunctionAttr *attr) {
 	attr->bits = r_read_le32 (buf + 8);
 	attr->flags = r_read_le32 (buf + 12);
 	attr->stack = r_read_le64 (buf + 16);
+	attr->stack_pop = (st32)r_read_le32 (buf + 24);
 	return true;
 }
 
-static bool rprj_block_read(RBuffer *b, R2ProjectBlock *bb) {
+static bool rprj_block_read(RBuffer *b, R2ProjectBlock *bb, ut64 next_entry) {
+	bb->op_pos = NULL;
 	ut8 buf[RPRJ_BLOCK_SIZE];
 	if (!rprj_read_exact (b, buf, sizeof (buf))) {
 		return false;
@@ -309,6 +312,29 @@ static bool rprj_block_read(RBuffer *b, R2ProjectBlock *bb) {
 	bb->fail.mod = r_read_le32 (buf + 32);
 	bb->fail.delta = r_read_le64 (buf + 36);
 	bb->color = r_read_le32 (buf + 44);
+	bb->ninstr = r_read_le32 (buf + 48);
+	const ut32 positions = bb->ninstr? bb->ninstr - 1: 0;
+	const ut64 at = r_buf_at (b);
+	size_t size;
+	if (bb->ninstr > INT_MAX || at > next_entry || positions > (next_entry - at) / 4
+			|| r_mul_overflow ((size_t)positions, sizeof (ut16), &size)) {
+		return false;
+	}
+	if (positions) {
+		bb->op_pos = malloc (size);
+		if (!bb->op_pos) {
+			return false;
+		}
+		ut32 i;
+		for (i = 0; i < positions; i++) {
+			ut32 offset;
+			if (!rprj_read_le32 (b, &offset) || offset > UT16_MAX) {
+				R_FREE (bb->op_pos);
+				return false;
+			}
+			bb->op_pos[i] = offset;
+		}
+	}
 	return true;
 }
 

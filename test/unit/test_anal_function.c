@@ -1,5 +1,6 @@
 #include <r_anal.h>
 #include <r_core.h>
+#include <r_anal_priv.h>
 #include "minunit.h"
 #include <string.h>
 
@@ -863,7 +864,117 @@ bool test_r_anal_function_switches_foreach(void) {
 	mu_end;
 }
 
+bool test_r_anal_function_getter_preserves_purge_ownership(void) {
+	RAnal *anal = r_anal_new ();
+	RAnalFunction *fcn = r_anal_create_function (anal, "owned_function", 0x1000, R_ANAL_FCN_TYPE_FCN, NULL);
+	mu_assert_notnull (fcn, "create owned function");
+	RAnalBlock *bb = r_anal_create_block (anal, 0x1000, 4);
+	mu_assert_notnull (bb, "create externally retained block");
+	r_anal_function_add_block (fcn, bb);
+	RListFree destructor = anal->fcns->free;
+	mu_assert_notnull (destructor, "analysis owns function destruction");
+	mu_assert_ptreq (r_anal_get_fcns (anal), anal->fcns, "getter borrows the owned list");
+	mu_assert_true (anal->fcns->free == destructor, "getter must preserve function destruction");
+	r_anal_purge (anal);
+	mu_assert_eq (r_list_length (anal->fcns), 0, "purge empties the owned collection");
+	mu_assert_null (r_anal_get_function_at (anal, 0x1000), "purge removes address registration");
+	mu_assert_null (ht_pp_find (anal->ht_name_fun, "owned_function", NULL), "purge removes name registration");
+	mu_assert_eq (r_list_length (bb->fcns), 0, "purge removes reciprocal block membership");
+	assert_invariants (anal);
+	fcn = r_anal_create_function (anal, "owned_function", 0x1000, R_ANAL_FCN_TYPE_FCN, NULL);
+	mu_assert_notnull (fcn, "same name and address can be registered after purge");
+	r_anal_function_add_block (fcn, bb);
+	r_unref (bb);
+	assert_invariants (anal);
+	(void)r_anal_get_fcns (anal);
+	r_anal_purge (anal);
+	mu_assert_null (r_anal_get_function_at (anal, 0x1000), "repeated purge removes recreated function");
+	mu_assert_null (r_anal_get_block_at (anal, 0x1000), "function's final block reference is released");
+	assert_invariants (anal);
+	r_anal_free (anal);
+	mu_end;
+}
+
+bool test_r_core_project_preserves_instruction_positions_and_stack_pop(void) {
+	RCore *core = r_core_new ();
+	r_config_set_b (core->config, "scr.interactive", false);
+	const int stack_pop[] = { R_ANAL_CC_STACK_POP_UNKNOWN, 0, 6 };
+	const int ninstr[] = { 3, 2, 0 };
+	const ut16 offsets[][2] = { { 2, 5 }, { 4, 0 }, { 0, 0 } };
+	int i, j;
+	for (i = 0; i < 3; i++) {
+		const ut64 addr = 0x1000 + i * 0x100;
+		char *name = r_str_newf ("codec.fields.%d", i);
+		RAnalFunction *fcn = r_anal_create_function (core->anal, name, addr, R_ANAL_FCN_TYPE_FCN, NULL);
+		free (name);
+		mu_assert_notnull (fcn, "create function with independent contract metadata");
+		fcn->maxstack = 32;
+		fcn->meta.stack_pop = stack_pop[i];
+		RAnalBlock *bb = r_anal_create_block (core->anal, addr, 8);
+		mu_assert_notnull (bb, "create body with explicit instruction positions");
+		bb->ninstr = ninstr[i];
+		for (j = 1; j < ninstr[i]; j++) {
+			mu_assert_true (r_anal_bb_set_offset (bb, j, offsets[i][j - 1]), "set independently selected instruction position");
+		}
+		r_anal_function_add_block (fcn, bb);
+		r_unref (bb);
+	}
+	char *path = r_file_temp ("newprj-native-fields");
+	mu_assert_notnull (path, "project artifact path");
+	mu_assert_eq (r_core_cmdf (core, "prj save \"%s\"", path), 0, "save native body and contract metadata");
+	r_core_cmd0 (core, "af-*");
+	mu_assert_null (r_anal_get_block_at (core->anal, 0x1000), "source block is not retained as an implicit codec fallback");
+	mu_assert_eq (r_core_cmdf (core, "prj load \"%s\"", path), 0, "load native body and contract metadata");
+	for (i = 0; i < 3; i++) {
+		const ut64 addr = 0x1000 + i * 0x100;
+		RAnalFunction *fcn = r_anal_get_function_at (core->anal, addr);
+		mu_assert_notnull (fcn, "restored function is registered");
+		mu_assert_eq (fcn->maxstack, 32, "frame size remains independent of callee cleanup");
+		mu_assert_eq (fcn->meta.stack_pop, stack_pop[i], "unknown zero and nonzero cleanup remain distinct");
+		RAnalBlock *bb = r_anal_get_block_at (core->anal, addr);
+		mu_assert_notnull (bb, "restored block");
+		mu_assert_ptreq (r_list_first (fcn->bbs), bb, "restored function owns its block");
+		mu_assert_eq (bb->ninstr, ninstr[i], "instruction counts retain independent body edits");
+		for (j = 0; j < ninstr[i]; j++) {
+			mu_assert_eq (r_anal_bb_opaddr_i (bb, j), addr + (j? offsets[i][j - 1]: 0), "instruction addresses retain selected offsets");
+		}
+	}
+	mu_assert_true (r_file_rm (path), "remove owned project artifact");
+	free (path);
+	r_core_free (core);
+	mu_end;
+}
+
+bool test_r_core_calling_conventions_reinitialize_after_purge(void) {
+	RCore *core = r_core_new ();
+	r_config_set (core->config, "asm.arch", "x86");
+	r_config_set_i (core->config, "asm.bits", 16);
+	r_core_anal_cc_init (core);
+	const char *default_cc = r_anal_cc_default (core->anal);
+	mu_assert_notnull (default_cc, "normal initialization provides a default convention");
+	char *expected = strdup (default_cc);
+	mu_assert_true (r_anal_cc_exist (core->anal, expected), "normal default has its definition");
+	mu_assert_true (r_anal_cc_set (core->anal, "ax selected_cc (ax)"), "install independently selected convention");
+	r_anal_set_cc_default (core->anal, "selected_cc");
+	r_core_anal_cc_init (core);
+	mu_assert_streq (r_anal_cc_default (core->anal), "selected_cc", "same-config initialization preserves an initialized manual selection");
+	mu_assert_true (r_anal_cc_exist (core->anal, "selected_cc"), "same-config initialization preserves its definition");
+	r_anal_purge (core->anal);
+	mu_assert_null (r_anal_cc_default (core->anal), "purge clears convention payload without replacing the core");
+	mu_assert_false (r_anal_cc_exist (core->anal, expected), "purge clears the previous default definition");
+	r_core_anal_cc_init (core);
+	mu_assert_streq (r_anal_cc_default (core->anal), expected, "same-config initialization rebuilds the reset baseline");
+	mu_assert_true (r_anal_cc_exist (core->anal, expected), "baseline definition is rebuilt despite the retained path cache");
+	mu_assert_false (r_anal_cc_exist (core->anal, "selected_cc"), "purged manual definitions are not replayed");
+	free (expected);
+	r_core_free (core);
+	mu_end;
+}
+
 int all_tests(void) {
+	mu_run_test (test_r_core_calling_conventions_reinitialize_after_purge);
+	mu_run_test (test_r_core_project_preserves_instruction_positions_and_stack_pop);
+	mu_run_test (test_r_anal_function_getter_preserves_purge_ownership);
 	mu_run_test (test_r_anal_function_relocate);
 	mu_run_test (test_r_anal_function_labels);
 	mu_run_test (test_r_anal_str_to_fcn_returns_status);

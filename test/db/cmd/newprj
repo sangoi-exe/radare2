@@ -158,7 +158,7 @@ EOF
 RUN
 
 NAME=newprj rejects invalid and truncated type metadata without consuming the next entry
-FILE=hex://5250524a060000003900000007000000616674657200696e745b335d006c696e6b2e303030303031303000676c6f62616c2e696e6665727265642e3078313030001100000010000000ffffffff06000000001d000000110000000d000000ffffffffffffffff0001000000000000001d000000130000001b0000000600000000000000000100000000000000210000001200000006000000fffffffff0ffffffffffffff20000000000000000021000000020000000100000000000000ffffffff80000000000000000100000000
+FILE=hex://5250524a080000003900000007000000616674657200696e745b335d006c696e6b2e303030303031303000676c6f62616c2e696e6665727265642e3078313030001100000010000000ffffffff06000000001d000000110000000d000000ffffffffffffffff0001000000000000001d000000130000001b0000000600000000000000000100000000000000210000001200000006000000fffffffff0ffffffffffffff20000000000000000021000000020000000100000000000000ffffffff80000000000000000100000000
 ARGS=-n
 CMDS=<<EOF
 mkdir .tmp
@@ -1094,7 +1094,7 @@ NAME=newprj direct opening executes commands without maps
 FILE=malloc://256
 CMDS=<<END
 mkdir .tmp
-wx 5250524a05000000090000000700000000220000000400000016000000662073617665642e636f6d6d616e643d307831323334
+wx 5250524a08000000090000000700000000220000000400000016000000662073617665642e636f6d6d616e643d307831323334
 wtf .tmp/newprj-script.prj 51 2>/dev/null
 !r2 -Nq -c 'fd 0x1234' .tmp/newprj-script.prj
 rm .tmp/newprj-script.prj
@@ -1114,7 +1114,7 @@ wtf .tmp/newprj-version.prj 8 2>/dev/null
 rm .tmp/newprj-version.prj
 END
 EXPECT_ERR=<<END
-ERROR: Unsupported project version 255 (this build understands version 6)
+ERROR: Unsupported project version 255 (this build understands version 8)
 END
 RUN
 
@@ -1308,25 +1308,28 @@ EXPECT=<<EOF
 EOF
 RUN
 
-NAME=newprj accepts version 5 projects
+NAME=newprj rejects older project versions before changing analysis
 FILE=hex://5250524a050000000f000000070000006c65676163790021000000020000000100000000000000ffffffff80000000000000000100000000
 ARGS=-n
 CMDS=<<EOF
 mkdir .tmp
 wtf .tmp/newprj-v5.prj 56 2>/dev/null
+f current.marker=0x44
 prj load .tmp/newprj-v5.prj > /dev/null
+f~current.marker
 f~legacy
 rm .tmp/newprj-v5.prj
 EOF
 EXPECT=<<EOF
-0x00000080 1 legacy
+0x00000044 1 current.marker
 EOF
 EXPECT_ERR=<<EOF
+ERROR: Unsupported project version 5 (this build understands version 8)
 EOF
 RUN
 
 NAME=newprj rejects invalid breakpoint records without consuming the next entry
-FILE=hex://5250524a060000000e00000007000000616674657200710000000e000000ffffffff1000000000000000ffffffffffffffffffffffffffffffffffffff7f0100000001000000020000000000000000000000ffffffff1000000000000000feffffffffffffffffffffffffffffff0100000001000000010000000200000000000000000000000021000000020000000100000000000000ffffffff80000000000000000100000000
+FILE=hex://5250524a080000000e00000007000000616674657200710000000e000000ffffffff1000000000000000ffffffffffffffffffffffffffffffffffffff7f0100000001000000020000000000000000000000ffffffff1000000000000000feffffffffffffffffffffffffffffff0100000001000000010000000200000000000000000000000021000000020000000100000000000000ffffffff80000000000000000100000000
 ARGS=-n
 CMDS=<<EOF
 mkdir .tmp
@@ -1348,7 +1351,7 @@ EOF
 RUN
 
 NAME=newprj rejects invalid signal records without consuming the next entry
-FILE=hex://5250524a06000000090000000700000000190000000f000000ffffffff010000000b0000000400000000100000000f0000000200000001000000
+FILE=hex://5250524a08000000090000000700000000190000000f000000ffffffff010000000b0000000400000000100000000f0000000200000001000000
 ARGS=-n
 CMDS=<<EOF
 mkdir .tmp
@@ -1364,5 +1367,211 @@ EXPECT_ERR=<<EOF
 WARN: Invalid signal record at 0x00000019
 WARN: Invalid signal record at 0x00000021
 WARN: Truncated signal record at 0x00000029
+EOF
+RUN
+
+NAME=newprj restore retains normal NE loading and effective virtual edits without saved config
+FILE=bins/ne/anim8.exe
+ARGS=-e bin.relocs.apply=true
+CMDS=<<EOF
+mkdir .tmp
+rm .tmp/newprj-restore-ne.prj
+e io.cache=true
+wx 40919293 @ 0x10020
+wx aabb @ 0x10021
+wc++
+wx cc @ 0x10022
+wx dd @ 0x10030
+f persisted.flag=0x10020
+af+ 0x10020 persisted.native
+afb+ 0x10020 0x10020 4
+CC persisted.comment @ 0x10020
+Ct int16_t @ 0x10020
+tcc void projectopaque (ax)
+afc projectopaque @ 0x10020
+tcc- projectopaque
+"td struct ProjectPair { int x; int y; };"
+axd 0x10030 0x10020
+ahi 7 @ 0x10020
+e asm.lines=true
+prj save .tmp/newprj-restore-ne.prj
+!r2 -NNq -e bin.relocs.apply=true -c 'e asm.lines=false;prj restore .tmp/newprj-restore-ne.prj;i~format;p8 4 @0x10001;p8 4 @0x10020;p8 1 @0x10030;f~persisted.flag;afl~persisted.native;afb @0x10020;CC. @0x10020;Ct. @0x10020;afc @0x10020;tsc ProjectPair;axf @0x10020~[0-1];ah. @0x10020;e asm.lines' bins/ne/anim8.exe
+rm .tmp/newprj-restore-ne.prj
+EOF
+EXPECT=<<EOF
+format   ne
+00000300
+40aacc93
+dd
+0x00010020 1 persisted.flag
+0x00010020    1      4 persisted.native
+0x00010020 0x00010024 00:0000 4
+persisted.comment
+int16_t
+projectopaque
+struct ProjectPair {
+  int x;
+  int y;
+};
+DATA 0x10030
+ 0x00010020 => immbase=7
+false
+EOF
+RUN
+
+NAME=newprj restore supports an explicitly opened read-only raw input
+FILE=bins/ne/anim8.exe
+ARGS=-n -a x86 -b 16
+CMDS=<<EOF
+mkdir .tmp
+rm .tmp/newprj-restore-raw.prj
+e io.cache=true
+wx 11223344 @ 0x20
+wx aabb @ 0x21
+wc++
+wx cc @ 0x22
+f raw.saved=0x20
+prj save .tmp/newprj-restore-raw.prj
+!r2 -NNnq -a x86 -b 16 -c 'prj restore .tmp/newprj-restore-raw.prj;p8 4 @0x20;f~raw.saved' bins/ne/anim8.exe
+rm .tmp/newprj-restore-raw.prj
+EOF
+EXPECT=<<EOF
+11aacc44
+0x00000020 1 raw.saved
+EOF
+RUN
+
+NAME=newprj restore refuses an unqualified target without changing current analysis or cache
+FILE=bins/ne/anim8.exe
+ARGS=-e bin.relocs.apply=true
+CMDS=<<EOF
+mkdir .tmp
+rm .tmp/newprj-restore-refuse.prj
+f saved.only=0x10020
+prj save .tmp/newprj-restore-refuse.prj
+o--
+o malloc://0x100
+e io.cache=true
+wx aabb @ 0x80
+f current.marker=0x80
+prj restore .tmp/newprj-restore-refuse.prj
+p8 2 @ 0x80
+f~current.marker
+f~saved.only
+rm .tmp/newprj-restore-refuse.prj
+EOF
+EXPECT=<<EOF
+aabb
+0x00000080 1 current.marker
+EOF
+EXPECT_ERR=<<EOF
+ERROR: Project restore requires the matching read-only original, loader and map layout, with valid saved virtual edits
+EOF
+RUN
+
+NAME=newprj warm restore retains loader cache registered functions and saved prototypes
+FILE=bins/ne/anim8.exe
+ARGS=-e bin.cache=true -e bin.relocs.apply=true
+CMDS=<<EOF
+mkdir .tmp
+rm .tmp/newprj-opcode-seed.prj
+rm .tmp/newprj-warm.prj
+rm .tmp/newprj-post-warm.prj
+!r2 -NNq -e bin.relocs.apply=true -c 'e io.cache=true;wx 90 @0x10000;prj save .tmp/newprj-opcode-seed.prj' bins/ne/anim8.exe
+prj restore .tmp/newprj-opcode-seed.prj
+p8 5 @ 0x10000
+e anal.nopskip=false
+wx 4091929394 @ 0x10020
+af+ 0x10000 saved_entry
+afb+ 0x10000 0x10000 5
+afs uint16_t saved_entry (uint16_t value) @ 0x10000
+af+ 0x10020 saved_call
+afb+ 0x10020 0x10020 5
+afs uint16_t saved_call (uint16_t value) @ 0x10020
+tcc void projectopaque (ax)
+afc projectopaque @ 0x10020
+tcc- projectopaque
+CC saved comment @ 0x10020
+axd 0x10030 0x10020
+prj save .tmp/newprj-warm.prj
+afn unsaved_entry @ 0x10000
+afs void unsaved_entry () @ 0x10000
+afn unsaved_call @ 0x10020
+afs void unsaved_call () @ 0x10020
+o--
+o bins/ne/anim8.exe
+prj restore .tmp/newprj-warm.prj
+p8 5 @ 0x10000
+afl~saved_
+afs @ 0x10000
+afs @ 0x10020
+afc @ 0x10020
+CC. @ 0x10020
+axf @ 0x10020~[0-1]
+prj save .tmp/newprj-post-warm.prj
+!r2 -NNq -e bin.cache=true -e bin.relocs.apply=true -c 'prj restore .tmp/newprj-post-warm.prj;afl~saved_;afs @0x10000;afs @0x10020' bins/ne/anim8.exe
+rm .tmp/newprj-opcode-seed.prj
+rm .tmp/newprj-warm.prj
+rm .tmp/newprj-post-warm.prj
+EOF
+EXPECT=<<EOF
+9000000300
+9000000300
+0x00010000    1      5 saved_entry
+0x00010020    1      5 saved_call
+uint16_t saved_entry (uint16_t value);
+uint16_t saved_call (uint16_t value);
+projectopaque
+saved comment
+DATA 0x10030
+0x00010000    1      5 saved_entry
+0x00010020    1      5 saved_call
+uint16_t saved_entry (uint16_t value);
+uint16_t saved_call (uint16_t value);
+EOF
+RUN
+
+NAME=newprj attaches a restored function to a block already shared by a live function
+FILE=malloc://0x100
+ARGS=-a x86 -b 64
+CMDS=<<EOF
+mkdir .tmp
+rm .tmp/newprj-shared-owner.prj
+wx 40504151 @ 0x20
+af+ 0x20 saved_owner
+afb+ 0x20 0x20 4
+prj save .tmp/newprj-shared-owner.prj
+af- 0x20
+af+ 0x40 live_owner
+afb+ 0x40 0x20 4
+prj load .tmp/newprj-shared-owner.prj
+prj load .tmp/newprj-shared-owner.prj
+afl~saved_owner
+afl~live_owner
+rm .tmp/newprj-shared-owner.prj
+EOF
+EXPECT=<<EOF
+0x00000020    1      4 saved_owner
+0x00000040    1      4 live_owner
+EOF
+RUN
+
+NAME=newprj preserves decoded instruction counts and positions without reanalysis
+FILE=hex://5589e58b46065dc20400
+ARGS=-a x86 -b 16
+CMDS=<<EOF
+mkdir .tmp
+rm .tmp/newprj-instructions.prj
+af
+afbj
+prj save .tmp/newprj-instructions.prj
+af-*
+prj load .tmp/newprj-instructions.prj
+afbj
+rm .tmp/newprj-instructions.prj
+EOF
+EXPECT=<<EOF
+[{"addr":0,"size":10,"opaddr":0,"inputs":0,"outputs":0,"ninstr":5,"instrs":[0,1,3,6,7],"traced":0}]
+[{"addr":0,"size":10,"opaddr":0,"inputs":0,"outputs":0,"ninstr":5,"instrs":[0,1,3,6,7],"traced":0}]
 EOF
 RUN

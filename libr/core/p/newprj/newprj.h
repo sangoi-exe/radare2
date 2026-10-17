@@ -27,10 +27,11 @@ enum {
 	RPRJ_TLNK,
 	RPRJ_FMT,
 	RPRJ_GLOB,
+	RPRJ_STATE,
 	RPRJ_MAGIC = 0x4a525052,
 };
 
-#define RPRJ_VERSION 6
+#define RPRJ_VERSION 8
 #define RPRJ_HEADER_SIZE (r_offsetof (R2ProjectHeader, version) + sizeof (ut32))
 #define RPRJ_ENTRY_SIZE (r_offsetof (R2ProjectEntry, type) + sizeof (ut32))
 #define RPRJ_INFO_SIZE (r_offsetof (R2ProjectInfo, time) + sizeof (ut64))
@@ -42,9 +43,9 @@ enum {
 #define RPRJ_XREF_SIZE (RPRJ_ADDR_SIZE * 2 + 4)
 #define RPRJ_FLAG_SIZE (4 + 4 + 8 + 4 + 1)
 #define RPRJ_FUNCTION_SIZE (4 + RPRJ_ADDR_SIZE + 4 + 4 + 4)
-#define RPRJ_FUNCTION_ATTR_SIZE (4 + 4 + 4 + 4 + 8)
+#define RPRJ_FUNCTION_ATTR_SIZE (4 + 4 + 4 + 4 + 8 + 4)
 #define RPRJ_COLOR_SIZE 9
-#define RPRJ_BLOCK_SIZE (RPRJ_ADDR_SIZE + 8 + RPRJ_ADDR_SIZE + RPRJ_ADDR_SIZE + 4)
+#define RPRJ_BLOCK_SIZE (RPRJ_ADDR_SIZE + 8 + RPRJ_ADDR_SIZE + RPRJ_ADDR_SIZE + 4 + 4)
 #define RPRJ_VAR_SIZE 16
 #define RPRJ_BREAKPOINT_SIZE (RPRJ_ADDR_SIZE + 40)
 #define RPRJ_SIGNAL_SIZE 8
@@ -76,7 +77,8 @@ enum {
 	R_CORE_NEWPRJ_MODE_CMD = 4,
 	R_CORE_NEWPRJ_MODE_SCRIPT = 8,
 	R_CORE_NEWPRJ_MODE_DIFF = 16,
-	R_CORE_NEWPRJ_MODE_RIO = 32
+	R_CORE_NEWPRJ_MODE_RIO = 32,
+	R_CORE_NEWPRJ_MODE_RESTORE = 64
 };
 
 typedef struct {
@@ -209,6 +211,7 @@ typedef struct {
 	ut32 bits;
 	ut32 flags;
 	ut64 stack;
+	st32 stack_pop;
 } R2ProjectFunctionAttr;
 
 R_VEC_TYPE (RVecPrjColor, RColor);
@@ -220,6 +223,8 @@ typedef struct {
 	R2ProjectAddr jump;
 	R2ProjectAddr fail;
 	ut32 color;
+	ut32 ninstr;
+	ut16 *op_pos;
 } R2ProjectBlock;
 
 typedef struct {
@@ -315,7 +320,7 @@ static bool rprj_signal_read(RBuffer *b, R2ProjectSignal *sig);
 static bool rprj_xref_read(RBuffer *b, R2ProjectXref *xref);
 static bool rprj_function_read(RBuffer *b, R2ProjectFunction *fcn);
 static bool rprj_function_attr_read(RBuffer *b, R2ProjectFunctionAttr *attr);
-static bool rprj_block_read(RBuffer *b, R2ProjectBlock *bb);
+static bool rprj_block_read(RBuffer *b, R2ProjectBlock *bb, ut64 next_entry);
 static bool rprj_var_read(RBuffer *b, R2ProjectVar *var);
 static void rprj_header_write(RBuffer *b);
 static bool rprj_header_read(RBuffer *b, R2ProjectHeader *hdr);
@@ -332,6 +337,7 @@ static void rprj_mods_write_one(RBuffer *b, R2ProjectMod *mod);
 static void rprj_mods_write(RPrjCursor *cur);
 static void rprj_mods_rebase(RPrjCursor *cur);
 static bool rprj_info_read(RBuffer *b, R2ProjectInfo *info);
+static ut8 *rprj_find(RBuffer *b, ut32 type, ut32 *size);
 
 static bool r_core_newprj_save(RCore *core, const char *file);
 static char *r_core_newprj_load(RCore *core, const char *file, int mode);

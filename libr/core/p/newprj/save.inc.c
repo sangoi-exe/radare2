@@ -226,13 +226,14 @@ static ut32 rprj_fcn_attr_intern(RPrjCursor *cur, RVecPrjFunctionAttr *attrs, RA
 	const ut32 bits = (ut32)fcn->bits;
 	const ut32 flags = fcn->is_noreturn? RPRJ_FUNC_ATTR_NORETURN: 0;
 	const ut64 stack = (ut64)fcn->maxstack;
+	const st32 stack_pop = fcn->meta.stack_pop;
 	const char *cc = R_STR_ISNOTEMPTY (fcn->callconv)? fcn->callconv: NULL;
 	ut32 idx = 0;
 	R2ProjectFunctionAttr *it;
 	R_VEC_FOREACH (attrs, it) {
 		const char *itcc = it->cc != UT32_MAX? rprj_st_get (cur->st, it->cc): NULL;
 		if (it->type == type && it->bits == bits && it->flags == flags
-				&& it->stack == stack
+				&& it->stack == stack && it->stack_pop == stack_pop
 				&& !strcmp (r_str_get (itcc), r_str_get (cc))) {
 			return idx;
 		}
@@ -244,6 +245,7 @@ static ut32 rprj_fcn_attr_intern(RPrjCursor *cur, RVecPrjFunctionAttr *attrs, RA
 	slot->bits = bits;
 	slot->flags = flags;
 	slot->stack = stack;
+	slot->stack_pop = stack_pop;
 	return idx;
 }
 
@@ -284,6 +286,11 @@ static void rprj_function_write_one(RPrjCursor *cur, RAnalFunction *fcn, ut32 at
 		rprj_write_project_addr (cur->b, rprj_mod_addr (cur, bb->jump));
 		rprj_write_project_addr (cur->b, rprj_mod_addr (cur, bb->fail));
 		rprj_write_le32 (cur->b, rprj_color_index (colors, &bb->color));
+		rprj_write_le32 (cur->b, bb->ninstr);
+		int i;
+		for (i = 1; i < bb->ninstr; i++) {
+			rprj_write_le32 (cur->b, r_anal_bb_offset_inst (bb, i));
+		}
 	}
 	RAnalVar **var;
 	R_VEC_FOREACH (&fcn->vars, var) {
@@ -327,6 +334,7 @@ static void rprj_function_write(RPrjCursor *cur) {
 		rprj_write_le32 (cur->b, attr->bits);
 		rprj_write_le32 (cur->b, attr->flags);
 		rprj_write_le64 (cur->b, attr->stack);
+		rprj_write_le32 (cur->b, (ut32)attr->stack_pop);
 	}
 	const ut64 count_at = rprj_le32_reserve (cur->b);
 	ut32 count = 0;
@@ -547,6 +555,16 @@ static bool r_core_newprj_save(RCore *core, const char *file) {
 		.b = b,
 	};
 	RVecPrjMod_init (&cur.mods);
+	ut64 state_at;
+	rprj_entry_begin (b, &state_at, RPRJ_STATE, 1);
+	if (!rprj_state_write (&cur)) {
+		R_LOG_ERROR ("Cannot save original identity and virtual edits");
+		r_unref (b);
+		free (st.data);
+		RVecPrjMod_fini (&cur.mods);
+		return false;
+	}
+	rprj_entry_end (b, state_at);
 	cur.maps = rprj_maps_current (&cur);
 	rprj_write_entry (&cur, RPRJ_INFO, rprj_info_write_entry);
 	rprj_write_entry (&cur, RPRJ_MAPS, rprj_maps_write);

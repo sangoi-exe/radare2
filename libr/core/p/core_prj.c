@@ -8,6 +8,7 @@
 #include "newprj/newprj.h"
 #include "newprj/format.inc.c"
 #include "newprj/maps.inc.c"
+#include "newprj/state.inc.c"
 #include "newprj/save.inc.c"
 #include "newprj/load.inc.c"
 
@@ -17,6 +18,7 @@ static RCoreHelpMessage help_msg_prj = {
 	"prj save", " [file]", "save current state into a project file",
 	"prj info", " [file]", "show information about the project file",
 	"prj load", " [file]", "merge project information into the current session",
+	"prj restore", " [file]", "restore analysis and virtual edits onto the matching read-only original, already loaded normally; no saved commands, config or file opens",
 	"prj open", " [file]", "close current session and open the project from scratch",
 	"prj diff", " [file]", "print commands for differences from file to current session",
 	"prj r2", " [file]", "print an r2 script for parsing purposes",
@@ -105,6 +107,9 @@ static RCmdResult prj_callback(RCmdContext *ctx) {
 	}
 	if (r_strs_equals_str (args[0], "load")) {
 		return prj_load (ctx, file, R_CORE_NEWPRJ_MODE_LOAD | R_CORE_NEWPRJ_MODE_CMD);
+	}
+	if (r_strs_equals_str (args[0], "restore")) {
+		return prj_load (ctx, file, R_CORE_NEWPRJ_MODE_LOAD | R_CORE_NEWPRJ_MODE_RESTORE);
 	}
 	if (r_strs_equals_str (args[0], "open")) {
 		return prj_open (ctx, file);

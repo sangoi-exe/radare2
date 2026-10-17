@@ -787,8 +787,9 @@ R_API void r_core_anal_cc_init(RCore *core) {
 	}
 	RCorePriv *priv = core->priv;
 	const int bits = core->anal->config->bits;
+	const bool initialized = !sdb_isempty (core->anal->sdb_cc);
 	r_str_after (anal_arch, '.');
-	if (priv->old_bits != -1) {
+	if (initialized && priv->old_bits != -1) {
 		if (priv->old_bits == bits) {
 			if (!strcmp (priv->old_arch, anal_arch)) {
 				free (anal_arch);
@@ -821,7 +822,7 @@ R_API void r_core_anal_cc_init(RCore *core) {
 	free (fcnsigndir);
 	Sdb *cc = core->anal->sdb_cc;
 	// Avoid sdb reloading
-	if (cc->path && (!strcmp (cc->path, dbpath) || !strcmp (cc->path, dbhomepath))) {
+	if (initialized && cc->path && (!strcmp (cc->path, dbpath) || !strcmp (cc->path, dbhomepath))) {
 		free (anal_arch);
 		free (dbpath);
 		free (dbhomepath);
