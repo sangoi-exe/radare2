@@ -1,9 +1,9 @@
 # Intent Contract: native baseline remediation
 
-Status: active
+Status: on-hold
 Task mode: Doctrine
-Lifecycle phase: Implementation
-Strategy epoch: 1
+Lifecycle phase: Strategy reset
+Strategy epoch: 3
 Plan kind: Bugfix / Regression Plan
 Secondary kind: Instruction / Policy Plan, limited to prospective commit attribution.
 
@@ -15,11 +15,15 @@ The current user confirmed this paraphrase with `sim, confirmo` at `2026-10-17T1
 
 The earlier current-user answer `Sim, nos quatro repositórios` confirmed prospective `Co-authored-by: Codex <codex@openai.com>` attribution. This plan includes that already-selected change. Do not rewrite history or change Git author, committer or configuration.
 
+The user selected the exact project-contract delta at `2026-10-17T18:48:05.382-03:00`, current turn `01a14bcc-d093-72f0-97dc-1b99dfecaa8f`, rollout line 23555, async question `call_4v3S61KgQgAoMzgvmO2Z8yqF`: `Criar prj snapshot; manter prj save genérico (recomendado).` This confirms the presented delta: keep generic native projects, add one strict native snapshot action in the same codec, and route MCP saving exclusively through that action. Scope and all other selected results remain unchanged. The new CLI surface changes the external-contract strategy boundary, so this plan enters Strategy reset before any implementation of that delta.
+
+The first strict-restore implementation exposed that the shared IO cache has no trustworthy producer identity and therefore cannot distinguish legitimate loader relocation bytes from later user edits. The current user selected Route A with `vá de A` at `2026-10-17T19:46:59.658-03:00` (America/Sao_Paulo), turn `01a14c0c-0630-7813-901c-7511f102619b`, current session `01a13bb1-5597-7090-a92b-8426359342a8`, rollout line 24813. Route A assigns a transient, independently owned normal-loader byte baseline to the host loading lifecycle and lets strict restore consume it after the existing identity/layout qualification. Scope and the required result remain unchanged, but this changes the host architecture/owner chain and starts Strategy epoch 3.
+
 ## Current object and owners
 
 | Repository | Fixed audit baseline | Canonical responsibility |
 | --- | --- | --- |
-| `/home/lucas/work/radare2` | `0e7fd1930c08261c441f6d5ef83d0ddc07768b2d` | C import/layout, native project codec and publication, IO/cache and filesystem scope helpers |
+| `/home/lucas/work/radare2` | `0e7fd1930c08261c441f6d5ef83d0ddc07768b2d` | C import/layout, normal-load lifecycle and transient loader baseline, native project codec/publication, IO/cache and filesystem scope helpers |
 | `/home/lucas/work/radare2/r2ghidra` | `9f88f3366851f03479b37a94d3cb41f0c3cde37b` | Signature/type projection and the managed engine dependency pin |
 | `/home/lucas/work/radare2/r2ghidra/ghidra-native` | `cd9a067b7ec14bed6f6faaa5192343742bc1953e` | Canonical native patch stack and its directly affected processor specifications/tests |
 | `/home/lucas/work/radare2/r2mcp` | `e8fb3ac34e98d633661127d9b13e1b0174b8f2d8` | Input admission, per-core lifecycle, opaque native project tools and MCP workflow triggers |
@@ -36,11 +40,12 @@ All four worktrees were clean at intake. The repositories remain independent Git
 | Union extent | verified_defect, inherited | The bridge replaces the host's explicit union extent with member-derived size. Preserve accepted host extent through aliases and arrays, including actual native stride. |
 | MCP open/session mode | verified_defect | Failed Frida open prematurely publishes server-global mode and can strand ordinary tools or contaminate another session. Publish successful mode with its active core state and propagate all direct consumers. |
 | Project publication | verified_defect, inherited writer failure | A real final-flush failure produces MCP save status 0 and replaces a complete artifact with a truncated file. Report write failure and publish the new project atomically without losing the previous complete artifact. |
-| Snapshot eligibility | verified_defect | MCP saves a kind-0 project that its restore path can never accept. Refuse the non-restorable snapshot before reporting success or discarding the session; keep qualification at the host owner. |
+| Snapshot eligibility | verified_defect | MCP saves a kind-0 project that its restore path can never accept. Add the user-selected native `prj snapshot` action, which requires restorable identity before publication; make MCP `save_project` use it exclusively. Keep `prj save` generic at the same codec owner. |
 | Windows project scope | verified_defect by source chain; native execution unverified | MCP consumes a Unix-only writable path exception. Correct scoped artifact access at its shared owner without globally disabling its boundary. |
 | MCP workflow branch | verified_defect | Literal `main` filters omit the published `master` route. Select the actual default-branch push and PR route. |
 | Local-backed URI admission | verified_defect by source chain; dynamic witness blocked | Presence of `://` skips the explicit root while plugins can open local resources. Qualify the actual resource capability/path and reject unknown or unqualified capabilities under an explicit root. Do not add a universal parallel parser or unrestricted plugin bypass. |
 | Strict restore semantics | current_user_decision | Successful restore retains disjoint post-save patches; malformed restore can mutate analysis before returning failure. The user selected full artifact validation before mutation and early refusal of incompatible current patches, while preserving legitimate loader relocations. These are selected semantics, not retroactive claims that the old docs promised universal rollback. |
+| Loader baseline ownership | verified_defect plus current_user_decision | The first M06 candidate passed both new adversarial cases but failed the existing warm NE restore, yielding 64/65 tests. Cache items retain bytes/history but no loader/user ownership, while exact relocation bytes exist only at the normal-load write boundary. Preserve those bytes as transient loader-owned state, separate from the user-writable cache, so restore can admit the qualified loader baseline and reject later incompatible edits. |
 
 The audit used 14 bounded Bug Hunter lanes. Thirteen completed their declared investigation; the archive execution lane was blocked by a platform safety filter. The root independently inspected material owner anchors. Production evidence includes actual callback import, native prototype XML, unlocked entry-SS recovery, union stride, inert failed-open tool routing, and native/MCP project calls. No claim covers all lines of all four repositories.
 
@@ -50,9 +55,15 @@ Known-good comparisons are declaration-equivalent compiler controls, the signatu
 
 ## Selected route and boundaries
 
-Repair the current host, bridge, native patch and MCP owner chain. Reuse the existing structured project readers and native IO boundaries. Keep project bytes opaque to the MCP. Use the existing component build/test owners and matching plugin/language inputs. No competing evidenced product architecture needs selection before the first slice.
+Repair the current host, bridge, native patch and MCP owner chain. Reuse the existing structured project readers and native IO boundaries. Keep project bytes opaque to the MCP. Use the existing component build/test owners and matching plugin/language inputs.
 
 The architecture delta is bounded to the selected strict native project behavior, correction of the active IO/state boundaries, and per-core ownership of MCP mode. No daemon, sidecar, database, second project parser, new persistent provenance service, migration or compatibility layer is authorized. If implementation requires a new public contract, persisted shape or independent owner beyond that delta, stop only its dependent frontier for the current user's decision.
+
+The only newly selected public contract is `prj snapshot [file]`. It shares serialization and publication with `prj save`, but must refuse a non-restorable source instead of writing kind-0 STATE. The generic action remains the canonical owner for merge-capable projects, including in-memory sessions; this is an explicit current-user product requirement, not a deprecated alias or dual snapshot path. The MCP tool name stays `save_project` and invokes only the strict host action. No new persisted format, schema version, migration, eligibility protocol or parser is selected.
+
+Route A retains the exact relocation bytes at the canonical normal-load write boundary in transient host lifecycle state that is not writable through the ordinary IO cache. The state is qualified and invalidated with its file, loader, base/load address and map lifecycle. The project reader does not infer provenance from cache history: it consumes the independent baseline only after the existing physical digest, loader, relocation setting and layout checks pass. Already-open objects without a qualified baseline must fail loud rather than derive one from current cache bytes.
+
+The rejected material alternative was an isolated fresh `RCore` replay. Current source proves that fresh loading exists, but its nearest consumer deliberately leaks the secondary core instead of freeing it and normal core open/load changes process-global signals, logging, environment and plugin/config state. The selected load-time baseline has lower lifecycle complexity and no second loader execution. Neither route changes the persisted project format.
 
 Save must not report success on failed final writes or replace a complete artifact with a partial one. Restore must reject the demonstrated malformed artifact or incompatible live-patch state before changing analysis or effective bytes. Original-file identity alone is not current-state qualification. Do not reset virtual cache wholesale: relocation writes can share it with user edits when `bin.cache=true`.
 
@@ -61,6 +72,10 @@ The instruction change is prospective and workspace-local. Add one canonical att
 ## Primary-path acceptance and first slice
 
 The first directly verifiable slice is the callback import at the host owner: the exact valid same-batch declaration must import CB and S with target-correct pointer layout, while the established array-of-pointer and typedef behavior remains correct. Use the existing unit/command surface and an independent compiler-valid equivalent as the oracle. Process exit 0 alone is not a parser-success oracle.
+
+The first directly verifiable slice for the selected command delta is native snapshot admission: a qualified read-only original can produce a restorable snapshot; a non-restorable in-memory descriptor is refused before artifact publication; its generic `prj save` remains available. The current STATE qualification and serializer own this distinction. The MCP must propagate the host action's real status without decoding project bytes.
+
+The first directly verifiable slice for Route A is the existing warm NE restore that failed under the cache-only comparator. A project saved without loader-cache spans must restore onto a normally loaded `bin.cache=true` original whose independently retained loader baseline qualifies, while changed and extra post-save user cache edits still refuse before any analysis or byte mutation. Baseline invalidation must be proven on the directly affected file/load/map lifecycle rather than by a hypothetical matrix.
 
 For completion, reproduce each admitted failure through its natural production boundary after correction, and run its focused current followers. Inspect native variadic flags and actual CALL inputs; inspect native union extent/stride; test unlocked stack discovery without supplied prototypes; observe MCP mode recovery/session isolation; observe actual project endpoint statuses and retained artifacts. Verify normal NE loading and saved edits without corrupting loader relocations or physical originals. Validate Windows behavior with a qualified native run when available; otherwise state the exact proof gap rather than claim runtime success.
 
@@ -76,15 +91,15 @@ Do not correct the unresolved signature-assignment policy, recognized-image mixe
 
 ## High-level execution and continuity
 
-1. Close the local Intent Contract audit for the confirmed route and first slice.
-2. After the active session's implementation checkpoint, dispatch disjoint bounded Worker entries for host C layout, bridge signature/types, native stack discovery, host persistence/platform boundaries, MCP admission/lifecycle and instruction/CI followers. Establish each entry's exact write and validation-read footprint before dispatch.
-3. Integrate the canonical changes and dependency pin, build in fresh task-scoped cache destinations, and run the focused combined-runtime acceptance. Preserve existing sources, generated configuration and unrelated work.
-4. Commit coherent validated candidates in the correct repositories with the exact Codex trailer; obtain the Code Gate required by the active resident instructions, then finish task-log/changelog bookkeeping and final Git verification.
+1. Close the Strategy-reset Intent Contract audit for Route A and its first slice.
+2. After the active session's post-Gate implementation checkpoint, replace the rejected cache-only M06 candidate with one bounded Worker entry whose exact footprint covers the normal-load baseline owner, lifecycle invalidation and strict-project consumer.
+3. Rebuild the host in a fresh task-scoped cache, require all 65 project tests plus the focused loader-baseline adversarial cases, then rerun the already-qualified bridge, engine and MCP followers against the stabilized host.
+4. Commit the validated host candidate with the exact Codex trailer, obtain the Code Gate required by the active resident instructions, then finish task-log/changelog bookkeeping and final Git verification.
 
-Material decisions still open: none for the confirmed result or first slice. Implementation-specific evidence may expose a new boundary, which cannot be silently selected by a Worker or reviewer. Residual-risk acceptances: none. Plan Gate: `PROCEED`, task `/root/native_baseline_plan_audit`, observed on `2026-10-17`; complete Intent Contract coverage, no material findings and no implementation approval claimed. After that result, the current user authorized implementation with `sim, por favor` at `2026-10-17T18:37:56.568-03:00`, turn `01a14bcc-d093-72f0-97dc-1b99dfecaa8f`, rollout line 23376. Code Gate operation: not yet selected for this candidate under the loaded session instructions.
+Material decisions still open: none for the confirmed result or selected Route A. Residual-risk acceptances: none. The previous Strategy-reset Plan Gate produced `PROCEED` for epoch 2 on `/root/native_baseline_plan_audit` at `2026-10-17T18:58:06.598-03:00`; the user then activated that implementation at `2026-10-17T18:59:35.079-03:00`, turn `01a14bde-a311-7332-b37f-1c137c212c08`, rollout line 23781. The 64/65 M06 result supplied new factual evidence that changed the host architecture/owner chain. The replacement epoch-3 Strategy-reset audit on the same task path produced `PROCEED` at `2026-10-17T19:51:07.979-03:00`, turn `01a14c0c-0630-7813-901c-7511f102619b`, rollout line 24895, with complete Intent Contract coverage and no material findings. This normal Gate result places the plan on hold in Strategy reset. The user's Route A selection preceded the Gate and does not supply the later implementation checkpoint required by this session's loaded instructions. The cache-only M06 candidate is uncommitted and not accepted. Code Gate operation: not yet selected for the final candidate.
 
 The active execution annex is `.sangoi/planning/2026-10-17-native-baseline-remediation-microtasks.md`. It records only the root-owned mutable Microtask Program and is current for this implementation. The runtime exposes no `update_plan` tool in this session, so this one subordinate annex carries the projection; it owns no Scope, strategy, lifecycle or acceptance.
 
 Runtime continuity caveat: the on-disk resident/shared instruction files now describe automatic implementation activation after PROCEED, while this session's injected shared instructions still require a later current-user authorization. Do not treat the revised disk instructions as active without the required session reload. This task does not edit the global instruction corpus or use that drift as an override.
 
-Blocker: none for the first slice and independent entries. Next high-level action: dispatch the prospective attribution entry, then the disjoint correction entries, while retaining dependent project/API decisions at their owner boundary if new evidence requires them.
+Blocker: Route A source mutation is suspended until a later unambiguous current-user implementation authorization. Next high-level action after that authorization: activate epoch 3, fix the exact load-lifecycle/consumer footprint, and dispatch the bounded Route A Worker entry.
