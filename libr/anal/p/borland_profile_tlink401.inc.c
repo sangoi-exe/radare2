@@ -28,46 +28,6 @@ static const struct {
 	{ 0xca6, 0xce9, "tlink401_selected_uppercase_p_option", TLINK401_MARKER "R151: selected/P- clears0126 at08BE; chosen caller/writer do not read that separate byte. No global absence-of-suppression conclusion. Exact FILE=0400+CS0 load-image offset; no complete containing function or stronger ABI inferred." },
 };
 
-// Partial code is qualified through the same current mapping/relocation/context owner; never fabricate a function.
-static bool tlink401_window(BorlandProfileContext *ctx, ut64 physical, int size, const char *name, const char *comment) {
-	ut64 address = profile_mapped (ctx, physical, size, true);
-	HelperOp *ops = calloc (size, sizeof (HelperOp));
-	bool valid = ops && address != UT64_MAX && profile_code (ctx, physical, size, address, ops);
-	if (valid) {
-		RVecIntervalNodePtr *metadata = r_meta_get_all_intersect (ctx->anal, address, size, R_META_TYPE_ANY);
-		RIntervalNode **node;
-		if (metadata) {
-			R_VEC_FOREACH (metadata, node) {
-				RAnalMetaItem *item = (*node)->data;
-				valid &= item->type == R_META_TYPE_COMMENT || item->type == R_META_TYPE_HIGHLIGHT;
-			}
-		}
-		RVecIntervalNodePtr_free (metadata);
-		RList *blocks = r_anal_get_blocks_intersect (ctx->anal, address, size);
-		RListIter *iter;
-		RAnalBlock *bb;
-		r_list_foreach (blocks, iter, bb) {
-			if (bb->addr < address || bb->addr - address >= size || bb->size > size - (bb->addr - address)) {
-				valid = false;
-				break;
-			}
-			BorlandCodeRange range = { bb->addr, bb->size, ops + (bb->addr - address) };
-			RAnalFunction view = { .bbs = r_list_new () };
-			r_list_append (view.bbs, bb);
-			valid &= borland_body_ranges (&view, &range, 1);
-			r_list_free (view.bbs);
-		}
-		r_list_free (blocks);
-	}
-	free (ops);
-	if (!valid || (name && !profile_label (ctx, address, name))) {
-		R_LOG_WARN ("Borland tlink401-qualified: preserving partial code at FILE 0x%08"PFMT64x, physical);
-		return false;
-	}
-	borland_comment (ctx->anal, address, comment);
-	return true;
-}
-
 static void tlink401_types(RAnal *anal) {
 	if (!borland_type (anal, "uint8_t") || !borland_type (anal, "uint16_t")) {
 		return;
@@ -101,7 +61,7 @@ static int borland_tlink401_profile(RAnal *anal) {
 	}
 	bool windows[R_ARRAY_SIZE (tlink401_windows)] = {0};
 	for (i = 0; i < R_ARRAY_SIZE (tlink401_windows); i++) {
-		windows[i] = tlink401_window (&ctx, tlink401_windows[i].start, tlink401_windows[i].end - tlink401_windows[i].start, tlink401_windows[i].name, tlink401_windows[i].comment);
+		windows[i] = profile_window (&ctx, tlink401_windows[i].start, tlink401_windows[i].end - tlink401_windows[i].start, tlink401_windows[i].name, tlink401_windows[i].comment);
 	}
 	if (profile_data_array (&ctx, 0x3546, "uint16_t", 8)
 			&& profile_label (&ctx, profile_mapped (&ctx, 0x3546, 16, false), "tlink401_location_dispatch_words8")) {
@@ -114,7 +74,7 @@ static int borland_tlink401_profile(RAnal *anal) {
 	if (accepted[4]) {
 		borland_comment (anal, profile_mapped (&ctx, 0x72d1, 1, true), TLINK401_MARKER "R144: selected ordinary reuse branch6ED1..6F1F; no universal equal-name iff equal-descriptor rule. I uses current0776, R current077E, D current079E.");
 	}
-	if (tlink401_window (&ctx, 0x5ec, 3, NULL, NULL)) {
+	if (profile_window (&ctx, 0x5ec, 3, NULL, NULL)) {
 		borland_comment (anal, profile_mapped (&ctx, 0x5ed, 2, true), TLINK401_MARKER "R151: actual native MZ relocation selects startup DS11B1 relative paragraph;11B10 is beyond initialized load-image end11AB9. DS0017 is not an initialized original-file object. Native relocated pointers, not FILE+inventedDS, own the loaded view; startup/helper/service/lifetime remain unproved.");
 	}
 	if (accepted[0] && accepted[1]) {

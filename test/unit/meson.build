@@ -13,6 +13,7 @@ if get_option('enable_tests')
     'anal_borland_simtower',
     'anal_borland_tasm',
     'anal_borland_tlink401',
+    'anal_borland_tlink51',
     'anal_cc',
     'anal_class_graph',
     'anal_function',

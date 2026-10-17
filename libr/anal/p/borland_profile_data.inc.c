@@ -110,10 +110,12 @@ static bool profile_data_meta(RIntervalNode *node, void *user) {
 	return false;
 }
 
-static bool profile_data_region(BorlandProfileContext *ctx, ut64 physical, int size, const char *type, ut64 element_size) {
+static bool profile_data_preflight(BorlandProfileContext *ctx, ut64 physical, int size, const char *type, ut64 element_size, BorlandDataCheck *result) {
 	RAnal *anal = ctx->anal;
 	ut64 address = profile_mapped (ctx, physical, size, false);
-	if (size < 1 || address == UT64_MAX || r_type_get_bitsize (anal->sdb_types, type) != (ut64)size * 8) {
+	ut64 bits = r_type_get_bitsize (anal->sdb_types, type);
+	if (size < 1 || address == UT64_MAX || (bits && bits != (ut64)size * 8)
+			|| (!bits && sdb_const_get (anal->sdb_types, type, NULL))) {
 		return false;
 	}
 	ut8 *current = malloc (size);
@@ -145,6 +147,19 @@ static bool profile_data_region(BorlandProfileContext *ctx, ut64 physical, int s
 		R_LOG_WARN ("Borland profile: preserving data/type/link/code at FILE 0x%08"PFMT64x, physical);
 		return false;
 	}
+	check.layout = NULL;
+	*result = check;
+	return true;
+}
+
+static bool profile_data_region(BorlandProfileContext *ctx, ut64 physical, int size, const char *type, ut64 element_size) {
+	BorlandDataCheck check;
+	if (r_type_get_bitsize (ctx->anal->sdb_types, type) != (ut64)size * 8
+			|| !profile_data_preflight (ctx, physical, size, type, element_size, &check)) {
+		return false;
+	}
+	RAnal *anal = ctx->anal;
+	ut64 address = check.address;
 	if (!check.linked && !r_anal_types_set_link (anal, type, address)) {
 		return false;
 	}

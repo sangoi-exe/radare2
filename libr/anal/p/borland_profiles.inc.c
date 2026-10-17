@@ -93,5 +93,5 @@ static int borland_scrantic_profile(RAnal *anal) {
 static int borland_profiles(RAnal *anal) {
 	return borland_scrantic_profile (anal) + borland_simtower_profile (anal)
 		+ borland_bcc20_profile (anal) + borland_bcc31_profile (anal) + borland_bcc45_profile (anal) + borland_tasm31_profile (anal)
-		+ borland_tlink401_profile (anal);
+		+ borland_tlink401_profile (anal) + borland_tlink51_profile (anal);
 }

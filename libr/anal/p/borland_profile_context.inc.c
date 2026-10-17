@@ -1,10 +1,18 @@
 /* radare - LGPL - Copyright 2026 */
 
 typedef struct {
+	ut64 call;
+	ut64 resume;
+} BorlandContinuation;
+
+typedef struct {
 	RAnal *anal;
 	RBinFile *file;
 	Sdb *ne;
 	bool bcc20_static_views;
+	bool tlink51_relations;
+	const BorlandContinuation *continuations;
+	int continuation_count;
 } BorlandProfileContext;
 
 static bool profile_identity(RAnal *anal, BorlandProfileContext *ctx, const char *format, int size, const char *sha256) {
@@ -304,6 +312,13 @@ static bool profile_code(BorlandProfileContext *ctx, ut64 physical, int size, ut
 			}
 		}
 		ops[off] = (HelperOp){ length, op.type & R_ANAL_OP_TYPE_MASK, op.jump, op.fail };
+		int i;
+		for (i = 0; valid && i < ctx->continuation_count; i++) {
+			if (ctx->continuations[i].call == address + off) {
+				valid = ops[off].type == R_ANAL_OP_TYPE_CALL && op.fail == address + off + length;
+				ops[off].fail = ctx->continuations[i].resume;
+			}
+		}
 		r_anal_op_fini (&op);
 		off += length;
 	}
@@ -327,13 +342,19 @@ static bool profile_label(BorlandProfileContext *ctx, ut64 address, const char *
 	return r_flag_set (flags, name, address, 1) != NULL;
 }
 
-static bool profile_reference(RAnal *anal, ut64 from, ut64 to, ut32 type) {
+static bool profile_reference_admit(RAnal *anal, ut64 from, ut64 to, ut32 type, bool *same) {
+	if (same) {
+		*same = false;
+	}
 	RVecAnalRef *refs = r_anal_refs_get (anal, from);
 	RAnalRef *ref;
 	if (refs) {
 		R_VEC_FOREACH (refs, ref) {
 			if (ref->addr == to) {
 				bool equivalent = R_ANAL_REF_TYPE_MASK (ref->type) == type;
+				if (same) {
+					*same = equivalent;
+				}
 				if (!equivalent) {
 					R_LOG_WARN ("Borland profile: preserving reference type at 0x%08"PFMT64x" -> 0x%08"PFMT64x, from, to);
 				}
@@ -343,7 +364,12 @@ static bool profile_reference(RAnal *anal, ut64 from, ut64 to, ut32 type) {
 		}
 	}
 	RVecAnalRef_free (refs);
-	return r_anal_xrefs_set (anal, from, to, type);
+	return true;
+}
+
+static bool profile_reference(RAnal *anal, ut64 from, ut64 to, ut32 type) {
+	bool same;
+	return profile_reference_admit (anal, from, to, type, &same) && (same || r_anal_xrefs_set (anal, from, to, type));
 }
 
 typedef struct {
@@ -359,8 +385,10 @@ static bool profile_leaders(const BorlandCodeRange *ranges, int count, bool *lea
 		leaders[index] = true;
 		for (off = 0; off < range->size; off += range->ops[off].size) {
 			const HelperOp *op = &range->ops[off];
-			if (borland_ends_block (op)) {
-				ut64 edges[] = { op->jump, op->fail };
+			ut64 end = range->address + off + op->size;
+			if (borland_ends_block (op) || (op->type == R_ANAL_OP_TYPE_CALL && op->fail != UT64_MAX && op->fail != end)) {
+				ut64 edges[2];
+				borland_edges (op, end, &edges[0], &edges[1]);
 				int edge;
 				for (edge = 0; edge < R_ARRAY_SIZE (edges); edge++) {
 					size_t target_index = 0;
@@ -438,8 +466,27 @@ static bool profile_signature_admit(RAnal *anal, RAnalFunction *fcn, ut64 addres
 	return admitted;
 }
 
-static bool profile_function_ranges_contract(BorlandProfileContext *ctx, const BorlandProfileRange *input, int count, const char *name, int purge, const char *comment, const RAnalFunctionSignature *expected) {
+typedef struct {
+	BorlandCodeRange *ranges;
+	int count;
+	bool *leaders;
+	RAnalFunction *function;
+	bool same_signature;
+} BorlandFunctionCheck;
+
+static void profile_function_check_fini(BorlandFunctionCheck *check) {
+	int i;
+	for (i = 0; i < check->count; i++) {
+		free (check->ranges[i].ops);
+	}
+	free (check->ranges);
+	free (check->leaders);
+	*check = (BorlandFunctionCheck){0};
+}
+
+static bool profile_function_preflight(BorlandProfileContext *ctx, const BorlandProfileRange *input, int count, const char *name, int purge, const RAnalFunctionSignature *expected, BorlandFunctionCheck *check) {
 	RAnal *anal = ctx->anal;
+	*check = (BorlandFunctionCheck){0};
 	size_t allocation, total = 0;
 	if (count < 1 || r_mul_overflow ((size_t)count, sizeof (BorlandCodeRange), &allocation)) {
 		return false;
@@ -448,7 +495,6 @@ static bool profile_function_ranges_contract(BorlandProfileContext *ctx, const B
 	if (!ranges) {
 		return false;
 	}
-	bool applied = false;
 	bool *leaders = NULL;
 	int i;
 	for (i = 0; i < count; i++) {
@@ -498,6 +544,16 @@ static bool profile_function_ranges_contract(BorlandProfileContext *ctx, const B
 		R_LOG_WARN ("Borland profile: preserving signature/variables/type link at FILE 0x%08"PFMT64x, input[0].physical);
 		goto beach;
 	}
+	if (!expected) {
+		RAnalFunction lookup = { .anal = anal, .addr = address, .name = (char *)name };
+		RAnalFunctionSignature *signature = r_anal_function_get_signature (fcn? fcn: &lookup);
+		char *linked = r_type_link_at (anal->sdb_types, address);
+		conflict |= linked || sdb_const_getf (anal->sdb_types, NULL, "fcnlink.%08"PFMT64x, address)
+			|| (fcn && !RVecAnalVarPtr_empty (&fcn->vars))
+			|| (signature && (signature->ret_type || !r_list_empty (signature->params) || signature->noreturn));
+		free (linked);
+		r_anal_function_signature_free (signature);
+	}
 	if (fcn) {
 		RAnalFunctionSignature *signature = expected? NULL: r_anal_function_get_signature (fcn);
 		const char *cc = r_anal_cc_default (anal);
@@ -515,10 +571,39 @@ static bool profile_function_ranges_contract(BorlandProfileContext *ctx, const B
 		R_LOG_WARN ("Borland profile: preserving function/body/name/contract/data at FILE 0x%08"PFMT64x, input[0].physical);
 		goto beach;
 	}
+	for (i = 0; ctx->tlink51_relations && i < count; i++) {
+		int off;
+		for (off = 0; off < ranges[i].size; off += ranges[i].ops[off].size) {
+			const HelperOp *op = &ranges[i].ops[off];
+			if (op->jump != UT64_MAX && (op->type == R_ANAL_OP_TYPE_CALL || op->type == R_ANAL_OP_TYPE_JMP || op->type == R_ANAL_OP_TYPE_CJMP)
+					&& !profile_reference_admit (anal, ranges[i].address + off, op->jump, op->type == R_ANAL_OP_TYPE_CALL? R_ANAL_REF_TYPE_CALL: R_ANAL_REF_TYPE_CODE, NULL)) {
+				goto beach;
+			}
+		}
+	}
+	*check = (BorlandFunctionCheck){ ranges, count, leaders, fcn, same };
+	return true;
+beach:
+	for (i = 0; i < count; i++) {
+		free (ranges[i].ops);
+	}
+	free (ranges);
+	free (leaders);
+	return false;
+}
+
+static bool profile_function_apply(BorlandProfileContext *ctx, BorlandFunctionCheck *check, const char *name, int purge, const char *comment, const RAnalFunctionSignature *expected) {
+	RAnal *anal = ctx->anal;
+	BorlandCodeRange *ranges = check->ranges;
+	int count = check->count, i;
+	bool *leaders = check->leaders;
+	RAnalFunction *fcn = check->function;
+	ut64 address = ranges[0].address;
+	RAnalBlock *bb;
 	if (!fcn) {
 		fcn = r_anal_create_function (anal, name, address, R_ANAL_FCN_TYPE_FCN, NULL);
 		if (!fcn) {
-			goto beach;
+			return false;
 		}
 		size_t index = 0;
 		for (i = 0; i < count; i++) {
@@ -534,7 +619,7 @@ static bool profile_function_ranges_contract(BorlandProfileContext *ctx, const B
 				} while (off < range->size && !leaders[index + off]);
 				bb = r_anal_create_block (anal, range->address + start, off - start);
 				if (!bb) {
-					goto beach;
+					return false;
 				}
 				bb->ninstr = instructions;
 				int cursor = start, instruction = 0;
@@ -550,15 +635,15 @@ static bool profile_function_ranges_contract(BorlandProfileContext *ctx, const B
 		}
 	}
 	if (expected) {
-		if ((!same && !r_anal_function_set_signature (anal, fcn, expected))
+		if ((!check->same_signature && !r_anal_function_set_signature (anal, fcn, expected))
 				|| !r_anal_function_store_callconv (anal, fcn, expected->callconv)) {
-			goto beach;
+			return false;
 		}
 		RAnalFunctionSignature *actual = r_anal_function_get_signature (fcn);
 		bool equivalent = profile_signature_equal (actual, expected);
 		r_anal_function_signature_free (actual);
 		if (!equivalent) {
-			goto beach;
+			return false;
 		}
 	}
 	if (purge != R_ANAL_CC_STACK_POP_UNKNOWN && fcn->meta.stack_pop == R_ANAL_CC_STACK_POP_UNKNOWN) {
@@ -566,7 +651,7 @@ static bool profile_function_ranges_contract(BorlandProfileContext *ctx, const B
 	}
 	// Unknown source net cleanup supplies no override to independently derived native inference.
 	if (!profile_label (ctx, address, name)) {
-		goto beach;
+		return false;
 	}
 	borland_comment (anal, address, comment);
 	for (i = 0; i < count; i++) {
@@ -578,13 +663,16 @@ static bool profile_function_ranges_contract(BorlandProfileContext *ctx, const B
 			}
 		}
 	}
-	applied = true;
-beach:
-	for (i = 0; i < count; i++) {
-		free (ranges[i].ops);
+	return true;
+}
+
+static bool profile_function_ranges_contract(BorlandProfileContext *ctx, const BorlandProfileRange *input, int count, const char *name, int purge, const char *comment, const RAnalFunctionSignature *expected) {
+	BorlandFunctionCheck check;
+	if (!profile_function_preflight (ctx, input, count, name, purge, expected, &check)) {
+		return false;
 	}
-	free (ranges);
-	free (leaders);
+	bool applied = profile_function_apply (ctx, &check, name, purge, comment, expected);
+	profile_function_check_fini (&check);
 	return applied;
 }
 
@@ -595,4 +683,44 @@ static bool profile_function_ranges(BorlandProfileContext *ctx, const BorlandPro
 static bool profile_function(BorlandProfileContext *ctx, ut64 physical, int size, const char *name, int purge, const char *comment) {
 	BorlandProfileRange range = { physical, size };
 	return profile_function_ranges (ctx, &range, 1, name, purge, comment);
+}
+
+// Partial code has the same current-byte and independent metadata/block guards, but never creates a function.
+static bool profile_window(BorlandProfileContext *ctx, ut64 physical, int size, const char *name, const char *comment) {
+	ut64 address = profile_mapped (ctx, physical, size, true);
+	HelperOp *ops = size > 0? calloc (size, sizeof (HelperOp)): NULL;
+	bool valid = ops && address != UT64_MAX && profile_code (ctx, physical, size, address, ops);
+	if (valid) {
+		RVecIntervalNodePtr *metadata = r_meta_get_all_intersect (ctx->anal, address, size, R_META_TYPE_ANY);
+		RIntervalNode **node;
+		if (metadata) {
+			R_VEC_FOREACH (metadata, node) {
+				RAnalMetaItem *item = (*node)->data;
+				valid &= item->type == R_META_TYPE_COMMENT || item->type == R_META_TYPE_HIGHLIGHT;
+			}
+		}
+		RVecIntervalNodePtr_free (metadata);
+		RList *blocks = r_anal_get_blocks_intersect (ctx->anal, address, size);
+		RListIter *iter;
+		RAnalBlock *bb;
+		r_list_foreach (blocks, iter, bb) {
+			if (bb->addr < address || bb->addr - address >= size || bb->size > size - (bb->addr - address)) {
+				valid = false;
+				break;
+			}
+			BorlandCodeRange range = { bb->addr, bb->size, ops + (bb->addr - address) };
+			RAnalFunction view = { .bbs = r_list_new () };
+			r_list_append (view.bbs, bb);
+			valid &= borland_body_ranges (&view, &range, 1);
+			r_list_free (view.bbs);
+		}
+		r_list_free (blocks);
+	}
+	free (ops);
+	if (!valid || (name && !profile_label (ctx, address, name))) {
+		R_LOG_WARN ("Borland profile: preserving partial code at FILE 0x%08"PFMT64x, physical);
+		return false;
+	}
+	borland_comment (ctx->anal, address, comment);
+	return true;
 }

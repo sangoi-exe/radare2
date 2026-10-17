@@ -266,7 +266,7 @@ static void borland_edges(const HelperOp *op, ut64 end, ut64 *jump, ut64 *fail) 
 		*jump = op->jump;
 		*fail = op->fail;
 	} else if (op->type != R_ANAL_OP_TYPE_RET) {
-		*jump = end;
+		*jump = op->type == R_ANAL_OP_TYPE_CALL && op->fail != UT64_MAX? op->fail: end;
 	}
 }
 
@@ -559,6 +559,7 @@ static bool borland_tlink_writer(BorlandProfileContext *ctx, ut64 physical, cons
 }
 
 #include "borland_profile_tlink401.inc.c"
+#include "borland_profile_tlink51.inc.c"
 #include "borland_profile_bcc20.inc.c"
 #include "borland_profile_bcc31.inc.c"
 #include "borland_profile_bcc45.inc.c"
@@ -570,11 +571,14 @@ static bool borland_pre_analysis(RAnal *anal) {
 }
 
 static char *borland_command(RAnal *anal, const char *input) {
+	if (!strcmp (input, "borland:continuations")) {
+		return borland_tlink51_continuations (anal);
+	}
 	if (strcmp (input, "borland") && strcmp (input, "borland?")) {
 		return NULL;
 	}
 	if (input[7] == '?') {
-		return strdup ("| a:borland    qualify exact executable 16-bit Borland helper families and exact-original profiles; preserve conflicting analysis\n| a:borland?   show this help; rerun a:borland after changing bytes/context\n");
+		return strdup ("| a:borland                 qualify exact executable 16-bit Borland helper families and exact-original profiles; preserve conflicting analysis\n| a:borland:continuations   readonly JSON of exact TLINK51 recognition and jointly current-qualified conditional call/resume pairs; refusals are logged\n| a:borland?                show this help; rerun a:borland after changing bytes/context\n");
 	}
 	int count = borland_profiles (anal);
 	return r_str_newf ("Borland: %d function contracts qualified (including unchanged); refusals are logged\n", borland_scan (anal) + count);
