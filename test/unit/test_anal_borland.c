@@ -201,6 +201,57 @@ static bool test_move_preserve_body_and_convention(void) {
 	mu_end;
 }
 
+static bool test_move_metadata_spaces(void) {
+	int installed, other;
+	for (installed = 0; installed < 2; installed++) {
+		for (other = 0; other < 2; other++) {
+			RCore *core = move_core ();
+			RAnal *anal = core->anal;
+			if (installed) {
+				mu_assert_true (move_run (core, 2), "valid helper baseline before independent DATA");
+			}
+			RAnalFunction *fcn = r_anal_get_function_at (anal, MOVE_ADDR);
+			char *signature = fcn? r_anal_function_get_signature_string (fcn): NULL;
+			ut64 epoch = fcn? fcn->dirty_epoch: 0;
+			RSpace *manual = r_spaces_set (&anal->meta_spaces, "manual");
+			mu_assert_notnull (manual, "independent metadata space");
+			mu_assert_true (r_meta_set (anal, R_META_TYPE_DATA, MOVE_ADDR + 1, 2, "manual definition"), "independent DATA within current helper");
+			r_meta_set_string (anal, R_META_TYPE_COMMENT, MOVE_ADDR, "manual comment");
+			RIntervalNode *data = r_meta_get_in (anal, MOVE_ADDR + 1, R_META_TYPE_DATA);
+			RIntervalNode *comment = r_meta_get_in (anal, MOVE_ADDR, R_META_TYPE_COMMENT);
+			mu_assert_notnull (data, "native DATA node");
+			mu_assert_notnull (comment, "native comment node");
+			RSpace *selected = r_spaces_set (&anal->meta_spaces, other? "selected": "manual");
+			mu_assert_true (move_run (core, 1), "DATA blocks helper creation and equivalent-helper early return in every space");
+			mu_assert_ptreq (r_spaces_current (&anal->meta_spaces), selected, "helper admission never switches current metadata space");
+			mu_assert_ptreq (r_anal_get_function_at (anal, MOVE_ADDR), fcn, "no conflicting function creation or replacement");
+			if (fcn) {
+				char *after = r_anal_function_get_signature_string (fcn);
+				mu_assert_streq (after, signature, "equivalent helper prototype preserved without reapplication");
+				mu_assert_eq (fcn->dirty_epoch, epoch, "refused helper contract not rewritten");
+				free (after);
+			} else {
+				mu_assert_null (r_type_link_at (anal->sdb_types, MOVE_ADDR), "no dependent helper prototype");
+			}
+			mu_assert_notnull (r_anal_get_function_at (anal, MOVE_ADDR + 89), "unrelated qualified wrapper remains available");
+			RAnalMetaItem *item = data->data;
+			mu_assert_ptreq (item->space, manual, "DATA ownership preserved");
+			mu_assert_eq (item->type, R_META_TYPE_DATA, "DATA kind preserved");
+			mu_assert_eq (item->subtype, 0, "DATA subtype preserved");
+			mu_assert_eq (data->start, MOVE_ADDR + 1, "DATA start preserved");
+			mu_assert_eq (data->end, MOVE_ADDR + 2, "DATA extent preserved");
+			mu_assert_streq (item->str, "manual definition", "DATA content preserved");
+			mu_assert_streq (((RAnalMetaItem *)comment->data)->str, "manual comment", "refusal adds no dependent helper comment");
+			if (other) {
+				mu_assert_null (r_meta_get_string (anal, R_META_TYPE_COMMENT, MOVE_ADDR), "no dependent comment in selected space");
+			}
+			free (signature);
+			move_core_free (core);
+		}
+	}
+	mu_end;
+}
+
 static bool test_move_preserve_type(void) {
 	RCore *core = move_core ();
 	sdb_set (core->anal->sdb_types, "FarAddress16", "struct", 0);
@@ -369,6 +420,7 @@ int main(int argc, char **argv) {
 	mu_run_test (test_move_current_qualification);
 	mu_run_test (test_move_preserve_independent_state);
 	mu_run_test (test_move_preserve_body_and_convention);
+	mu_run_test (test_move_metadata_spaces);
 	mu_run_test (test_move_preserve_type);
 	mu_run_test (test_remaining_helper_contracts);
 	mu_run_test (test_fill_qualification);

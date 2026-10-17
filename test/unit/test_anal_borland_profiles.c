@@ -300,6 +300,44 @@ static RCore *original_core(void) {
 	return original_core_path (getenv ("R2_TEST_SCRANTIC"));
 }
 
+static bool test_scrantic_metadata_spaces(void) {
+	if (!getenv ("R2_TEST_SCRANTIC")) {
+		mu_end;
+	}
+	int scenario;
+	for (scenario = 0; scenario < 4; scenario++) {
+		bool helper = scenario >= 2, other = scenario % 2;
+		RCore *core = original_core ();
+		mu_assert_notnull (core, "actual read-only SCRANTIC metadata witness");
+		RAnal *anal = core->anal;
+		ut64 entry = helper? 0x1033a: 0x105e2, at = helper? 0x1033b: 0x105e4;
+		RSpace *manual = r_spaces_set (&anal->meta_spaces, "manual");
+		mu_assert_true (r_meta_set (anal, R_META_TYPE_DATA, at, 2, "manual definition"), "actual LSEEK profile or F_SCOPY helper conflicts with independent DATA");
+		RIntervalNode *data = r_meta_get_in (anal, at, R_META_TYPE_DATA);
+		mu_assert_notnull (data, "native original-backed DATA node");
+		RSpace *selected = r_spaces_set (&anal->meta_spaces, other? "selected": "manual");
+		char *output = r_core_cmd_str (core, "a:borland");
+		mu_assert_notnull (output, "actual registered profile application");
+		mu_assert_notnull (strstr (output, "Borland: 14 function contracts qualified"), "same refusal count regardless selected metadata space");
+		free (output);
+		mu_assert_ptreq (r_spaces_current (&anal->meta_spaces), selected, "profile admission preserves current metadata space");
+		mu_assert_null (r_anal_get_function_at (anal, entry), "no global profile/helper function over independent DATA");
+		mu_assert_null (r_type_link_at (anal->sdb_types, entry), "no dependent original-backed prototype");
+		mu_assert_null (r_flag_get (core->flags, helper? "qualified_borland_f_scopy.0001033a": "scrantic_cwm31_lseek_correspondence"), "no dependent profile/helper label");
+		mu_assert_null (r_meta_get_string (anal, R_META_TYPE_COMMENT, entry), "no dependent profile/helper comment");
+		mu_assert_notnull (r_anal_get_function_at (anal, helper? 0x105e2: 0x1033a), "unrelated original function remains qualified");
+		RAnalMetaItem *item = data->data;
+		mu_assert_ptreq (item->space, manual, "original-backed DATA space preserved");
+		mu_assert_eq (item->type, R_META_TYPE_DATA, "original-backed DATA kind preserved");
+		mu_assert_eq (item->subtype, 0, "original-backed DATA subtype preserved");
+		mu_assert_eq (data->start, at, "original-backed DATA start preserved");
+		mu_assert_eq (data->end, at + 1, "original-backed DATA extent preserved");
+		mu_assert_streq (item->str, "manual definition", "original-backed DATA content preserved");
+		r_core_free (core);
+	}
+	mu_end;
+}
+
 static bool tasm_context(RCore *core, BorlandProfileContext *ctx) {
 	return profile_identity (core->anal, ctx, "mz", 129266, "80534cd6a1e2c2b4376ae3f21954c6dbfa77a6998d5e0bf8b8bee6153f3174ea");
 }
@@ -705,6 +743,7 @@ int all_tests(void) {
 	mu_run_test (test_mz_current_preservation);
 	mu_run_test (test_scrantic_production);
 	mu_run_test (test_scrantic_production_preservation);
+	mu_run_test (test_scrantic_metadata_spaces);
 	mu_run_test (test_simtower_selected_code);
 	mu_run_test (test_simtower_code_preservation);
 	return tests_passed != tests_run;

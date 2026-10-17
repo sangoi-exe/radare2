@@ -530,15 +530,7 @@ static bool profile_function_preflight(BorlandProfileContext *ctx, const Borland
 		r_list_foreach (anal->fcns, iter, other) {
 			conflict |= other != fcn && other->addr >= ranges[i].address && other->addr - ranges[i].address < ranges[i].size;
 		}
-		RVecIntervalNodePtr *metadata = r_meta_get_all_intersect (anal, ranges[i].address, ranges[i].size, R_META_TYPE_ANY);
-		RIntervalNode **node;
-		if (metadata) {
-			R_VEC_FOREACH (metadata, node) {
-				RAnalMetaItem *item = (*node)->data;
-				conflict |= item->type != R_META_TYPE_COMMENT && item->type != R_META_TYPE_HIGHLIGHT;
-			}
-		}
-		RVecIntervalNodePtr_free (metadata);
+		conflict |= !borland_code_metadata (anal, ranges[i].address, ranges[i].size);
 	}
 	if (expected && !profile_signature_admit (anal, fcn, address, name, expected, &same)) {
 		R_LOG_WARN ("Borland profile: preserving signature/variables/type link at FILE 0x%08"PFMT64x, input[0].physical);
@@ -690,16 +682,8 @@ static bool profile_window(BorlandProfileContext *ctx, ut64 physical, int size, 
 	ut64 address = profile_mapped (ctx, physical, size, true);
 	HelperOp *ops = size > 0? calloc (size, sizeof (HelperOp)): NULL;
 	bool valid = ops && address != UT64_MAX && profile_code (ctx, physical, size, address, ops);
+	valid = valid && borland_code_metadata (ctx->anal, address, size);
 	if (valid) {
-		RVecIntervalNodePtr *metadata = r_meta_get_all_intersect (ctx->anal, address, size, R_META_TYPE_ANY);
-		RIntervalNode **node;
-		if (metadata) {
-			R_VEC_FOREACH (metadata, node) {
-				RAnalMetaItem *item = (*node)->data;
-				valid &= item->type == R_META_TYPE_COMMENT || item->type == R_META_TYPE_HIGHLIGHT;
-			}
-		}
-		RVecIntervalNodePtr_free (metadata);
 		RList *blocks = r_anal_get_blocks_intersect (ctx->anal, address, size);
 		RListIter *iter;
 		RAnalBlock *bb;

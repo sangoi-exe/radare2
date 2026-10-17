@@ -368,9 +368,23 @@ static bool borland_signature_equal(RAnalFunctionSignature *sig, const HelperCon
 	return true;
 }
 
+static bool borland_code_metadata_node(RIntervalNode *node, void *user) {
+	RAnalMetaItem *item = node->data;
+	return item->type == R_META_TYPE_COMMENT || item->type == R_META_TYPE_HIGHLIGHT;
+}
+
+static bool borland_code_metadata(RAnal *anal, ut64 address, ut64 size) {
+	return size && address <= UT64_MAX - (size - 1)
+		&& r_interval_tree_all_intersect (&anal->meta, address, address + size - 1, true, borland_code_metadata_node, NULL);
+}
+
 static bool borland_apply(RAnal *anal, ut64 family, const HelperContract *helper, const HelperOp *ops) {
 	const int start = helper->start, size = helper->size;
 	const ut64 addr = family + start;
+	if (!borland_code_metadata (anal, addr, size)) {
+		R_LOG_WARN ("Borland: preserving independent metadata at 0x%08"PFMT64x, addr);
+		return false;
+	}
 	RAnalFunction *fcn = r_anal_get_function_at (anal, addr);
 	RList *blocks = r_anal_get_blocks_intersect (anal, addr, size);
 	RListIter *iter;

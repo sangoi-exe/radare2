@@ -461,6 +461,63 @@ static bool test_tlink51_current_and_manual_refusal(void) {
 	mu_end;
 }
 
+static bool test_tlink51_metadata_spaces(void) {
+	if (!getenv ("R2_TEST_TLINK51")) {
+		mu_end;
+	}
+	int installed, other;
+	for (installed = 0; installed < 2; installed++) {
+		for (other = 0; other < 2; other++) {
+			RCore *core = tlink51_core ();
+			mu_assert_notnull (core, "actual original metadata-space witness");
+			if (installed) {
+				mu_assert_true (tlink51_activate (core, false), "valid original profile baseline before independent DATA");
+				mu_assert_true (r_flag_unset_name (core->flags, "tlink51_source_record_setup"), "remove only the fixture's previously installed partial label");
+			}
+			RAnal *anal = core->anal;
+			RAnalFunction *consume = r_anal_get_function_at (anal, 0x1b4f0), *shared = r_anal_get_function_at (anal, 0x1ddf9);
+			RSpace *manual = r_spaces_set (&anal->meta_spaces, "manual");
+			mu_assert_true (r_meta_set (anal, R_META_TYPE_DATA, 0x1b4f0, 2, "manual helper"), "independent definition at actual consumed-return helper");
+			mu_assert_true (r_meta_set (anal, R_META_TYPE_DATA, 0x14f33, 2, "manual window"), "independent definition at actual partial window");
+			r_meta_set_string (anal, R_META_TYPE_COMMENT, 0x1de2c, "manual call comment");
+			RIntervalNode *helper = r_meta_get_in (anal, 0x1b4f0, R_META_TYPE_DATA), *window = r_meta_get_in (anal, 0x14f33, R_META_TYPE_DATA), *comment = r_meta_get_in (anal, 0x1de2c, R_META_TYPE_COMMENT);
+			mu_assert_notnull (helper, "native helper DATA node");
+			mu_assert_notnull (window, "native partial-window DATA node");
+			mu_assert_notnull (comment, "native independent comment node");
+			RSpace *selected = r_spaces_set (&anal->meta_spaces, other? "selected": "manual");
+			mu_assert_true (tlink51_query (core, true, false), "same production preflight refuses readonly pairs regardless selected metadata space");
+			mu_assert_ptreq (r_spaces_current (&anal->meta_spaces), selected, "readonly query preserves current metadata space");
+			mu_assert_true (tlink51_activate (core, false), "unrelated original facts still apply");
+			mu_assert_ptreq (r_spaces_current (&anal->meta_spaces), selected, "profile and window application preserve current metadata space");
+			mu_assert_ptreq (r_anal_get_function_at (anal, 0x1b4f0), consume, "conflicting helper is neither created nor replaced");
+			mu_assert_ptreq (r_anal_get_function_at (anal, 0x1ddf9), shared, "dependent caller is neither created nor replaced");
+			mu_assert_null (r_flag_get (core->flags, "tlink51_source_record_setup"), "no dependent partial-code label");
+			mu_assert_null (r_meta_get_string (anal, R_META_TYPE_COMMENT, 0x14f33), "no dependent partial-code comment in working space");
+			mu_assert_notnull (r_anal_get_function_at (anal, 0x13c0b), "unrelated qualified writer remains available");
+			RAnalMetaItem *helper_item = helper->data, *window_item = window->data;
+			mu_assert_ptreq (helper_item->space, manual, "helper DATA ownership preserved");
+			mu_assert_ptreq (window_item->space, manual, "partial-window DATA ownership preserved");
+			mu_assert_eq (helper_item->type, R_META_TYPE_DATA, "helper DATA kind preserved");
+			mu_assert_eq (window_item->type, R_META_TYPE_DATA, "partial-window DATA kind preserved");
+			mu_assert_eq (helper_item->subtype, 0, "helper DATA subtype preserved");
+			mu_assert_eq (window_item->subtype, 0, "partial-window DATA subtype preserved");
+			mu_assert_eq (helper->start, 0x1b4f0, "helper DATA start preserved");
+			mu_assert_eq (helper->end, 0x1b4f1, "helper DATA extent preserved");
+			mu_assert_eq (window->start, 0x14f33, "window DATA start preserved");
+			mu_assert_eq (window->end, 0x14f34, "window DATA extent preserved");
+			mu_assert_streq (helper_item->str, "manual helper", "helper DATA content preserved");
+			mu_assert_streq (window_item->str, "manual window", "window DATA content preserved");
+			mu_assert_streq (((RAnalMetaItem *)comment->data)->str, "manual call comment", "refusal adds no dependent call comment");
+			if (other) {
+				mu_assert_null (r_meta_get_string (anal, R_META_TYPE_COMMENT, 0x1de2c), "no dependent call comment in selected space");
+			}
+			mu_assert_true (tlink51_query (core, true, false), "pairs remain withheld after registered reapply, without mutation");
+			r_core_free (core);
+		}
+	}
+	mu_end;
+}
+
 static bool test_tlink51_partial_refusal(void) {
 	if (!getenv ("R2_TEST_TLINK51")) {
 		mu_end;
@@ -501,6 +558,7 @@ int all_tests(void) {
 	mu_run_test (test_tlink51_nonmatch);
 	mu_run_test (test_tlink51_original_facts);
 	mu_run_test (test_tlink51_current_and_manual_refusal);
+	mu_run_test (test_tlink51_metadata_spaces);
 	mu_run_test (test_tlink51_partial_refusal);
 	return tests_passed != tests_run;
 }
