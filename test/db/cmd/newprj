@@ -1608,6 +1608,172 @@ uint16_t saved_call (uint16_t value);
 EOF
 RUN
 
+NAME=newprj restore refuses a malformed block before changing analysis or virtual edits
+FILE=bins/ne/anim8.exe
+ARGS=-n -a x86 -b 16
+CMDS=<<EOF
+mkdir .tmp
+rm .tmp/newprj-strict-valid.prj
+rm .tmp/newprj-strict-invalid.prj
+e io.cache=true
+wx aa @ 8
+wx 0000 @ 0x20
+f saved.only=0x40
+af+ 0x20 saved_original
+afb+ 0x20 0x20 2
+CCu saved_comment @ 0x20
+prj snapshot .tmp/newprj-strict-valid.prj
+cp .tmp/newprj-strict-valid.prj .tmp/newprj-strict-invalid.prj
+!r2 -NNnwq -c '/x 0000000020000000000000000200000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff01000000 > /dev/null;wx 02 @ hit0_0+48' .tmp/newprj-strict-invalid.prj
+af-*
+f-*
+af+ 0x20 current_before
+afb+ 0x20 0x20 4
+CCu before_comment @ 0x20
+prj restore .tmp/newprj-strict-invalid.prj || echo malformed-refused
+p8 1 @ 8
+p8 2 @ 0x20
+afl~current_before
+f~saved.only
+f~saved_original
+f~current_before
+CC. @ 0x20
+afb @ 0x20
+wcj
+?e
+prj restore .tmp/newprj-strict-valid.prj && echo valid-restored
+afl~saved_original
+CC. @ 0x20
+afb @ 0x20
+rm .tmp/newprj-strict-valid.prj
+rm .tmp/newprj-strict-invalid.prj
+EOF
+EXPECT=<<EOF
+malformed-refused
+aa
+0000
+0x00000020    1      4 current_before
+0x00000020 0 current_before
+before_comment
+0x00000020 0x00000024 00:0000 4
+{"layer":[{"idx":0,"addr":8,"size":1,"after":"20","before":"aa","written":false},{"idx":1,"addr":32,"size":2,"after":"6a72","before":"0000","written":false}]}
+valid-restored
+0x00000020    1      2 saved_original
+saved_comment
+0x00000020 0x00000022 00:0000 2
+EOF
+EXPECT_ERR=<<EOF
+WARN: Truncated basic block record 0/1 in function 0/1
+ERROR: Cannot load function entry
+EOF
+RUN
+
+NAME=newprj restore refuses changed or extra current cache ranges and accepts a fresh original
+FILE=bins/ne/anim8.exe
+ARGS=-n -a x86 -b 16
+CMDS=<<EOF
+mkdir .tmp
+rm .tmp/newprj-strict-cache.prj
+e io.cache=true
+wx aa @ 8
+wc++
+wx aa @ 8
+af+ 0x20 saved_original
+afb+ 0x20 0x20 4
+CCu saved_comment @ 0x20
+prj snapshot .tmp/newprj-strict-cache.prj
+prj restore .tmp/newprj-strict-cache.prj && echo compatible-cache
+wx bb @ 8
+wx cc @ 0x20
+afn current_before @ 0x20
+CCu before_comment @ 0x20
+prj restore .tmp/newprj-strict-cache.prj || echo changed-cache-refused
+p8 1 @ 8
+p8 1 @ 0x20
+afl~current_before
+CC. @ 0x20
+wx aa @ 8
+prj restore .tmp/newprj-strict-cache.prj || echo extra-cache-refused
+p8 1 @ 8
+p8 1 @ 0x20
+afl~current_before
+CC. @ 0x20
+!r2 -NNnq -a x86 -b 16 -c 'prj restore .tmp/newprj-strict-cache.prj && echo fresh-restored;p8 1 @8;p8 1 @0x20;afl~saved_original;CC. @0x20' bins/ne/anim8.exe
+rm .tmp/newprj-strict-cache.prj
+EOF
+EXPECT=<<EOF
+compatible-cache
+changed-cache-refused
+bb
+cc
+0x00000020    1      4 current_before
+before_comment
+extra-cache-refused
+aa
+cc
+0x00000020    1      4 current_before
+before_comment
+fresh-restored
+aa
+6a
+0x00000020    1      4 saved_original
+saved_comment
+EOF
+EXPECT_ERR=<<EOF
+ERROR: Project restore conflicts with current virtual edits
+ERROR: Project restore conflicts with current virtual edits
+EOF
+RUN
+
+NAME=newprj restore rejects a loader baseline after map or object addresses change and return
+FILE=bins/ne/anim8.exe
+ARGS=-B 0 -e bin.cache=true -e bin.relocs.apply=true
+CMDS=<<EOF
+mkdir .tmp
+rm .tmp/newprj-baseline-lifecycle.prj
+CCu saved_comment @ 0x10020
+prj snapshot .tmp/newprj-baseline-lifecycle.prj
+!r2 -NNq -B 0 -e bin.cache=true -e bin.relocs.apply=true -c 'CCu current_comment @0x10020;omv 1 0x40000;omv 1 0x20000;prj restore .tmp/newprj-baseline-lifecycle.prj || echo stale-map-refused;CC. @0x10020;p8 4 @0x10001' bins/ne/anim8.exe
+!r2 -NNq -B 0 -e bin.cache=true -e bin.relocs.apply=true -c 'CCu current_comment @0x10020;obr 0x100000;obr 0;prj restore .tmp/newprj-baseline-lifecycle.prj || echo stale-object-refused;CC. @0x10020;p8 4 @0x10001' bins/ne/anim8.exe
+rm .tmp/newprj-baseline-lifecycle.prj
+EOF
+EXPECT=<<EOF
+stale-map-refused
+current_comment
+00000300
+stale-object-refused
+current_comment
+00000300
+EOF
+EXPECT_ERR=<<EOF
+WARN: Don't use -B on unknown files. Consider using -m
+WARN: Don't use -B on unknown files. Consider using -m
+ERROR: Project restore requires a current qualified loader baseline
+WARN: Don't use -B on unknown files. Consider using -m
+ERROR: Project restore requires a current qualified loader baseline
+EOF
+RUN
+
+NAME=newprj restore qualifies an empty baseline after normal raw-loader maps are complete
+FILE=bins/ne/anim8.exe
+ARGS=-F null -a x86 -b 16
+CMDS=<<EOF
+mkdir .tmp
+rm .tmp/newprj-baseline-null.prj
+e io.cache=true
+wx 1122 @ 0x20
+f raw.baseline.saved=0x20
+prj snapshot .tmp/newprj-baseline-null.prj
+!r2 -NNq -F null -a x86 -b 16 -c 'prj restore .tmp/newprj-baseline-null.prj && echo raw-restored;p8 2 @0x20;f~raw.baseline.saved' bins/ne/anim8.exe
+rm .tmp/newprj-baseline-null.prj
+EOF
+EXPECT=<<EOF
+raw-restored
+1122
+0x00000020 1 raw.baseline.saved
+EOF
+RUN
+
 NAME=newprj attaches a restored function to a block already shared by a live function
 FILE=malloc://0x100
 ARGS=-a x86 -b 64

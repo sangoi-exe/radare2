@@ -11,14 +11,14 @@ typedef struct {
 
 R_VEC_TYPE (RVecTrycatchLinks, TrycatchLinks);
 
-typedef struct {
+struct r_bin_trycatch_store_t {
 	RVecRBinTrycatch regions;
 	RVecTrycatchLinks links;
 	HtUU *tails;
-} TrycatchStore;
+};
 
 R_IPI void r_bin_trycatch_free(void *data) {
-	TrycatchStore *store = data;
+	RBinTrycatchStore *store = data;
 	if (store) {
 		RVecRBinTrycatch_fini (&store->regions);
 		RVecTrycatchLinks_fini (&store->links);
@@ -27,7 +27,7 @@ R_IPI void r_bin_trycatch_free(void *data) {
 	}
 }
 
-static void trycatch_link(TrycatchStore *store, ut64 source, size_t index) {
+static void trycatch_link(RBinTrycatchStore *store, ut64 source, size_t index) {
 	TrycatchLinks *links = R_VEC_START_ITER (&store->links);
 	bool found;
 	ut64 tail = ht_uu_find (store->tails, source, &found);
@@ -42,12 +42,13 @@ static void trycatch_link(TrycatchStore *store, ut64 source, size_t index) {
 	ht_uu_update (store->tails, source, index);
 }
 
-static TrycatchStore *trycatch_store(RBinFile *bf) {
+static RBinTrycatchStore *trycatch_store(RBinFile *bf) {
 	RBinObject *bo = bf->bo;
-	if (bo->trycatch) {
-		return bo->trycatch;
+	RBinObjectPrivate *priv = r_bin_object_private_get (bo, true);
+	if (priv->trycatch) {
+		return priv->trycatch;
 	}
-	TrycatchStore *store = R_NEW0 (TrycatchStore);
+	RBinTrycatchStore *store = R_NEW0 (RBinTrycatchStore);
 	RVecRBinTrycatch *regions = bo->plugin && bo->plugin->trycatch? bo->plugin->trycatch (bf): NULL;
 	size_t count = regions? RVecRBinTrycatch_length (regions): 0;
 	if (count) {
@@ -73,13 +74,13 @@ static TrycatchStore *trycatch_store(RBinFile *bf) {
 	if (regions) {
 		RVecRBinTrycatch_swap (&store->regions, regions);
 	}
-	bo->trycatch = store;
+	priv->trycatch = store;
 	return store;
 }
 
 R_API R_UNOWNED const RVecRBinTrycatch *r_bin_file_get_trycatch(RBinFile * R_NONNULL bf) {
 	R_RETURN_VAL_IF_FAIL (bf && bf->bo, NULL);
-	TrycatchStore *store = trycatch_store (bf);
+	RBinTrycatchStore *store = trycatch_store (bf);
 	return store? &store->regions: NULL;
 }
 
@@ -93,7 +94,7 @@ R_API bool r_bin_trycatch_insert(RBinFile *bf, const RBinTrycatch *tc) {
 	if (tc->type && !item.type) {
 		return false;
 	}
-	TrycatchStore *store = trycatch_store (bf);
+	RBinTrycatchStore *store = trycatch_store (bf);
 	if (!store) {
 		free (item.type);
 		return false;
@@ -123,7 +124,7 @@ R_API bool r_bin_trycatch_insert(RBinFile *bf, const RBinTrycatch *tc) {
 
 R_API bool r_bin_trycatch_delete(RBinFile *bf, size_t index) {
 	R_RETURN_VAL_IF_FAIL (bf && bf->bo, false);
-	TrycatchStore *store = trycatch_store (bf);
+	RBinTrycatchStore *store = trycatch_store (bf);
 	if (!store || index >= RVecRBinTrycatch_length (&store->regions)) {
 		return false;
 	}
@@ -164,7 +165,7 @@ R_API bool r_bin_trycatch_delete(RBinFile *bf, size_t index) {
 
 R_API bool r_bin_trycatch_clear(RBinFile *bf) {
 	R_RETURN_VAL_IF_FAIL (bf && bf->bo, false);
-	TrycatchStore *store = trycatch_store (bf);
+	RBinTrycatchStore *store = trycatch_store (bf);
 	if (!store) {
 		return false;
 	}
@@ -177,7 +178,7 @@ R_API bool r_bin_trycatch_clear(RBinFile *bf) {
 
 R_API bool r_bin_trycatch_foreach(RBinFile *bf, ut64 source, RBinTrycatchCb cb, void *user) {
 	R_RETURN_VAL_IF_FAIL (bf && bf->bo && cb, false);
-	TrycatchStore *store = trycatch_store (bf);
+	RBinTrycatchStore *store = trycatch_store (bf);
 	if (!store) {
 		return false;
 	}

@@ -780,6 +780,8 @@ R_API void r_bin_set_baddr(RBin *bin, ut64 baddr) {
 			return;
 		}
 		ut64 file_baddr = o->plugin->baddr (bf);
+		const ut64 old_baddr = o->baddr;
+		const st64 old_shift = o->baddr_shift;
 		if (baddr == UT64_MAX) {
 			o->baddr = file_baddr;
 			o->baddr_shift = 0; // o->baddr; // - file_baddr;
@@ -788,6 +790,9 @@ R_API void r_bin_set_baddr(RBin *bin, ut64 baddr) {
 				o->baddr = baddr;
 				o->baddr_shift = baddr - file_baddr;
 			}
+		}
+		if (o->baddr != old_baddr || o->baddr_shift != old_shift) {
+			r_bin_loader_baseline_invalidate (o);
 		}
 	} else {
 		R_LOG_WARN ("This should be an assert probably");

@@ -1,5 +1,7 @@
 /* radare - MIT - Copyright 2026 - pancake */
 
+#include "../../../bin/i/private.h"
+
 #define RPRJ_STATE_HEADER_SIZE 80
 
 typedef struct {
@@ -180,6 +182,71 @@ static bool rprj_state_validate(RPrjCursor *cur, const ut8 *data, ut32 size) {
 		at += len;
 	}
 	return at == size;
+}
+
+static bool rprj_state_current_matches(RPrjCursor *cur, const ut8 *data, RBuffer *loader) {
+	RIO *io = cur->core->io;
+	RList *ranges = loader? r_buf_nonempty_list (loader): NULL;
+	if (loader && !ranges) {
+		return false;
+	}
+	bool ok = false;
+	RListIter *iter;
+	RIOCacheLayer *layer;
+	r_list_foreach (io->cache.layers, iter, layer) {
+		RIOCacheItem **item;
+		R_VEC_FOREACH (layer->vec, item) {
+			const RInterval *span = (*item)->tree_itv;
+			if (!span || !span->size) {
+				continue;
+			}
+			if (span->addr > UT64_MAX - span->size) {
+				goto done;
+			}
+			ut64 offset = 0;
+			while (offset < span->size) {
+				ut8 current[4096], expected[4096], covered[4096] = {0};
+				const ut64 addr = span->addr + offset;
+				const int len = R_MIN ((ut64)sizeof (current), span->size - offset);
+				if (!r_io_cache_read_at (io, addr, current, len)) {
+					goto done;
+				}
+				RListIter *range_iter;
+				RBufferSparseItem *range;
+				r_list_foreach (ranges, range_iter, range) {
+					const ut64 start = R_MAX (addr, range->from);
+					const ut64 end = R_MIN (addr + len, range->to);
+					if (start < end) {
+						memcpy (expected + start - addr, range->data + start - range->from, end - start);
+						memset (covered + start - addr, 1, end - start);
+					}
+				}
+				ut32 count = r_read_le32 (data + 76);
+				ut64 at = RPRJ_STATE_HEADER_SIZE;
+				while (count--) {
+					const ut64 saved_addr = r_read_le64 (data + at);
+					const ut32 saved_len = r_read_le32 (data + at + 8);
+					at += 12;
+					const ut64 start = R_MAX (addr, saved_addr);
+					const ut64 end = R_MIN (addr + len, saved_addr + saved_len);
+					if (start < end) {
+						// Replay saved spans in order, including overlaps and duplicate layers.
+						memcpy (expected + start - addr, data + at + start - saved_addr, end - start);
+						memset (covered + start - addr, 1, end - start);
+					}
+					at += saved_len;
+				}
+				if (memchr (covered, 0, len) || memcmp (current, expected, len)) {
+					goto done;
+				}
+				offset += len;
+			}
+		}
+	}
+	ok = true;
+done:
+	r_list_free (ranges);
+	return ok;
 }
 
 static bool rprj_state_restore(RPrjCursor *cur, const ut8 *data) {

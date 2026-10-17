@@ -1,4 +1,5 @@
 #include <r_bin.h>
+#include "../../libr/bin/i/private.h"
 #include "minunit.h"
 
 #define MODEL_CAPACITY 256
@@ -36,6 +37,15 @@ static TrycatchFixture fixture_new(void) {
 static void fixture_fini(TrycatchFixture *fixture) {
 	r_bin_free (fixture->bin);
 	r_io_free (fixture->io);
+}
+
+static bool baseline_open_io(TrycatchFixture *fixture) {
+	RIODesc *desc = r_io_open (fixture->io, "malloc://256", R_PERM_RW, 0);
+	if (!desc) {
+		return false;
+	}
+	fixture->bf->fd = desc->fd;
+	return true;
 }
 
 static RBinTrycatch make_entry(ut64 source, ut64 id) {
@@ -332,6 +342,15 @@ static bool test_trycatch_plugin_load(void) {
 	RBinFile *bf = open_buffer (fixture.bin, "trycatch-plugin", plugin.meta.name);
 	mu_assert_notnull (bf, "open trycatch plugin binary");
 	TrycatchPluginData *data = bf->bo->bin_obj;
+	RIODesc *desc = r_io_open (fixture.io, "malloc://256", R_PERM_RW, 0);
+	mu_assert_notnull (desc, "open baseline descriptor");
+	bf->fd = desc->fd;
+	RBinLoaderBaseline *baseline = r_bin_loader_baseline_begin (bf, false);
+	mu_assert_eq (data->calls, 0, "baseline-first allocation does not load trycatch");
+	mu_assert_null (r_bin_object_private_get (bf->bo, false)->trycatch, "baseline does not initialize the trycatch child");
+	r_bin_loader_baseline_record (baseline, 0x10, (const ut8 *)"saved", 5);
+	r_bin_loader_baseline_finish (bf, false);
+	mu_assert_notnull (r_bin_loader_baseline_get (bf, false), "baseline qualified independently");
 	TrycatchModel model = {0};
 	const ut64 sources[] = {9, 0, 9, 1};
 	size_t i;
@@ -350,6 +369,87 @@ static bool test_trycatch_plugin_load(void) {
 	model.count = 0;
 	mu_assert_true (query_matches (bf, &model, 9), "clear does not reload parser metadata");
 	mu_assert_eq (data->calls, 1, "edits never invoke plugin callback again");
+	mu_assert_ptreq (r_bin_loader_baseline_get (bf, false), baseline, "trycatch clear preserves loader qualification");
+	ut8 bytes[5];
+	mu_assert_eq (r_buf_read_at (baseline->bytes, 0x10, bytes, sizeof (bytes)), sizeof (bytes), "read baseline after trycatch clear");
+	mu_assert_memeq (bytes, (const ut8 *)"saved", sizeof (bytes), "clear preserves baseline bytes");
+	fixture_fini (&fixture);
+	mu_end;
+}
+
+static ut64 baseline_baddr(RBinFile *bf) {
+	return 0;
+}
+
+static bool test_loader_baseline_lifecycle(void) {
+	TrycatchFixture fixture = fixture_new ();
+	mu_assert_notnull (fixture.bf, "open baseline object");
+	mu_assert_true (baseline_open_io (&fixture), "open baseline IO");
+	mu_assert_null (r_bin_loader_baseline_get (fixture.bf, false), "missing baseline is not an empty baseline");
+	mu_assert_true (r_bin_trycatch_clear (fixture.bf), "initialize trycatch first");
+	RBinObjectPrivate *priv = r_bin_object_private_get (fixture.bf->bo, false);
+	mu_assert_null (priv->loader, "trycatch does not create a baseline");
+	RBinTrycatchStore *trycatch = priv->trycatch;
+	RBinLoaderBaseline *baseline = r_bin_loader_baseline_begin (fixture.bf, false);
+	mu_assert_null (r_bin_loader_baseline_get (fixture.bf, false), "pending baseline is unqualified");
+	r_bin_loader_baseline_finish (fixture.bf, false);
+	mu_assert_ptreq (r_bin_loader_baseline_get (fixture.bf, false), baseline, "successful empty capture is qualified");
+	mu_assert_ptreq (priv->trycatch, trycatch, "baseline leaves initialized trycatch intact");
+	mu_assert_true (r_bin_trycatch_clear (fixture.bf), "clear sibling store");
+	mu_assert_ptreq (r_bin_loader_baseline_get (fixture.bf, false), baseline, "clear preserves valid empty baseline");
+	RBinPlugin plugin = *fixture.bf->bo->plugin;
+	plugin.baddr = baseline_baddr;
+	fixture.bf->bo->plugin = &plugin;
+	baseline->plugin = &plugin;
+	r_bin_set_baddr (fixture.bin, 0x1000);
+	r_bin_set_baddr (fixture.bin, 0);
+	mu_assert_null (r_bin_loader_baseline_get (fixture.bf, false), "baddr away and back invalidates capture");
+	r_bin_loader_baseline_begin (fixture.bf, false);
+	r_bin_loader_baseline_finish (fixture.bf, false);
+	mu_assert_null (r_bin_loader_baseline_get (fixture.bf, false), "begin cannot recertify stale bytes");
+	fixture_fini (&fixture);
+	mu_end;
+}
+
+static bool test_loader_baseline_ranges_and_association(void) {
+	TrycatchFixture fixture = fixture_new ();
+	mu_assert_notnull (fixture.bf, "open baseline object");
+	mu_assert_true (baseline_open_io (&fixture), "open baseline IO");
+	RBinLoaderBaseline *baseline = r_bin_loader_baseline_begin (fixture.bf, true);
+	r_bin_loader_baseline_record (baseline, 4, (const ut8 *)"AAAA", 4);
+	r_bin_loader_baseline_record (baseline, 0, (const ut8 *)"0123456789", 10);
+	r_bin_loader_baseline_record (baseline, 5, (const ut8 *)"XYZ", 3);
+	r_bin_loader_baseline_finish (fixture.bf, true);
+	mu_assert_ptreq (r_bin_loader_baseline_get (fixture.bf, true), baseline, "nonempty capture qualified");
+	ut8 bytes[10];
+	mu_assert_eq (r_buf_read_at (baseline->bytes, 0, bytes, sizeof (bytes)), sizeof (bytes), "read overlapping capture");
+	mu_assert_memeq (bytes, (const ut8 *)"01234XYZ89", sizeof (bytes), "last successful write wins across sparse overlaps");
+	RBinFile *other = open_buffer (fixture.bin, "other-baseline-object", "null");
+	mu_assert_notnull (other, "open another selected object");
+	mu_assert_null (r_bin_loader_baseline_get (other, true), "baseline never transfers to another object");
+	mu_assert_null (r_bin_loader_baseline_get (fixture.bf, true), "wrong selected object cannot qualify baseline");
+	fixture_fini (&fixture);
+	mu_end;
+}
+
+static bool test_loader_baseline_failed_and_stale(void) {
+	TrycatchFixture fixture = fixture_new ();
+	mu_assert_notnull (fixture.bf, "open baseline object");
+	mu_assert_true (baseline_open_io (&fixture), "open baseline IO");
+	RBinLoaderBaseline *baseline = r_bin_loader_baseline_begin (fixture.bf, false);
+	baseline->failed = true;
+	r_bin_loader_baseline_finish (fixture.bf, false);
+	mu_assert_null (r_bin_loader_baseline_get (fixture.bf, false), "failed capture never qualifies as empty");
+	fixture_fini (&fixture);
+	fixture = fixture_new ();
+	mu_assert_true (baseline_open_io (&fixture), "open fresh baseline IO");
+	r_bin_loader_baseline_begin (fixture.bf, false);
+	r_bin_loader_baseline_finish (fixture.bf, false);
+	RIOMap *map = r_io_map_get_at (fixture.io, 0);
+	mu_assert_notnull (map, "baseline map exists");
+	mu_assert_true (r_io_map_remap (fixture.io, map->id, 0x1000), "move map away");
+	mu_assert_true (r_io_map_remap (fixture.io, map->id, 0), "restore map geometry");
+	mu_assert_null (r_bin_loader_baseline_get (fixture.bf, false), "restored geometry cannot recertify capture generation");
 	fixture_fini (&fixture);
 	mu_end;
 }
@@ -474,5 +574,8 @@ int main(int argc, char **argv) {
 	mu_run_test (test_trycatch_ownership);
 	mu_run_test (test_trycatch_mixed_edits);
 	mu_run_test (test_trycatch_plugin_load);
+	mu_run_test (test_loader_baseline_lifecycle);
+	mu_run_test (test_loader_baseline_ranges_and_association);
+	mu_run_test (test_loader_baseline_failed_and_stale);
 	return tests_passed != tests_run;
 }

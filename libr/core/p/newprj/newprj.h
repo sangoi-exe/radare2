@@ -242,6 +242,7 @@ typedef struct {
 	RStrBuf *out;
 	RVecPrjMod mods;
 	RVecPrjMap *maps;
+	bool invalid;
 } RPrjCursor;
 
 typedef struct {

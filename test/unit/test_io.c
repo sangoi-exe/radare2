@@ -337,7 +337,48 @@ bool test_r_io_priority2(void) {
 	mu_end;
 }
 
+static bool test_map_generation(void) {
+	RIO *io = r_io_new ();
+	RIODesc *desc = r_io_open (io, "malloc://256", R_PERM_RW, 0);
+	mu_assert_notnull (desc, "open map-generation fixture");
+	RIOMap *map = r_io_map_get_at (io, 0);
+	mu_assert_notnull (map, "initial map");
+	const ut32 id = map->id;
+	const ut64 ts = map->ts;
+	const ut64 captured = io->mts;
+	mu_assert_false (r_io_map_remap (io, UT32_MAX, 0x1000), "invalid remap fails");
+	mu_assert_true (r_io_map_remap (io, id, 0), "same-address remap is a no-op");
+	mu_assert_eq (io->mts, captured, "failed and no-op remaps preserve generation");
+	mu_assert_true (r_io_map_remap (io, id, 0x1000), "remap succeeds");
+	mu_assert_true (io->mts > captured, "remap advances structural generation");
+	ut64 generation = io->mts;
+	mu_assert_true (r_io_map_remap (io, id, 0), "remap back succeeds");
+	mu_assert_true (io->mts > generation && io->mts > captured, "away-back cannot restore capture generation");
+	generation = io->mts;
+	mu_assert_false (r_io_map_resize (io, id, 0), "zero resize fails");
+	mu_assert_true (r_io_map_resize (io, id, 256), "same-size resize is a no-op");
+	mu_assert_eq (io->mts, generation, "failed and no-op resizes preserve generation");
+	mu_assert_true (r_io_map_resize (io, id, 128), "resize succeeds");
+	mu_assert_true (io->mts > generation, "resize advances structural generation");
+	mu_assert_eq (map->ts, ts, "structural generation does not change map-reference timestamp");
+	generation = io->mts;
+	r_io_map_del (io, UT32_MAX);
+	mu_assert_eq (io->mts, generation, "missing-map deletion is a no-op");
+	r_io_map_del (io, id);
+	mu_assert_true (io->mts > generation, "deletion advances structural generation");
+	generation = io->mts;
+	r_io_map_reset (io);
+	mu_assert_eq (io->mts, generation, "empty reset is a no-op");
+	mu_assert_notnull (r_io_map_add (io, desc->fd, R_PERM_RW, 0, 0, 128), "add replacement map");
+	generation = io->mts;
+	r_io_map_reset (io);
+	mu_assert_true (io->mts > generation, "populated reset advances structural generation");
+	r_io_free (io);
+	mu_end;
+}
+
 int all_tests(void) {
+	mu_run_test (test_map_generation);
 	mu_run_test(test_r_io_cache);
 	mu_run_test(test_r_io_nread_at);
 	mu_run_test(test_r_io_mapsplit);

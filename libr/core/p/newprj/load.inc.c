@@ -25,12 +25,14 @@ static void rprj_type_load(RPrjCursor *cur, int mode, ut64 next_entry) {
 	while (rprj_entry_has (b, next_entry, 8)) {
 		ut32 key_index, value_index;
 		if (!rprj_read_le32 (b, &key_index) || !rprj_read_le32 (b, &value_index)) {
+			cur->invalid = true;
 			break;
 		}
 		const char *key = rprj_st_get (cur->st, key_index);
 		const char *value = rprj_st_get (cur->st, value_index);
 		if (!key || !value) {
 			R_LOG_WARN ("Invalid type string index");
+			cur->invalid = true;
 			continue;
 		}
 		if (mode & R_CORE_NEWPRJ_MODE_LOG) {
@@ -53,6 +55,7 @@ static void rprj_sdb_addr_load(RPrjCursor *cur, int mode, ut64 next_entry, bool 
 	while (rprj_entry_has (b, next_entry, RPRJ_SDB_ADDR_SIZE)) {
 		ut8 record[RPRJ_SDB_ADDR_SIZE];
 		if (!rprj_read_exact (b, record, sizeof (record))) {
+			cur->invalid = true;
 			break;
 		}
 		const ut32 key_index = r_read_le32 (record);
@@ -64,6 +67,7 @@ static void rprj_sdb_addr_load(RPrjCursor *cur, int mode, ut64 next_entry, bool 
 		if (!key || !value || r_str_startswith (key, "global.") != global
 			|| !rprj_mod_va (cur, &addr, &va)) {
 			R_LOG_WARN ("Invalid type address record");
+			cur->invalid = true;
 			continue;
 		}
 		ut64 original;
@@ -71,6 +75,7 @@ static void rprj_sdb_addr_load(RPrjCursor *cur, int mode, ut64 next_entry, bool 
 		const char *number = rprj_sdb_addr (key, &original, &suffix);
 		if (!number || (!global && *suffix)) {
 			R_LOG_WARN ("Invalid type address key %s", key);
+			cur->invalid = true;
 			continue;
 		}
 		char *rebased = r_str_newf (global? "%.*s%" PFMT64x "%s": "%.*s%08" PFMT64x "%s",
@@ -219,11 +224,13 @@ static void rprj_flag_load(RPrjCursor *cur, int mode, ut64 next_entry) {
 	ut32 fcount = 0;
 	if (!rprj_entry_has (b, next_entry, sizeof (fcount)) || !rprj_read_le32 (b, &fcount)) {
 		R_LOG_WARN ("Truncated flag entry");
+		cur->invalid = true;
 		return;
 	}
 	const ut64 bmax = rprj_entry_remaining (b, next_entry) / RPRJ_FLAG_SIZE;
 	if (fcount > bmax) {
 		R_LOG_WARN ("Invalid flag record count %u", fcount);
+		cur->invalid = true;
 		fcount = (ut32)bmax;
 	}
 	RList *seen = (mode & R_CORE_NEWPRJ_MODE_DIFF)? r_list_newf (free): NULL;
@@ -231,21 +238,25 @@ static void rprj_flag_load(RPrjCursor *cur, int mode, ut64 next_entry) {
 	for (i = 0; i < fcount; i++) {
 		if (!rprj_entry_has (b, next_entry, RPRJ_FLAG_SIZE)) {
 			R_LOG_WARN ("Truncated flag record %u/%u", i, fcount);
+			cur->invalid = true;
 			break;
 		}
 		R2ProjectFlag flag;
 		if (!rprj_flag_read (b, &flag)) {
 			R_LOG_WARN ("Truncated flag record %u/%u", i, fcount);
+			cur->invalid = true;
 			break;
 		}
 		RPrjFlagExtras fe = {0};
 		if (!read_flag_extras (cur, flag.extras, next_entry, &fe)) {
 			R_LOG_WARN ("Truncated or invalid flag extras %u/%u", i, fcount);
+			cur->invalid = true;
 			break;
 		}
 		const char *flag_name = rprj_st_get (st, flag.name);
 		if (!flag_name) {
 			R_LOG_WARN ("Invalid flag string index %u", flag.name);
+			cur->invalid = true;
 			continue;
 		}
 		R2ProjectAddr addr = {
@@ -255,6 +266,7 @@ static void rprj_flag_load(RPrjCursor *cur, int mode, ut64 next_entry) {
 		ut64 va = UT64_MAX;
 		if (!rprj_mod_va (cur, &addr, &va)) {
 			R_LOG_WARN ("Cannot resolve address for flag %s", flag_name);
+			cur->invalid = true;
 			continue;
 		}
 		if (mode & R_CORE_NEWPRJ_MODE_SCRIPT) {
@@ -326,7 +338,11 @@ static void rprj_block_load(RPrjCursor *cur, RAnalFunction *fcn, R2ProjectBlock 
 			|| !rprj_mod_va (cur, &pbb->jump, &jump)
 			|| !rprj_mod_va (cur, &pbb->fail, &fail)) {
 		R_LOG_WARN ("Cannot resolve basic block for function %s", fcn? fcn->name: "?");
+		cur->invalid = true;
 		return;
+	}
+	if (!pbb->size || pbb->size > ST32_MAX || (pbb->color != UT32_MAX && pbb->color >= ncolors)) {
+		cur->invalid = true;
 	}
 	if (mode & R_CORE_NEWPRJ_MODE_SCRIPT) {
 		r_strbuf_appendf (cur->out, "'afb+ 0x%08"PFMT64x" 0x%08"PFMT64x" %"PFMT64u" 0x%08"PFMT64x" 0x%08"PFMT64x"\n",
@@ -404,8 +420,16 @@ static void rprj_function_attr_load(RPrjCursor *cur, RAnalFunction *fcn, R2Proje
 static void rprj_var_load(RPrjCursor *cur, RAnalFunction *fcn, R2ProjectVar *pvar, int mode, ut64 fcn_addr, st64 stack) {
 	const char *name = rprj_st_get (cur->st, pvar->name);
 	const char *type = rprj_st_get (cur->st, pvar->type);
+	if ((mode & R_CORE_NEWPRJ_MODE_RESTORE) && ((pvar->type != UT32_MAX && !type) || pvar->isarg > 1
+			|| (pvar->kind && pvar->kind != R_ANAL_VAR_KIND_REG
+				&& pvar->kind != R_ANAL_VAR_KIND_BPV && pvar->kind != R_ANAL_VAR_KIND_SPV)
+			|| (pvar->kind == R_ANAL_VAR_KIND_REG && (pvar->delta == ST32_MIN
+				|| !r_reg_index_get (cur->core->anal->reg, R_ABS (pvar->delta)))))) {
+		cur->invalid = true;
+	}
 	if (!name) {
 		R_LOG_WARN ("Invalid function variable name index %u", pvar->name);
+		cur->invalid = true;
 		return;
 	}
 	if (mode & R_CORE_NEWPRJ_MODE_SCRIPT) {
@@ -778,6 +802,9 @@ static bool rprj_function_resolve(RPrjCursor *cur, int mode, R2ProjectFunction *
 		R2ProjectFunctionAttr *attrs, ut32 nattrs, RList *pfcns, ut64 *out_va, RAnalFunction **out_fcn) {
 	RCore *core = cur->core;
 	const char *name = rprj_st_get (cur->st, pfcn->name);
+	if (!name || (pfcn->attr != UT32_MAX && pfcn->attr >= nattrs)) {
+		cur->invalid = true;
+	}
 	ut64 va = UT64_MAX;
 	RAnalFunction *fcn = NULL;
 	if (!rprj_mod_va (cur, &pfcn->addr, &va)) {
@@ -897,6 +924,9 @@ static bool rprj_function_load(RPrjCursor *cur, int mode, ut64 next_entry) {
 				R_LOG_WARN ("Truncated function attribute record %u/%u", i, nattrs);
 				goto cleanup;
 			}
+			if (attrs[i].cc != UT32_MAX && !rprj_st_get (cur->st, attrs[i].cc)) {
+				cur->invalid = true;
+			}
 		}
 	}
 	if (!rprj_entry_has (b, next_entry, sizeof (count)) || !rprj_read_le32 (b, &count)) {
@@ -906,6 +936,7 @@ static bool rprj_function_load(RPrjCursor *cur, int mode, ut64 next_entry) {
 	const ut64 fbmax = rprj_entry_remaining (b, next_entry) / RPRJ_FUNCTION_SIZE;
 	if (count > fbmax) {
 		R_LOG_WARN ("Invalid function record count %u", count);
+		cur->invalid = true;
 		count = (ut32)fbmax;
 	}
 	const bool diff = (mode & R_CORE_NEWPRJ_MODE_DIFF) != 0;
@@ -915,6 +946,7 @@ static bool rprj_function_load(RPrjCursor *cur, int mode, ut64 next_entry) {
 		R2ProjectFunction pfcn;
 		if (!rprj_entry_has (b, next_entry, RPRJ_FUNCTION_SIZE) || !rprj_function_read (b, &pfcn)) {
 			R_LOG_WARN ("Truncated function record %u/%u", i, count);
+			cur->invalid = true;
 			break;
 		}
 		ut64 va = UT64_MAX;
@@ -922,12 +954,14 @@ static bool rprj_function_load(RPrjCursor *cur, int mode, ut64 next_entry) {
 		const bool resolved = rprj_function_resolve (cur, mode, &pfcn, attrs, nattrs, pfcns, &va, &fcn);
 		if (!resolved) {
 			R_LOG_WARN ("Cannot resolve function record %u/%u", i, count);
+			cur->invalid = true;
 		}
 		pbbs = diff? r_list_newf (free): NULL;
 		pvars = diff? r_list_newf ((RListFree)rprj_diff_var_free): NULL;
 		const ut64 bbmax = rprj_entry_remaining (b, next_entry) / RPRJ_BLOCK_SIZE;
 		if (pfcn.nbbs > bbmax) {
 			R_LOG_WARN ("Invalid basic block count %u in function %u/%u", pfcn.nbbs, i, count);
+			cur->invalid = true;
 			pfcn.nbbs = (ut32)bbmax;
 		}
 		ut32 j;
@@ -945,6 +979,9 @@ static bool rprj_function_load(RPrjCursor *cur, int mode, ut64 next_entry) {
 			}
 			free (pbb.op_pos);
 		}
+		if (j != pfcn.nbbs) {
+			cur->invalid = true;
+		}
 		const st64 fstack = pfcn.attr < nattrs? (st64)attrs[pfcn.attr].stack: 0;
 		if (resolved && (mode & R_CORE_NEWPRJ_MODE_SCRIPT)) {
 			// always emitted, even for an empty frame, because the afvs offsets below are relative to it
@@ -953,6 +990,7 @@ static bool rprj_function_load(RPrjCursor *cur, int mode, ut64 next_entry) {
 		const ut64 vbmax = rprj_entry_remaining (b, next_entry) / RPRJ_VAR_SIZE;
 		if (pfcn.nvars > vbmax) {
 			R_LOG_WARN ("Invalid variable count %u in function %u/%u", pfcn.nvars, i, count);
+			cur->invalid = true;
 			pfcn.nvars = (ut32)vbmax;
 		}
 		for (j = 0; j < pfcn.nvars && r_buf_at (b) < next_entry; j++) {
@@ -967,6 +1005,9 @@ static bool rprj_function_load(RPrjCursor *cur, int mode, ut64 next_entry) {
 				}
 				rprj_var_load (cur, fcn, &pvar, mode, va, fstack);
 			}
+		}
+		if (j != pfcn.nvars) {
+			cur->invalid = true;
 		}
 		if (diff && resolved) {
 			const char *name = rprj_st_get (cur->st, pfcn.name);
@@ -985,6 +1026,9 @@ static bool rprj_function_load(RPrjCursor *cur, int mode, ut64 next_entry) {
 		r_list_free (pbbs);
 		pvars = NULL;
 		pbbs = NULL;
+	}
+	if (i != count) {
+		cur->invalid = true;
 	}
 	if (diff) {
 		RListIter *iter;
@@ -1011,17 +1055,20 @@ static void rprj_info_load(RPrjCursor *cur, int mode, ut64 next_entry) {
 	RBuffer *b = cur->b;
 	if (!rprj_entry_has (b, next_entry, RPRJ_INFO_SIZE)) {
 		R_LOG_WARN ("Truncated project info entry");
+		cur->invalid = true;
 		return;
 	}
 	R2ProjectInfo cmds = {0};
 	if (!rprj_info_read (b, &cmds)) {
 		R_LOG_WARN ("Truncated project info entry");
+		cur->invalid = true;
 		return;
 	}
 	const char *name = rprj_st_get (cur->st, cmds.name);
 	const char *user = rprj_st_get (cur->st, cmds.user);
 	if (!name || !user) {
 		R_LOG_WARN ("Invalid project info string index (%u,%u)", cmds.name, cmds.user);
+		cur->invalid = true;
 		return;
 	}
 	if (mode & R_CORE_NEWPRJ_MODE_LOG) {
@@ -1054,17 +1101,20 @@ static void rprj_meta_load(RPrjCursor *cur, int mode, ut64 next_entry, RAnalMeta
 		R2ProjectComment cmnt;
 		if (!rprj_cmnt_read (b, &cmnt)) {
 			R_LOG_WARN ("Truncated %s record at 0x%08"PFMT64x, kind, at);
+			cur->invalid = true;
 			break;
 		}
 		const char *cmnt_text = rprj_st_get (cur->st, cmnt.text);
 		if (!cmnt_text) {
 			R_LOG_WARN ("Invalid %s string index %u", kind, cmnt.text);
+			cur->invalid = true;
 			continue;
 		}
 		R2ProjectAddr addr = { .mod = cmnt.mod, .delta = cmnt.delta };
 		ut64 va = UT64_MAX;
 		if (!rprj_mod_va (cur, &addr, &va)) {
 			R_LOG_WARN ("Cannot resolve address for %s %s", kind, cmnt_text);
+			cur->invalid = true;
 			continue;
 		}
 		char *b64 = sdb_encode ((const ut8 *)cmnt_text, strlen (cmnt_text));
@@ -1113,6 +1163,7 @@ static void rprj_fmt_load(RPrjCursor *cur, int mode, ut64 next_entry) {
 	while (rprj_entry_has (b, next_entry, RPRJ_CMNT_SIZE)) {
 		R2ProjectComment format;
 		if (!rprj_cmnt_read (b, &format)) {
+			cur->invalid = true;
 			break;
 		}
 		const char *text = rprj_st_get (cur->st, format.text);
@@ -1121,6 +1172,7 @@ static void rprj_fmt_load(RPrjCursor *cur, int mode, ut64 next_entry) {
 		if (!text || !format.size || !rprj_mod_va (cur, &addr, &va)
 			|| r_add_overflow (va, format.size - 1, &end)) {
 			R_LOG_WARN ("Invalid format record");
+			cur->invalid = true;
 			continue;
 		}
 		if (mode & R_CORE_NEWPRJ_MODE_LOG) {
@@ -1141,11 +1193,13 @@ static void rprj_xref_load(RPrjCursor *cur, int mode, ut64 next_entry) {
 	ut32 count = 0;
 	if (!rprj_entry_has (b, next_entry, sizeof (count)) || !rprj_read_le32 (b, &count)) {
 		R_LOG_WARN ("Truncated xref entry");
+		cur->invalid = true;
 		return;
 	}
 	const ut64 bmax = rprj_entry_remaining (b, next_entry) / RPRJ_XREF_SIZE;
 	if (count > bmax) {
 		R_LOG_WARN ("Invalid xref record count %u", count);
+		cur->invalid = true;
 		count = (ut32)bmax;
 	}
 	const bool diff = (mode & R_CORE_NEWPRJ_MODE_DIFF) != 0;
@@ -1155,12 +1209,14 @@ static void rprj_xref_load(RPrjCursor *cur, int mode, ut64 next_entry) {
 		R2ProjectXref xref;
 		if (!rprj_entry_has (b, next_entry, RPRJ_XREF_SIZE) || !rprj_xref_read (b, &xref)) {
 			R_LOG_WARN ("Truncated xref record %u/%u", i, count);
+			cur->invalid = true;
 			break;
 		}
 		ut64 from = UT64_MAX;
 		ut64 to = UT64_MAX;
 		if (!rprj_mod_va (cur, &xref.from, &from) || !rprj_mod_va (cur, &xref.to, &to)) {
 			R_LOG_WARN ("Cannot resolve xref record %u/%u", i, count);
+			cur->invalid = true;
 			continue;
 		}
 		if (mode & R_CORE_NEWPRJ_MODE_SCRIPT) {
@@ -1246,12 +1302,14 @@ static void rprj_hint_load(RPrjCursor *cur, int mode, ut64 next_entry) {
 		R2ProjectHint hint;
 		if (!rprj_hint_read (b, &hint)) {
 			R_LOG_WARN ("Truncated hint record at 0x%08"PFMT64x, at);
+			cur->invalid = true;
 			break;
 		}
 		R2ProjectAddr addr = { .mod = hint.mod, .delta = hint.delta };
 		ut64 va = UT64_MAX;
 		if (!rprj_mod_va (cur, &addr, &va) || va == UT64_MAX) {
 			R_LOG_WARN ("Cannot resolve hint record at 0x%08"PFMT64x, at);
+			cur->invalid = true;
 			continue;
 		}
 		if (hint.kind == 1 || hint.kind == 2) {
@@ -1376,11 +1434,13 @@ static void rprj_breakpoint_load(RPrjCursor *cur, int mode, ut64 next_entry) {
 		R2ProjectBreakpoint bp;
 		if (!rprj_entry_has (b, next_entry, RPRJ_BREAKPOINT_SIZE) || !rprj_breakpoint_read (b, &bp)) {
 			R_LOG_WARN ("Truncated breakpoint record at 0x%08"PFMT64x, at);
+			cur->invalid = true;
 			break;
 		}
 		ut64 va = UT64_MAX;
 		if (!rprj_mod_va (cur, &bp.addr, &va) || va == UT64_MAX) {
 			R_LOG_WARN ("Cannot resolve breakpoint record at 0x%08"PFMT64x, at);
+			cur->invalid = true;
 			continue;
 		}
 		if (!bp.size || bp.size > ST32_MAX - 16 || bp.togglehits > ST32_MAX || bp.hits > ST32_MAX
@@ -1388,6 +1448,7 @@ static void rprj_breakpoint_load(RPrjCursor *cur, int mode, ut64 next_entry) {
 				|| (bp.hw != R_BP_TYPE_SW && bp.hw != R_BP_TYPE_HW && bp.hw != R_BP_TYPE_FAULT)
 				|| (bp.flags & ~(RPRJ_BREAKPOINT_TRACE | RPRJ_BREAKPOINT_ENABLED))) {
 			R_LOG_WARN ("Invalid breakpoint record at 0x%08"PFMT64x, at);
+			cur->invalid = true;
 			continue;
 		}
 		RBreakpointItem saved = {
@@ -1409,6 +1470,7 @@ static void rprj_breakpoint_load(RPrjCursor *cur, int mode, ut64 next_entry) {
 		if ((bp.name != UT32_MAX && !saved.name) || (bp.data != UT32_MAX && !saved.data)
 				|| (bp.cond != UT32_MAX && !saved.cond) || (bp.expr != UT32_MAX && !saved.expr)) {
 			R_LOG_WARN ("Invalid breakpoint strings at 0x%08"PFMT64x, at);
+			cur->invalid = true;
 			continue;
 		}
 		if (mode & R_CORE_NEWPRJ_MODE_LOG) {
@@ -1480,10 +1542,12 @@ static void rprj_signal_load(RPrjCursor *cur, int mode, ut64 next_entry) {
 		R2ProjectSignal sig;
 		if (!rprj_entry_has (b, next_entry, RPRJ_SIGNAL_SIZE) || !rprj_signal_read (b, &sig)) {
 			R_LOG_WARN ("Truncated signal record at 0x%08"PFMT64x, at);
+			cur->invalid = true;
 			break;
 		}
 		if (!sig.signum || sig.signum > ST32_MAX || (sig.option & ~(R_DBG_SIGNAL_CONT | R_DBG_SIGNAL_SKIP))) {
 			R_LOG_WARN ("Invalid signal record at 0x%08"PFMT64x, at);
+			cur->invalid = true;
 			continue;
 		}
 		if (mode & R_CORE_NEWPRJ_MODE_LOG) {
@@ -1575,10 +1639,12 @@ static void rprj_load_mods(RPrjCursor *cur, ut8 **out_buf, bool rebase) {
 	ut32 modsize = 0;
 	*out_buf = rprj_find (cur->b, RPRJ_MODS, &modsize);
 	if (!*out_buf) {
+		cur->invalid = true;
 		return;
 	}
 	RBuffer *mods = r_buf_new_with_bytes (*out_buf, modsize);
 	if (!mods) {
+		cur->invalid = true;
 		return;
 	}
 	ut32 n = 0;
@@ -1586,17 +1652,135 @@ static void rprj_load_mods(RPrjCursor *cur, ut8 **out_buf, bool rebase) {
 		R2ProjectMod mod;
 		if (!rprj_mods_read (mods, &mod)) {
 			R_LOG_ERROR ("Cannot read mod");
+			cur->invalid = true;
 			break;
+		}
+		if (!rprj_st_get (cur->st, mod.name) || (mod.file != UT32_MAX && !rprj_st_get (cur->st, mod.file))
+				|| mod.pmax < mod.pmin || mod.vmax < mod.vmin) {
+			cur->invalid = true;
 		}
 		R_LOG_DEBUG ("MOD: %s + 0x%08"PFMT64x, rprj_st_get (cur->st, mod.name), mod.vmin);
 		R2ProjectMod *slot = RVecPrjMod_emplace_back (&cur->mods);
 		*slot = mod;
 		n += RPRJ_MOD_SIZE;
 	}
+	if (n != modsize) {
+		cur->invalid = true;
+	}
 	if (rebase) {
 		rprj_mods_rebase (cur);
 	}
 	r_unref (mods);
+}
+
+static bool rprj_load_entries(RPrjCursor *cur, int mode) {
+	RBuffer *b = cur->b;
+	RStrBuf *out = cur->out;
+	R2ProjectEntry entry;
+	r_buf_seek (b, RPRJ_HEADER_SIZE, SEEK_SET);
+	int n = 0;
+	const ut64 bsz = r_buf_size (b);
+	while (r_buf_at (b) < bsz) {
+		const ut64 entry_at = r_buf_at (b);
+		if (!rprj_entry_read (b, &entry)) {
+			R_LOG_ERROR ("Cannot read entry");
+			return false;
+		}
+		if (entry.size < RPRJ_ENTRY_SIZE || entry.size > bsz - entry_at) {
+			R_LOG_ERROR ("Invalid entry size %u", entry.size);
+			return false;
+		}
+		if (mode & R_CORE_NEWPRJ_MODE_LOG) {
+			r_strbuf_appendf (out, "  Entry<%s> {\n", rprj_entry_type_tostring (entry.type));
+			r_strbuf_appendf (out, "    type = 0x%02x\n", entry.type);
+			r_strbuf_appendf (out, "    size = %d\n", entry.size);
+		}
+		if (mode & R_CORE_NEWPRJ_MODE_SCRIPT) {
+			r_strbuf_appendf (out, "'f entry%d.%s=0x%08"PFMT64x"\n", n, rprj_entry_type_tostring (entry.type), r_buf_at (b));
+		}
+		const ut64 next_entry = entry_at + entry.size;
+		bool consumed = true;
+		switch (entry.type) {
+		case RPRJ_STRS:
+			if (mode & R_CORE_NEWPRJ_MODE_LOG) {
+				rprj_strs_log (cur, next_entry);
+			}
+			consumed = false;
+			break;
+		case RPRJ_MODS:
+		case RPRJ_MAPS:
+			consumed = false;
+			break;
+		case RPRJ_CMDS:
+			if (!(mode & R_CORE_NEWPRJ_MODE_RESTORE)) {
+				rprj_cmds_load (cur, mode, next_entry);
+			}
+			consumed = false;
+			break;
+		case RPRJ_INFO:
+			rprj_info_load (cur, mode, next_entry);
+			break;
+		case RPRJ_CMNT:
+			rprj_cmnt_load (cur, mode, next_entry);
+			break;
+		case RPRJ_VART:
+			rprj_vart_load (cur, mode, next_entry);
+			break;
+		case RPRJ_FMT:
+			rprj_fmt_load (cur, mode, next_entry);
+			break;
+		case RPRJ_TYPE:
+			rprj_type_load (cur, mode, next_entry);
+			break;
+		case RPRJ_TLNK:
+			rprj_sdb_addr_load (cur, mode, next_entry, false);
+			break;
+		case RPRJ_GLOB:
+			rprj_sdb_addr_load (cur, mode, next_entry, true);
+			break;
+		case RPRJ_FLAG:
+			rprj_flag_load (cur, mode, next_entry);
+			break;
+		case RPRJ_EVAL:
+			if (!(mode & R_CORE_NEWPRJ_MODE_RESTORE)) {
+				rprj_eval_load (cur, mode, next_entry);
+			}
+			consumed = false;
+			break;
+		case RPRJ_XREF:
+			rprj_xref_load (cur, mode, next_entry);
+			break;
+		case RPRJ_FUNC:
+			if (!rprj_function_load (cur, mode, next_entry)) {
+				R_LOG_ERROR ("Cannot load function entry");
+				return false;
+			}
+			break;
+		case RPRJ_HINT:
+			rprj_hint_load (cur, mode, next_entry);
+			break;
+		case RPRJ_BRKP:
+			rprj_breakpoint_load (cur, mode, next_entry);
+			break;
+		case RPRJ_SIGS:
+			rprj_signal_load (cur, mode, next_entry);
+			break;
+		default:
+			consumed = false;
+			break;
+		}
+		if ((mode & R_CORE_NEWPRJ_MODE_RESTORE) && (cur->invalid || (consumed && r_buf_at (b) != next_entry))) {
+			R_LOG_ERROR ("Invalid project %s entry", rprj_entry_type_tostring (entry.type));
+			return false;
+		}
+		if (mode & R_CORE_NEWPRJ_MODE_LOG) {
+			r_strbuf_append (out, "  }\n");
+		}
+		// skip to the next entry
+		r_buf_seek (b, next_entry, SEEK_SET);
+		n++;
+	}
+	return true;
 }
 
 static char *r_core_newprj_load(RCore *core, const char *file, int mode) {
@@ -1651,6 +1835,25 @@ static char *r_core_newprj_load(RCore *core, const char *file, int mode) {
 			R_LOG_ERROR ("Project restore requires the matching read-only original, loader and map layout, with valid saved virtual edits");
 			goto done;
 		}
+		RBinFile *bf = r_bin_cur (core->bin);
+		const RBinLoaderBaseline *baseline = bf? r_bin_loader_baseline_get (bf, r_config_get_b (core->config, "bin.relocs.apply")): NULL;
+		if (bf && !baseline) {
+			R_LOG_ERROR ("Project restore requires a current qualified loader baseline");
+			goto done;
+		}
+		if (!rprj_state_current_matches (&cur, statebuf, baseline? baseline->bytes: NULL)) {
+			R_LOG_ERROR ("Project restore conflicts with current virtual edits");
+			goto done;
+		}
+		rprj_load_mods (&cur, &modsbuf, false);
+		if (cur.invalid) {
+			R_LOG_ERROR ("Invalid project modules");
+			goto done;
+		}
+		// Decode the same records without LOAD, commands, configuration or live analysis writes first.
+		if (!rprj_load_entries (&cur, R_CORE_NEWPRJ_MODE_RESTORE)) {
+			goto done;
+		}
 	}
 	if (mode & R_CORE_NEWPRJ_MODE_RIO) {
 		if (core->dbg) {
@@ -1663,99 +1866,11 @@ static char *r_core_newprj_load(RCore *core, const char *file, int mode) {
 		r_config_set (core->config, "prj.name", "");
 		rprj_restore_io_maps (&cur);
 	}
-	rprj_load_mods (&cur, &modsbuf, !(mode & R_CORE_NEWPRJ_MODE_RESTORE));
-
-	R2ProjectEntry entry;
-	r_buf_seek (b, RPRJ_HEADER_SIZE, SEEK_SET);
-	int n = 0;
-	const ut64 bsz = r_buf_size (b);
-	while (r_buf_at (b) < bsz) {
-		const ut64 entry_at = r_buf_at (b);
-		if (!rprj_entry_read (b, &entry)) {
-			R_LOG_ERROR ("Cannot read entry");
-			goto done;
-		}
-		if (entry.size < RPRJ_ENTRY_SIZE || entry.size > bsz - entry_at) {
-			R_LOG_ERROR ("Invalid entry size %u", entry.size);
-			goto done;
-		}
-		if (mode & R_CORE_NEWPRJ_MODE_LOG) {
-			r_strbuf_appendf (out, "  Entry<%s> {\n", rprj_entry_type_tostring (entry.type));
-			r_strbuf_appendf (out, "    type = 0x%02x\n", entry.type);
-			r_strbuf_appendf (out, "    size = %d\n", entry.size);
-		}
-		if (mode & R_CORE_NEWPRJ_MODE_SCRIPT) {
-			r_strbuf_appendf (out, "'f entry%d.%s=0x%08"PFMT64x"\n", n, rprj_entry_type_tostring (entry.type), r_buf_at (b));
-		}
-		const ut64 next_entry = entry_at + entry.size;
-		switch (entry.type) {
-		case RPRJ_STRS:
-			if (mode & R_CORE_NEWPRJ_MODE_LOG) {
-				rprj_strs_log (&cur, next_entry);
-			}
-			break;
-		case RPRJ_MODS:
-		case RPRJ_MAPS:
-			break;
-		case RPRJ_CMDS:
-			if (!(mode & R_CORE_NEWPRJ_MODE_RESTORE)) {
-				rprj_cmds_load (&cur, mode, next_entry);
-			}
-			break;
-		case RPRJ_INFO:
-			rprj_info_load (&cur, mode, next_entry);
-			break;
-		case RPRJ_CMNT:
-			rprj_cmnt_load (&cur, mode, next_entry);
-			break;
-		case RPRJ_VART:
-			rprj_vart_load (&cur, mode, next_entry);
-			break;
-		case RPRJ_FMT:
-			rprj_fmt_load (&cur, mode, next_entry);
-			break;
-		case RPRJ_TYPE:
-			rprj_type_load (&cur, mode, next_entry);
-			break;
-		case RPRJ_TLNK:
-			rprj_sdb_addr_load (&cur, mode, next_entry, false);
-			break;
-		case RPRJ_GLOB:
-			rprj_sdb_addr_load (&cur, mode, next_entry, true);
-			break;
-		case RPRJ_FLAG:
-			rprj_flag_load (&cur, mode, next_entry);
-			break;
-		case RPRJ_EVAL:
-			if (!(mode & R_CORE_NEWPRJ_MODE_RESTORE)) {
-				rprj_eval_load (&cur, mode, next_entry);
-			}
-			break;
-		case RPRJ_XREF:
-			rprj_xref_load (&cur, mode, next_entry);
-			break;
-		case RPRJ_FUNC:
-			if (!rprj_function_load (&cur, mode, next_entry)) {
-				R_LOG_ERROR ("Cannot load function entry");
-				goto done;
-			}
-			break;
-		case RPRJ_HINT:
-			rprj_hint_load (&cur, mode, next_entry);
-			break;
-		case RPRJ_BRKP:
-			rprj_breakpoint_load (&cur, mode, next_entry);
-			break;
-		case RPRJ_SIGS:
-			rprj_signal_load (&cur, mode, next_entry);
-			break;
-		}
-		if (mode & R_CORE_NEWPRJ_MODE_LOG) {
-			r_strbuf_append (out, "  }\n");
-		}
-		// skip to the next entry
-		r_buf_seek (b, next_entry, SEEK_SET);
-		n++;
+	if (!(mode & R_CORE_NEWPRJ_MODE_RESTORE)) {
+		rprj_load_mods (&cur, &modsbuf, true);
+	}
+	if (!rprj_load_entries (&cur, mode)) {
+		goto done;
 	}
 	if (mode & R_CORE_NEWPRJ_MODE_LOG) {
 		r_strbuf_append (out, "}\n");

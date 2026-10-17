@@ -341,6 +341,8 @@ R_API bool r_core_bin_set_env(RCore *core, RBinFile *binfile) {
 		if (!core->bin->options.setflags) {
 			action &= ~(R_CORE_BIN_ACC_IMPORTS | R_CORE_BIN_ACC_SYMBOLS | R_CORE_BIN_ACC_EXPORTS | R_CORE_BIN_ACC_CLASSES);
 		}
+		const bool apply_relocs = r_config_get_b (core->config, "bin.relocs.apply");
+		r_bin_loader_baseline_begin (binfile, apply_relocs);
 		r_core_bin_info (core, action, NULL, R_MODE_SET, va, NULL, NULL);
 		return true;
 	}
@@ -2186,6 +2188,19 @@ static bool warn_if_dbg(RCore *core) {
 	return true;
 }
 
+static bool bin_relocs_capture_write(RIO *io, ut64 addr, const ut8 *bytes, int len) {
+	RCore *core = io->coreb.core;
+	RBinObjectPrivate *priv = r_bin_object_private_get (core->bin->cur->bo, false);
+	RBinLoaderBaseline *baseline = priv->loader;
+	const bool ok = baseline->writer (io, addr, bytes, len);
+	if (ok) {
+		r_bin_loader_baseline_record (baseline, addr, bytes, len);
+	} else {
+		baseline->failed = true;
+	}
+	return ok;
+}
+
 static bool bin_relocs(RCore *core, PJ *pj, int mode, int va) {
 	bool bin_demangle = r_config_get_b (core->config, "bin.demangle");
 	bool keep_lib = r_config_get_i (core->config, "bin.demangle.pfxlib");
@@ -2211,36 +2226,42 @@ static bool bin_relocs(RCore *core, PJ *pj, int mode, int va) {
 	RVecRBinReloc *relocs = r_bin_get_relocs (core->bin);
 	const bool apply_relocs = r_config_get_b (core->config, "bin.relocs.apply");
 	const bool bc = r_config_get_b (core->config, "bin.cache");
-	if (apply_relocs) {
+	if (apply_relocs || bc) {
 		if (!warn_if_dbg (core)) {
+			r_bin_loader_baseline_invalidate (core->bin->cur->bo);
 			return false;
 		}
-		// TODO: remove the bin.cache crap
 		if (bc) {
 			if (! (core->io->cachemode & R_PERM_W)) {
 				r_config_set_b (core->config, "io.cache", true);
 			}
-			core->bin->iob.overlay_write_at = r_io_cache_write_at;
 		}
-		relocs = r_bin_patch_relocs (core->bin->cur); // XXX other way to get RBinFile?
+		RBinFile *bf = core->bin->cur;
+		RBinObjectPrivate *priv = r_bin_object_private_get (bf->bo, false);
+		RBinLoaderBaseline *baseline = priv? priv->loader: NULL;
+		const bool capture = baseline && baseline->pending;
+		const RIOOverlayWriteAt previous = core->bin->iob.overlay_write_at;
+		RIOOverlayWriteAt writer = previous;
 		if (bc) {
-			core->bin->iob.overlay_write_at = r_io_vwrite_to_overlay_at;
-		} else {
+			writer = apply_relocs? r_io_cache_write_at: r_io_write_at;
+		}
+		if (capture) {
+			baseline->writer = writer;
+		}
+		core->bin->iob.overlay_write_at = capture? bin_relocs_capture_write: writer;
+		relocs = r_bin_patch_relocs (bf);
+		core->bin->iob.overlay_write_at = previous;
+		if (capture) {
+			baseline->writer = NULL;
+			if (bf->bo->plugin->patch_relocs && !bf->bo->is_reloc_patched) {
+				baseline->failed = true;
+			}
+		}
+		if (!bc) {
 			r_io_drain_overlay (core->io);
 		}
-	} else {
-		if (bc) {
-			if (!warn_if_dbg (core)) {
-				return false;
-			}
-			if (! (core->io->cachemode & R_PERM_W)) {
-				r_config_set_b (core->config, "io.cache", true);
-			}
-			core->bin->iob.overlay_write_at = r_io_write_at;
-			relocs = r_bin_patch_relocs (core->bin->cur); // XXX other way to get RBinFile?
-		} else if (relocs) {
-			R_LOG_HINT ("Relocs not applied, some references may not resolve: use -e bin.relocs.apply=true");
-		}
+	} else if (relocs) {
+		R_LOG_HINT ("Relocs not applied, some references may not resolve: use -e bin.relocs.apply=true");
 	}
 	if (!relocs) {
 		if (pj) {
@@ -6196,6 +6217,7 @@ R_API bool r_core_bin_rebase(RCore *core, ut64 baddr) {
 	R_RETURN_VAL_IF_FAIL (core && core->bin, false);
 	if (core->bin->cur && baddr != UT64_MAX) {
 		RBinFile *bf = core->bin->cur;
+		r_bin_loader_baseline_invalidate (bf->bo);
 		bf->bo->baddr = baddr;
 		bf->bo->loadaddr = baddr;
 		r_bin_object_set_items (bf, bf->bo);

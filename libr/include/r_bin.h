@@ -521,7 +521,7 @@ typedef struct r_bin_object_t {
 	void *bin_obj; // internal pointer used by formats... TODO: RENAME TO internal object or sthg
 	bool is_reloc_patched; // used to indicate whether relocations were patched or not
 	bool resources_loaded;
-	void *trycatch; // private exception metadata store
+	void *trycatch; // private per-object state, including exception metadata
 } RBinObject;
 
 typedef struct r_bin_file_options_t {

@@ -5,6 +5,141 @@
 #include <r_util.h>
 #include <r_types.h>
 
+typedef struct r_bin_trycatch_store_t RBinTrycatchStore;
+
+typedef struct {
+	RBuffer *bytes;
+	RBuffer *input;
+	RIO *io;
+	RIODesc *desc;
+	RBinPlugin *plugin;
+	RIOOverlayWriteAt writer;
+	ut64 baddr;
+	st64 baddr_shift;
+	ut64 loadaddr;
+	ut64 offset;
+	ut64 map_generation;
+	ut32 bank;
+	int fd;
+	int va;
+	bool relocs;
+	bool pending;
+	bool failed;
+	bool qualified;
+} RBinLoaderBaseline;
+
+typedef struct {
+	RBinTrycatchStore *trycatch;
+	RBinLoaderBaseline *loader;
+} RBinObjectPrivate;
+
+static inline RBinObjectPrivate *r_bin_object_private_get(RBinObject *bo, bool create) {
+	if (!bo->trycatch && create) {
+		bo->trycatch = R_NEW0 (RBinObjectPrivate);
+	}
+	return bo->trycatch;
+}
+
+static inline RBinLoaderBaseline *r_bin_loader_baseline_begin(RBinFile *bf, bool relocs) {
+	RBinObject *bo = bf->bo;
+	RBinObjectPrivate *priv = r_bin_object_private_get (bo, true);
+	if (priv->loader) {
+		return priv->loader;
+	}
+	RBinLoaderBaseline *baseline = R_NEW0 (RBinLoaderBaseline);
+	priv->loader = baseline;
+	RIO *io = bf->rbin->iob.io;
+	baseline->bytes = r_buf_new_sparse (0);
+	baseline->input = bf->buf;
+	baseline->io = io;
+	baseline->fd = bf->fd;
+	baseline->desc = io? r_io_desc_get (io, bf->fd): NULL;
+	baseline->plugin = bo->plugin;
+	baseline->baddr = bo->baddr;
+	baseline->baddr_shift = bo->baddr_shift;
+	baseline->loadaddr = bo->loadaddr;
+	baseline->offset = bf->offset;
+	baseline->relocs = relocs;
+	baseline->pending = true;
+	baseline->failed = !baseline->bytes || !baseline->desc || bo->is_reloc_patched;
+	return baseline;
+}
+
+static inline void r_bin_loader_baseline_record(RBinLoaderBaseline *baseline, ut64 addr, const ut8 *bytes, int len) {
+	if (baseline->failed) {
+		return;
+	}
+	if (!baseline->pending || len < 1 || addr > UT64_MAX - len) {
+		baseline->failed = true;
+		return;
+	}
+	RList *ranges = r_buf_nonempty_list (baseline->bytes);
+	if (!ranges) {
+		baseline->failed = true;
+		return;
+	}
+	RListIter *iter;
+	RBufferSparseItem *range;
+	r_list_foreach (ranges, iter, range) {
+		const ut64 start = R_MAX (addr, range->from);
+		const ut64 end = R_MIN (addr + len, range->to);
+		if (start < end) {
+			// Sparse ranges can overlap; keep every retained copy current before filling gaps.
+			memcpy (range->data + start - range->from, bytes + start - addr, end - start);
+		}
+	}
+	r_list_free (ranges);
+	if (r_buf_write_at (baseline->bytes, addr, bytes, len) != len) {
+		baseline->failed = true;
+	}
+}
+
+static inline bool loader_baseline_object_matches(RBinLoaderBaseline *baseline, RBinFile *bf, bool relocs) {
+	RBinObject *bo = bf->bo;
+	RIO *io = bf->rbin->iob.io;
+	return bf == bf->rbin->cur && baseline->io == io && baseline->fd == bf->fd
+		&& baseline->desc == r_io_desc_get (io, bf->fd) && baseline->input == bf->buf
+		&& baseline->plugin == bo->plugin && baseline->baddr == bo->baddr
+		&& baseline->baddr_shift == bo->baddr_shift && baseline->loadaddr == bo->loadaddr
+		&& baseline->offset == bf->offset && baseline->relocs == relocs;
+}
+
+static inline void r_bin_loader_baseline_finish(RBinFile *bf, bool relocs) {
+	RBinObjectPrivate *priv = r_bin_object_private_get (bf->bo, false);
+	RBinLoaderBaseline *baseline = priv? priv->loader: NULL;
+	if (!baseline || !baseline->pending) {
+		return;
+	}
+	baseline->pending = false;
+	baseline->qualified = !baseline->failed && loader_baseline_object_matches (baseline, bf, relocs);
+	baseline->map_generation = baseline->io? baseline->io->mts: 0;
+	baseline->bank = baseline->io? baseline->io->bank: 0;
+	baseline->va = baseline->io? baseline->io->va: 0;
+}
+
+static inline const RBinLoaderBaseline *r_bin_loader_baseline_get(RBinFile *bf, bool relocs) {
+	RBinObjectPrivate *priv = r_bin_object_private_get (bf->bo, false);
+	RBinLoaderBaseline *baseline = priv? priv->loader: NULL;
+	if (!baseline || !baseline->qualified || baseline->failed || baseline->pending) {
+		return NULL;
+	}
+	if (!loader_baseline_object_matches (baseline, bf, relocs)
+			|| baseline->map_generation != baseline->io->mts || baseline->bank != baseline->io->bank
+			|| baseline->va != baseline->io->va) {
+		baseline->qualified = false;
+		return NULL;
+	}
+	return baseline;
+}
+
+static inline void r_bin_loader_baseline_invalidate(RBinObject *bo) {
+	RBinObjectPrivate *priv = r_bin_object_private_get (bo, false);
+	if (priv && priv->loader) {
+		priv->loader->failed = true;
+		priv->loader->qualified = false;
+	}
+}
+
 R_IPI RBinFile *r_bin_file_new(RBin *bin, const char *file, ut64 file_sz, RBinFileOptions *opt, Sdb *sdb, bool steal_ptr);
 R_IPI RBinObject *r_bin_file_object_find_by_id(RBinFile *binfile, ut32 binobj_id);
 R_IPI RVecRBinString *r_bin_file_get_strings(RBinFile *a, int min, int raw, RStrBuf *output);

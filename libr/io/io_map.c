@@ -34,6 +34,9 @@ R_API bool r_io_map_remap(RIO *io, ut32 id, ut64 addr) {
 		return false;
 	}
 	const ut64 ofrom = r_io_map_from (map);
+	if (ofrom == addr) {
+		return true;
+	}
 	const ut64 oto = r_io_map_to (map);
 	ut64 size = r_io_map_size (map);
 	if (map->overlay) {
@@ -73,6 +76,7 @@ R_API bool r_io_map_remap(RIO *io, ut32 id, ut64 addr) {
 		// TODO: use threads here
 		r_io_bank_update_map_boundaries (io, bankid, id, ofrom, oto);
 	} while (r_id_storage_get_next (&io->banks, &bankid));
+	io->mts++;
 	return true;
 }
 
@@ -286,6 +290,10 @@ R_API bool r_io_map_is_mapped(RIO* io, ut64 addr) {
 }
 
 R_API void r_io_map_reset(RIO* io) {
+	ut32 id;
+	if (r_id_storage_get_lowest (&io->maps, &id)) {
+		io->mts++;
+	}
 	r_io_map_fini (io);
 	r_io_map_init (io);
 }
@@ -307,6 +315,7 @@ R_API void r_io_map_del(RIO *io, ut32 id) {
 	} while (r_id_storage_get_next (&io->banks, &bankid));
 	r_id_storage_delete (&io->maps, id);
 	_map_free_cb (NULL, map, id);
+	io->mts++;
 }
 
 //delete all maps with specified fd
@@ -429,6 +438,9 @@ R_IPI bool io_map_resize(RIO *io, ut32 id, ut64 newsize) {
 		R_LOG_WARN ("Invalid map id or new size, map size cannot be 0");
 		return false;
 	}
+	if (r_io_map_size (map) == newsize) {
+		return true;
+	}
 	ut64 addr = r_io_map_begin (map);
 	const ut64 oto = r_io_map_to (map);
 	if (UT64_MAX - newsize + 1 < addr) {
@@ -456,6 +468,7 @@ R_IPI bool io_map_resize(RIO *io, ut32 id, ut64 newsize) {
 			r_io_map_set_size (map, osize);
 			return false;
 		}
+		io->mts++;
 		return true;
 	}
 	r_io_map_set_size (map, newsize);
@@ -467,6 +480,7 @@ R_IPI bool io_map_resize(RIO *io, ut32 id, ut64 newsize) {
 			r_io_bank_update_map_boundaries (io, bankid, id, r_io_map_from (map), oto);
 		}
 	} while (r_id_storage_get_next (&io->banks, &bankid));
+	io->mts++;
 	return true;
 }
 

@@ -3,6 +3,7 @@
 #define R_LOG_ORIGIN "cfile"
 
 #include <r_core.h>
+#include "../bin/i/private.h"
 
 static bool close_but_cb(void *user, void *data, ut32 id) {
 	RCore *core = (RCore *)user;
@@ -931,6 +932,7 @@ static void load_mach0_dsym(RCore *core, RBinFile *main_bf) {
 
 R_API bool r_core_bin_load(RCore *r, const char *filenameuri, ut64 baddr) {
 	R_RETURN_VAL_IF_FAIL (r && r->io, false);
+	const ut32 previous_bin_id = r->bin->cur? r->bin->cur->id: UT32_MAX;
 	R_CRITICAL_ENTER (r);
 	ut64 laddr = r_config_get_i (r->config, "bin.laddr");
 	RIODesc *desc = r->io->desc;
@@ -1009,6 +1011,9 @@ R_API bool r_core_bin_load(RCore *r, const char *filenameuri, ut64 baddr) {
 		r_core_block_read (r);
 		return loaded;
 	}
+	const ut32 baseline_bin_id = binfile? binfile->id: UT32_MAX;
+	RBinObject *baseline_object = binfile? binfile->bo: NULL;
+	RBuffer *baseline_input = binfile? r_ref (binfile->buf): NULL;
 #if 0
 	//r_core_bin_set_env (r, binfile);
 	if (plugin && plugin->name) {
@@ -1201,6 +1206,12 @@ beach:
 		}
 	}
 	r_flag_space_set (r->flags, "*");
+	RBinFile *loaded_bin = r_bin_cur (r->bin);
+	if (baseline_bin_id != previous_bin_id && loaded_bin && loaded_bin->id == baseline_bin_id
+			&& loaded_bin == binfile && loaded_bin->bo == baseline_object && loaded_bin->buf == baseline_input) {
+		r_bin_loader_baseline_finish (loaded_bin, r_config_get_b (r->config, "bin.relocs.apply"));
+	}
+	r_unref (baseline_input);
 	return true;
 }
 
