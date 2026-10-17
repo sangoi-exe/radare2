@@ -136,7 +136,8 @@ static bool kvc_type_layout(KVCParser *kvc, const char *name, int *size, int *al
 	}
 	bool ok = true;
 	ut64 count = 1;
-	char *array = strchr (type, '[');
+	// Function-parameter arrays do not dimension the enclosing callback pointer.
+	char *array = (char *)scan_toplevel (r_strs_from (type), '[');
 	if (array) {
 		char *p = array;
 		while (*p == '[') {

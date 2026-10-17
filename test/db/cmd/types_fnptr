@@ -27,6 +27,48 @@ func.rea_callbacks.xDlSym.ret=void (*)(void)
 EOF
 RUN
 
+NAME=same import callback array parameter uses pointer layout
+FILE=--
+ARGS=-b 64
+CMDS=<<EOF
+'td typedef int (*CB)(int x[4]); struct S { CB callback; char tail; };
+tk typedef.CB
+tk struct.S.callback
+tk struct.S.tail
+tk type.S.size
+EOF
+EXPECT=<<EOF
+func.CB
+CB,0,0
+char,8,0
+128
+EOF
+RUN
+
+NAME=same import transitive callback alias and outer pointer arrays
+FILE=--
+ARGS=-b 64
+CMDS=<<EOF
+'td typedef int (*CB)(int x[4]); typedef CB CB2; struct S { CB2 callback; char tail; }; typedef int *Pointers[2]; struct PointerArrays {int *direct[2]; Pointers indirect; char tail;};
+tk typedef.CB2
+tk struct.S.callback
+tk struct.S.tail
+tk type.S.size
+tk struct.PointerArrays.indirect
+tk struct.PointerArrays.tail
+tk type.PointerArrays.size
+EOF
+EXPECT=<<EOF
+CB
+CB2,0,0
+char,8,0
+128
+Pointers,16,0
+char,32,0
+320
+EOF
+RUN
+
 NAME=union callback members overlap and pointer spacing is optional
 FILE=--
 ARGS=-b 64

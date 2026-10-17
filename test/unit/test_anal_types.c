@@ -789,6 +789,35 @@ static bool test_anal_cparse_nested_layout(void) {
 	mu_end;
 }
 
+static bool test_anal_cparse_callback_array_layout(void) {
+	int bits;
+	for (bits = 32; bits <= 64; bits += 32) {
+		RAnal *anal = r_anal_new ();
+		anal->config->bits = bits;
+		char *error = NULL;
+		mu_assert_true (r_anal_import_c_decls (anal,
+			"typedef int (*CB)(int x[4]); struct S { CB callback; char tail; };", &error), "import callback with an array parameter and its consumer together");
+		mu_assert_null (error, "callback parameter array does not prevent record layout");
+		mu_assert_streq (sdb_const_get (anal->sdb_types, "typedef.CB", NULL), "func.CB", "callback typedef is imported");
+		mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.S.callback", NULL), "CB,0,0", "record retains its callback member");
+		mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.S.tail", NULL), bits == 64? "char,8,0": "char,4,0", "callback occupies one target pointer");
+		mu_assert_eq (r_anal_type_bitsize (anal, "S"), bits * 2, "callback record retains pointer alignment and tail padding");
+		mu_assert_true (r_anal_import_c_decls (anal,
+			"typedef int (*ArrayCallback)(int x[4]);typedef ArrayCallback CallbackAlias;"
+			"struct AliasRecord {CallbackAlias callback;char tail;};"
+			"typedef int *Pointers[2];struct PointerArrays {int *direct[2];Pointers indirect;char tail;};", &error), "import transitive callback aliases and outer pointer arrays");
+		mu_assert_null (error, "callback aliases and pointer arrays retain their distinct layout");
+		mu_assert_streq (sdb_const_get (anal->sdb_types, "typedef.CallbackAlias", NULL), "ArrayCallback", "transitive callback alias is imported");
+		mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.AliasRecord.tail", NULL), bits == 64? "char,8,0": "char,4,0", "transitive callback alias occupies one pointer");
+		mu_assert_eq (r_anal_type_bitsize (anal, "AliasRecord"), bits * 2, "transitive callback record retains tail padding");
+		mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.PointerArrays.indirect", NULL), bits == 64? "Pointers,16,0": "Pointers,8,0", "direct pointer array retains both elements");
+		mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.PointerArrays.tail", NULL), bits == 64? "char,32,0": "char,16,0", "outer array typedef retains both pointer elements");
+		mu_assert_eq (r_anal_type_bitsize (anal, "PointerArrays"), bits * 5, "pointer arrays retain their extent and alignment");
+		r_anal_free (anal);
+	}
+	mu_end;
+}
+
 static bool test_anal_cparse_definition_alias(void) {
 	RAnal *anal = r_anal_new ();
 	anal->config->bits = 64;
@@ -966,6 +995,7 @@ int all_tests(void) {
 	mu_run_test (test_anal_base_type_to_kv);
 	mu_run_test (test_anal_cparse_multiline_fnptr);
 	mu_run_test (test_anal_cparse_nested_layout);
+	mu_run_test (test_anal_cparse_callback_array_layout);
 	mu_run_test (test_anal_cparse_definition_alias);
 	mu_run_test (test_anal_get_base_type_union);
 	mu_run_test (test_anal_save_base_type_union);
