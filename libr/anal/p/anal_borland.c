@@ -180,7 +180,7 @@ static bool borland_type(RAnal *anal, const char *name) {
 		return r_type_get_bitsize (anal->sdb_types, "uint16_t") == 16
 			&& borland_record (anal, name, 32, members, R_ARRAY_SIZE (members));
 	}
-	if (!strcmp (name, "FarPointerCompareAnalysisState9")) {
+	if (!strcmp (name, "bool")) {
 		RAnalBaseType *boolean = r_anal_get_base_type (anal, "bool");
 		if (boolean) {
 			bool valid = boolean->kind == R_ANAL_BASE_TYPE_KIND_ATOMIC && boolean->size == 8
@@ -200,8 +200,16 @@ static bool borland_type(RAnal *anal, const char *name) {
 			r_anal_save_base_type (anal, boolean);
 			r_anal_base_type_free (boolean);
 		}
+		return true;
+	}
+	if (!strcmp (name, "NearWriterAnalysisState7")) {
+		const HelperMember members[] = { { "accepted_cf", "bool", 0 }, { "dx", "uint16_t", 1 }, { "cx", "uint16_t", 3 }, { "es", "uint16_t", 5 } };
+		return borland_type (anal, "bool") && borland_type (anal, "uint16_t")
+			&& borland_record (anal, name, 56, members, R_ARRAY_SIZE (members));
+	}
+	if (!strcmp (name, "FarPointerCompareAnalysisState9")) {
 		const HelperMember members[] = { { "equal_zf", "bool", 0 }, { "ax", "uint16_t", 1 }, { "dx", "uint16_t", 3 }, { "bx", "uint16_t", 5 }, { "cx", "uint16_t", 7 } };
-		return r_type_get_bitsize (anal->sdb_types, "bool") == 8
+		return borland_type (anal, "bool")
 			&& r_type_get_bitsize (anal->sdb_types, "uint16_t") == 16
 			&& borland_record (anal, name, 72, members, R_ARRAY_SIZE (members));
 	}
@@ -525,6 +533,32 @@ static int borland_scan(RAnal *anal) {
 #include "borland_profile_context.inc.c"
 #include "borland_profile_data.inc.c"
 #include "borland_profile_bindings.inc.c"
+
+// The two established TLINK writers share this four-WORD analysis contract, not a historical C ABI.
+static bool borland_tlink_writer(BorlandProfileContext *ctx, ut64 physical, const char *name, const char *comment) {
+	r_anal_types_prepare (ctx->anal);
+	if (!borland_type (ctx->anal, "NearWriterAnalysisState7")) {
+		return false;
+	}
+	RAnalFunctionParam params[] = {
+		{ "entry_bx", "uint16_t" }, { "entry_cx", "uint16_t" }, { "entry_dx", "uint16_t" }, { "entry_ds", "uint16_t" }
+	};
+	RList *list = r_list_new ();
+	size_t i;
+	for (i = 0; i < R_ARRAY_SIZE (params); i++) {
+		r_list_append (list, &params[i]);
+	}
+	RAnalFunctionSignature signature = { .ret_type = "NearWriterAnalysisState7", .callconv = "tlink_writer_state_16near", .params = list };
+	const BorlandProfileRange range = { physical, 150 };
+	bool applied = profile_function_ranges_contract (ctx, &range, 1, name, 0, comment, &signature);
+	r_list_free (list);
+	if (applied) {
+		borland_comment (ctx->anal, profile_mapped (ctx, physical, 150, true), "[TLINK writer analysis contract] Complete 51-instruction/150-byte near body; BX/CX/DX plus current DS-selected memory are inputs. AX/SI/DI are saved/restored; BX/BP/DS/SS/CS/DF untouched locally; SP has ordinary near-return delta2, argument purge0. ES is overwritten by the two selected arrays; CX/DX change only on accepted rewrite. Other arithmetic flags are clobbered, not preserved. CF/DX/CX/ES are retained as a seven-byte analysis tuple, not recovered historical C or a universal caller ABI. Default __cdecl16near would incorrectly preserve ES. Memory/stack extents, selector validity, alias-sensitive ordering, caller propagation and physical effects remain unproved. Success DX=u16(entryDX+F802), CX=u16(entryCX-j-4-current record offset); rejection leaves CX/DX unchanged. No loader DS is treated as caller-qualified context.");
+	}
+	return applied;
+}
+
+#include "borland_profile_tlink401.inc.c"
 #include "borland_profile_bcc31.inc.c"
 #include "borland_profile_bcc45.inc.c"
 #include "borland_profiles.inc.c"
