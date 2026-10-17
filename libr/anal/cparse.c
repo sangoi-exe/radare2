@@ -2,7 +2,7 @@
 
 #include <r_anal.h>
 
-R_IPI char* kvc_parse(const char* header_content, int ptr_size, char **errmsg);
+R_IPI char* kvc_parse(RAnal *anal, const char* header_content, int ptr_size, char **errmsg);
 R_IPI int kvc_type_size(const char *name, int dimension, int ptr_size);
 R_IPI int kvc_type_align(const char *name, int ptr_size);
 
@@ -22,7 +22,7 @@ static int cparse_ptr_size(RAnal *anal) {
 }
 
 R_API char *r_anal_cparse2(RAnal *anal, const char *code, char **error_msg) {
-	return kvc_parse (code, cparse_ptr_size (anal), error_msg);
+	return kvc_parse (anal, code, cparse_ptr_size (anal), error_msg);
 }
 
 R_API int r_anal_cparse_typesize(const char *type, int dimension, int ptr_size) {

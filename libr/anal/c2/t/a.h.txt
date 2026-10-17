@@ -7,4 +7,5 @@ struct.Foo.c=int,8,0
 struct.Foo.name=char,12,20
 struct.Foo.var=float,32,0
 struct.Foo=a,b,c,name,var
+type.Foo.size=288
 

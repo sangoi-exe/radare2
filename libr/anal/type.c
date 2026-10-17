@@ -611,6 +611,9 @@ R_API char *r_anal_base_type_to_kv(const RAnalBaseType *type) {
 	}
 	char *lists = r_strbuf_drain (list);
 	r_strbuf_appendf (sb, "%s.%s=%s\n", kind, sname, lists);
+	if (type->size) {
+		r_strbuf_appendf (sb, "type.%s.size=%" PFMT64u "\n", sname, type->size);
+	}
 	free (lists);
 	free (sname);
 	return r_strbuf_drain (sb);
@@ -653,7 +656,7 @@ static void save_composite(const RAnal *anal, const RAnalBaseType *type) {
 	}
 	// name=struct
 	sdb_set (db, sname, kind, 0);
-	// a DWARF definition carries its width; a C one is measured by walking the members
+	// Retain a known extent, including aggregate tail padding.
 	if (type->size) {
 		sdb_num_setf (db, type->size, 0, "type.%s.size", sname);
 	} else {

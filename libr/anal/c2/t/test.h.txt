@@ -5,4 +5,5 @@ struct.Foo.a=int,0,0
 struct.Foo.b=char,4,0
 struct.Foo.c=ut8,5,32
 struct.Foo=a,b,c
+type.Foo.size=320
 

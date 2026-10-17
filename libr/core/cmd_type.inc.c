@@ -918,7 +918,9 @@ static void print_struct_union_in_c_format(RCore *core, Sdb *TDB, SdbForeachCall
 								space = " ";
 							}
 						}
-						const ut64 mb = is_fptr? ptr_size: r_anal_cparse_typesize (val, arrnum > 0? arrnum: 1, ptr_size);
+						const ut64 type_bytes = is_fptr? ptr_size: r_anal_type_bitsize (core->anal, val) / 8;
+						const int count = arrnum > 0? arrnum: 1;
+						const ut64 mb = type_bytes? type_bytes * count: r_anal_cparse_typesize (val, count, ptr_size);
 						run = R_MAX (run, moff + mb); // monotonic: overlapping members never force a pad
 					}
 					// Check for metadata attributes for this field

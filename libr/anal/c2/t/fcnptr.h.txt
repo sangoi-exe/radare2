@@ -11,4 +11,5 @@ struct.foo.x=int,0,0
 struct.foo.fp=foo.fp,8,0
 struct.foo.b=char *,16,0
 struct.foo=x,fp,b
+type.foo.size=192
 

@@ -1170,6 +1170,94 @@ int,4,0
 EOF
 RUN
 
+NAME=td lays out native nested pointer records without overlap
+FILE=-
+ARGS=-a x86 -b 64
+CMDS=<<EOF
+'td enum Ambassador { AMBASSADOR_PURE=0, AMBASSADOR_MILLION=1000000 }; struct Window { const char *sunlight; }; struct Morning { uint32_t saved_argc; char **saved_argv; }; struct Bright { struct Morning *morning; struct Window window; enum Ambassador ambassador; };
+tk struct.Bright.window
+tk struct.Bright.ambassador
+tk type.Window.size
+tk type.Morning.size
+tk type.Bright.size
+tsc Bright
+'td struct After { char c; struct Bright records[2]; char tail; };
+tk struct.After.records
+tk struct.After.tail
+tk type.After.size
+EOF
+EXPECT=<<EOF
+struct Window,8,0
+enum Ambassador,16,0
+64
+128
+192
+struct Bright {
+  struct Morning *morning;
+  struct Window window;
+  enum Ambassador ambassador;
+};
+struct Bright,8,2
+char,56,0
+512
+EOF
+RUN
+
+NAME=td definition aliases retain canonical typedef ownership
+FILE=-
+ARGS=-a x86 -b 64
+CMDS=<<EOF
+'td typedef struct Tag { int x; int y; } Alias; typedef union UnionTag { Alias value; int word; } UnionAlias;
+tk Alias
+tk typedef.Alias
+tk Tag
+tk struct.Tag.y
+tk UnionAlias
+tk typedef.UnionAlias
+tk UnionTag
+tss Alias
+tss UnionAlias
+ttc Alias
+EOF
+EXPECT=<<EOF
+typedef
+struct Tag
+struct
+int,4,0
+typedef
+union UnionTag
+union
+8
+8
+typedef struct Tag Alias;
+EOF
+RUN
+
+NAME=td retains 32bit nested pointer record layout
+FILE=-
+ARGS=-a x86 -b 32
+CMDS=<<EOF
+'td struct Window { const char *sunlight; }; struct Bright { void *morning; struct Window window; int ambassador; };
+tk struct.Bright.window
+tk struct.Bright.ambassador
+tk type.Window.size
+tk type.Bright.size
+'td struct After { char c; struct Bright records[2]; char tail; };
+tk struct.After.records
+tk struct.After.tail
+tk type.After.size
+EOF
+EXPECT=<<EOF
+struct Window,4,0
+int,8,0
+32
+96
+struct Bright,4,2
+char,28,0
+256
+EOF
+RUN
+
 NAME=pad members keep their offsets across td and tsc
 FILE=malloc://1024
 ARGS=-a x86 -b 64
@@ -1280,7 +1368,7 @@ ts~A,B,C,D
 EOF
 EXPECT=<<EOF
 'pf f num
-'pf dF num num2
+'pf d[4].F num num2
 'pf c ch
 ----
 struct.A=num
@@ -1288,18 +1376,15 @@ struct.A.num=float,0,0
 struct.B=num,num2
 struct.B.num=int,0,0
 struct.B.num.meta=0
-struct.B.num2=double,4,0
+struct.B.num2=double,8,0
 struct.B.num2.meta=0
 struct.C=ch
 struct.C.ch=char,0,0
 struct.C.ch.meta=0
-typedef.B=struct B
-typedef.C=struct C
 
 A
 B
 C
-D
 EOF
 RUN
 
@@ -5431,7 +5516,7 @@ tss union U
 EOF
 EXPECT=<<EOF
 16
-36
+40
 8
 EOF
 RUN

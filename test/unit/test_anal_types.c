@@ -708,6 +708,10 @@ static bool test_anal_base_type_to_kv(void) {
 		"struct.kv=scalar,buf\n",
 		"canonical struct kv serialization");
 	free (kv);
+	base->size = 256;
+	kv = r_anal_base_type_to_kv (base);
+	mu_assert_notnull (strstr (kv, "type.kv.size=256\n"), "canonical serialization retains the known aggregate extent in bits");
+	free (kv);
 	r_anal_base_type_free (base);
 
 	base = r_anal_base_type_new (R_ANAL_BASE_TYPE_KIND_UNION);
@@ -740,6 +744,95 @@ static bool test_anal_cparse_multiline_fnptr(void) {
 	mu_assert_notnull (strstr (kv, "func.once.arg.0=void (*)( int ),cb\n"),
 		"function pointer type stays within one SDB row");
 	free (kv);
+	r_anal_free (anal);
+	mu_end;
+}
+
+static bool test_anal_cparse_nested_layout(void) {
+	int bits;
+	for (bits = 32; bits <= 64; bits += 32) {
+		RAnal *anal = r_anal_new ();
+		anal->config->bits = bits;
+		char *error = NULL;
+		char *kv = r_anal_cparse (anal,
+			"struct Window {const char *sunlight;};"
+			"struct Bright {void *morning;struct Window window;int ambassador;};", &error);
+		mu_assert_null (error, "parse nested pointer-sized record");
+		mu_assert_notnull (kv, "serialize nested pointer-sized record");
+		const char *ambassador = bits == 64? "struct.Bright.ambassador=int,16,0\n": "struct.Bright.ambassador=int,8,0\n";
+		mu_assert_notnull (strstr (kv, ambassador), "the member after Window does not overlap it");
+		mu_assert_null (sdb_const_get (anal->sdb_types, "Window", NULL), "parsing does not import its definitions into analysis");
+		r_anal_save_parsed_type (anal, kv);
+		free (kv);
+		mu_assert_eq (r_anal_type_bitsize (anal, "Window"), bits, "Window retains its pointer-sized extent");
+		mu_assert_eq (r_anal_type_bitsize (anal, "Bright"), bits == 64? 192: 96, "Bright retains aggregate tail padding");
+		mu_assert_true (r_anal_import_c_decls (anal,
+			"typedef struct Window WindowAlias;typedef WindowAlias WindowPair[2];"
+			"typedef struct Group {char lead;WindowPair windows;char tail;} Group;"
+			"typedef union Choice {char c;Group groups[2];} Choice;"
+			"struct Outer {char lead;Choice choice;char tail;};", &error), "import aliases, arrays and definition-form aggregates");
+		mu_assert_null (error, "measure previously imported definitions");
+		mu_assert_streq (sdb_const_get (anal->sdb_types, "typedef.WindowPair", NULL), "WindowAlias[2]", "array typedef retains its element type and extent");
+		mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.Group.tail", NULL), bits == 64? "char,24,0": "char,12,0", "definition-form struct measures array alias elements");
+		mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.Outer.tail", NULL), bits == 64? "char,72,0": "char,36,0", "definition-form union extent governs its consumer");
+		mu_assert_eq (r_anal_type_bitsize (anal, "Group"), bits == 64? 256: 128, "definition-form struct has tail padding");
+		mu_assert_eq (r_anal_type_bitsize (anal, "Choice"), bits == 64? 512: 256, "definition-form union measures its largest array");
+		mu_assert_true (r_anal_import_c_decls (anal,
+			"struct Packed __attribute__((packed)) {char c;void *p;};", &error), "import a packed pointer record");
+		mu_assert_true (r_anal_import_c_decls (anal,
+			"struct Envelope {char lead;struct Packed packed;char tail;};", &error), "reuse packing from a previous import");
+		mu_assert_null (error, "packed nested definition layout succeeds");
+		mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.Envelope.packed", NULL), "struct Packed,1,0", "nested packed alignment comes from its definition");
+		mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.Envelope.tail", NULL), bits == 64? "char,10,0": "char,6,0", "nested packed extent includes its pointer");
+		r_anal_free (anal);
+	}
+	mu_end;
+}
+
+static bool test_anal_cparse_definition_alias(void) {
+	RAnal *anal = r_anal_new ();
+	anal->config->bits = 64;
+	char *error = NULL;
+	mu_assert_true (r_anal_import_c_decls (anal,
+		"typedef struct Tag {int x;int y;} Alias;"
+		"typedef union UnionTag {Alias value;int word;} UnionAlias;"
+		"typedef struct Same {Alias value;} Same;"
+		"typedef struct {UnionAlias value;} Anonymous;", &error), "import definition-form aliases");
+	mu_assert_null (error, "definition-form aliases parse successfully");
+	RAnalBaseType *base = r_anal_get_base_type (anal, "Alias");
+	mu_assert_notnull (base, "the distinct struct alias has a native owner");
+	mu_assert_eq (base->kind, R_ANAL_BASE_TYPE_KIND_TYPEDEF, "the distinct struct alias is a typedef");
+	mu_assert_streq (base->type, "struct Tag", "the alias targets the named struct");
+	r_anal_base_type_free (base);
+	base = r_anal_get_base_type (anal, "Tag");
+	mu_assert_notnull (base, "the named struct remains readable");
+	mu_assert_eq (base->kind, R_ANAL_BASE_TYPE_KIND_STRUCT, "the tag owns the struct definition");
+	RAnalTypeMember *member = RVecAnalTypeMember_at (r_anal_base_type_members (base), 1);
+	mu_assert_notnull (member, "the tag retains the y field");
+	mu_assert_streq (member->name, "y", "the named struct retains field identity");
+	mu_assert_eq (member->offset, 4, "the named struct retains field layout");
+	r_anal_base_type_free (base);
+	base = r_anal_get_base_type (anal, "UnionAlias");
+	mu_assert_notnull (base, "the distinct union alias has a native owner");
+	mu_assert_eq (base->kind, R_ANAL_BASE_TYPE_KIND_TYPEDEF, "the distinct union alias is a typedef");
+	mu_assert_streq (base->type, "union UnionTag", "the alias targets the named union");
+	r_anal_base_type_free (base);
+	base = r_anal_get_base_type (anal, "UnionTag");
+	mu_assert_notnull (base, "the named union remains readable");
+	mu_assert_eq (base->kind, R_ANAL_BASE_TYPE_KIND_UNION, "the tag owns the union definition");
+	r_anal_base_type_free (base);
+	mu_assert_eq (r_anal_type_bitsize (anal, "Alias"), 64, "native measurement follows the struct typedef");
+	mu_assert_eq (r_anal_type_bitsize (anal, "UnionAlias"), 64, "native measurement follows the union typedef");
+	const char *records[] = {"Same", "Anonymous"};
+	size_t i;
+	for (i = 0; i < R_ARRAY_SIZE (records); i++) {
+		base = r_anal_get_base_type (anal, records[i]);
+		mu_assert_notnull (base, "same-name and anonymous definitions remain native records");
+		mu_assert_eq (base->kind, R_ANAL_BASE_TYPE_KIND_STRUCT, "the definition owns its record kind");
+		mu_assert_eq (base->size, 64, "record layout follows the distinct alias member");
+		r_anal_base_type_free (base);
+		mu_assert_null (sdb_const_getf (anal->sdb_types, NULL, "typedef.%s", records[i]), "a record does not declare itself as a typedef");
+	}
 	r_anal_free (anal);
 	mu_end;
 }
@@ -872,6 +965,8 @@ int all_tests(void) {
 	mu_run_test (test_anal_save_base_type_union_redefine);
 	mu_run_test (test_anal_base_type_to_kv);
 	mu_run_test (test_anal_cparse_multiline_fnptr);
+	mu_run_test (test_anal_cparse_nested_layout);
+	mu_run_test (test_anal_cparse_definition_alias);
 	mu_run_test (test_anal_get_base_type_union);
 	mu_run_test (test_anal_save_base_type_union);
 	mu_run_test (test_anal_get_base_type_enum);

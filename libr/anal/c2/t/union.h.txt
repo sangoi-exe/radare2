@@ -3,4 +3,5 @@ union.xoo.x=int,0,0
 union.xoo.y=int,0,0
 union.xoo.z=int,0,0
 union.xoo=x,y,z
+type.xoo.size=32
 

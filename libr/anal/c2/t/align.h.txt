@@ -11,6 +11,7 @@ foo=struct
 struct.foo.gap=char,0,0
 struct.foo.bar=int,4,0
 struct.foo=gap,bar
+type.foo.size=64
 Row=enum
 enum.Row.ROW=0x7b
 enum.Row.0x7b=ROW
