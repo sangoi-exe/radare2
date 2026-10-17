@@ -3,44 +3,64 @@
 #include <r_anal.h>
 #include <r_anal_priv.h>
 
-static const char move_hex[] =
-	"45558bec56571e8b4e0c8b5e0a8b56088b46063bd1770c72043bc37306fdb80100eb03fc33c0c57606c47e0a8b4e0e0bc0740603f14e03f94ff7c701007404e311a4492bf02bf8d1e9f3a5730503f003f8a4fc1f5f5e5d4dcb"
-	"45558bec5657ff760eff7608ff7606ff760cff760a0ee88eff83c40a8b56088b46065f5e5d4dcb";
-static const ut8 move_lengths[] = {
-	1, 1, 2, 1, 1, 1, 3, 3, 3, 3, 2, 2, 2, 2, 2, 1, 3, 2, 1, 2, 3, 3, 3, 2, 2, 2, 1, 2, 1, 4, 2, 2, 1, 1, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1,
-	1, 1, 2, 1, 1, 3, 3, 3, 3, 3, 1, 3, 3, 3, 3, 1, 1, 1, 1, 1
-};
+typedef struct {
+	const char *name;
+	const char *type;
+} HelperParam;
+
+typedef struct {
+	const char *name;
+	const char *cc;
+	const char *ret;
+	int start;
+	int size;
+	int purge;
+	int argc;
+	HelperParam args[3];
+	const char *comment;
+} HelperContract;
+
+typedef struct {
+	const char *hex;
+	const ut8 *lengths;
+	size_t ninstr;
+	const HelperContract *helpers;
+	size_t nhelpers;
+	int call;
+	bool adapters;
+} HelperFamily;
 
 typedef struct {
 	int size;
 	ut32 type;
 	ut64 jump;
 	ut64 fail;
-} MoveOp;
+} HelperOp;
+
+#include "borland_helpers.inc.c"
 
 static int borland_eligible(RAnal *anal) {
 	return !strcmp (anal->config->arch, "x86")
 		&& anal->config->bits == 16 && !R_ARCH_CONFIG_IS_BIG_ENDIAN (anal->config)? 0: -1;
 }
 
-static bool move_qualify(RAnal *anal, ut64 addr, MoveOp *ops) {
-	ut8 expected[128], bytes[128];
-	if (addr > UT64_MAX - sizeof (bytes) || !anal->iob.read_at || !anal->iob.get_region_at
-			|| anal->iob.read_at (anal->iob.io, addr, bytes, sizeof (bytes)) != sizeof (bytes)) {
+static bool borland_qualify(RAnal *anal, ut64 addr, const HelperFamily *family, const ut8 *expected, int family_size, HelperOp *ops) {
+	ut8 bytes[128];
+	if (addr > UT64_MAX - family_size || !anal->iob.read_at || !anal->iob.get_region_at
+			|| anal->iob.read_at (anal->iob.io, addr, bytes, family_size) != family_size) {
 		return false;
 	}
-	r_hex_str2bin (move_hex, expected);
-	if (memcmp (bytes, expected, sizeof (bytes))) {
+	if (memcmp (bytes, expected, family_size)) {
 		return false;
 	}
 	int i, off = 0;
-	for (i = 0; i < sizeof (bytes); i++) {
+	for (i = 0; i < family_size; i++) {
 		RIORegion region;
 		if (!anal->iob.get_region_at (anal->iob.io, &region, addr + i) || !(region.perm & R_PERM_X)) {
 			return false;
 		}
 	}
-	for (i = 0; i < R_ARRAY_SIZE (move_lengths); i++) {
+	for (i = 0; i < family->ninstr; i++) {
 		const ut64 at = addr + off;
 		const int bits = r_anal_hint_bits_at (anal, at, NULL);
 		const char *arch = r_anal_hint_arch_at (anal, at, NULL);
@@ -57,60 +77,129 @@ static bool move_qualify(RAnal *anal, ut64 addr, MoveOp *ops) {
 			return false;
 		}
 		RAnalOp op = {0};
-		int size = r_anal_op (anal, &op, at, bytes + off, sizeof (bytes) - off, R_ARCH_OP_MASK_BASIC);
-		bool valid = size == move_lengths[i] && anal->config->bits == 16;
-		if (off == 110) {
+		int size = r_anal_op (anal, &op, at, bytes + off, family_size - off, R_ARCH_OP_MASK_BASIC);
+		bool valid = size == family->lengths[i] && anal->config->bits == 16;
+		if (family->call && off == family->call - 1) {
 			valid &= op.type == R_ANAL_OP_TYPE_RPUSH;
 		}
-		if (off == 111) {
+		if (family->call && off == family->call) {
 			valid &= (op.type & R_ANAL_OP_TYPE_MASK) == R_ANAL_OP_TYPE_CALL && op.jump == addr;
 		}
-		ops[off] = (MoveOp){ size, op.type & R_ANAL_OP_TYPE_MASK, op.jump, op.fail };
+		ops[off] = (HelperOp){ size, op.type & R_ANAL_OP_TYPE_MASK, op.jump, op.fail };
 		r_anal_op_fini (&op);
 		if (!valid) {
 			return false;
 		}
 		off += size;
 	}
-	return off == sizeof (bytes);
+	return off == family_size;
 }
 
-static bool move_type(RAnal *anal) {
-	r_anal_types_prepare (anal);
-	if (r_type_get_bitsize (anal->sdb_types, "uint16_t") != 16) {
-		return false;
-	}
-	RAnalBaseType *type = r_anal_get_base_type (anal, "FarAddress16");
+typedef struct {
+	const char *name;
+	const char *type;
+	int offset;
+} HelperMember;
+
+static bool borland_record(RAnal *anal, const char *name, int bits, const HelperMember *members, int count) {
+	RAnalBaseType *type = r_anal_get_base_type (anal, name);
 	if (type) {
-		bool valid = type->kind == R_ANAL_BASE_TYPE_KIND_STRUCT && type->size == 32
-			&& RVecAnalTypeMember_length (&type->struct_data.members) == 2;
-		if (valid) {
-			RAnalTypeMember *offset = RVecAnalTypeMember_at (&type->struct_data.members, 0);
-			RAnalTypeMember *selector = RVecAnalTypeMember_at (&type->struct_data.members, 1);
-			valid = !strcmp (offset->name, "offset") && !strcmp (selector->name, "selector")
-				&& !strcmp (offset->type, "uint16_t") && !strcmp (selector->type, "uint16_t")
-				&& !offset->offset && selector->offset == 2 && !offset->count && !selector->count
-				&& !offset->bitsize && !selector->bitsize;
+		bool valid = type->kind == R_ANAL_BASE_TYPE_KIND_STRUCT && type->size == bits
+			&& RVecAnalTypeMember_length (&type->struct_data.members) == count;
+		int i;
+		for (i = 0; valid && i < count; i++) {
+			RAnalTypeMember *member = RVecAnalTypeMember_at (&type->struct_data.members, i);
+			valid = !strcmp (member->name, members[i].name) && !strcmp (member->type, members[i].type)
+				&& member->offset == members[i].offset && !member->count && !member->bitsize;
 		}
 		r_anal_base_type_free (type);
 		return valid;
 	}
-	if (sdb_const_get (anal->sdb_types, "FarAddress16", NULL)) {
+	if (sdb_const_get (anal->sdb_types, name, NULL)) {
 		return false;
 	}
 	type = r_anal_base_type_new (R_ANAL_BASE_TYPE_KIND_STRUCT);
-	type->name = strdup ("FarAddress16");
-	type->size = 32;
-	RAnalTypeMember offset = { .name = strdup ("offset"), .type = strdup ("uint16_t") };
-	RAnalTypeMember selector = { .name = strdup ("selector"), .type = strdup ("uint16_t"), .offset = 2 };
-	RVecAnalTypeMember_push_back (&type->struct_data.members, &offset);
-	RVecAnalTypeMember_push_back (&type->struct_data.members, &selector);
+	type->name = strdup (name);
+	type->size = bits;
+	int i;
+	for (i = 0; i < count; i++) {
+		RAnalTypeMember member = { .name = strdup (members[i].name), .type = strdup (members[i].type), .offset = members[i].offset };
+		RVecAnalTypeMember_push_back (&type->struct_data.members, &member);
+	}
 	r_anal_save_base_type (anal, type);
 	r_anal_base_type_free (type);
 	return true;
 }
 
-static bool move_body(RAnalFunction *fcn, ut64 family, int start, int size, const MoveOp *ops) {
+static bool borland_type(RAnal *anal, const char *name) {
+	if (!strcmp (name, "void")) {
+		return true;
+	}
+	if (!strcmp (name, "FarAddress16")) {
+		const HelperMember members[] = { { "offset", "uint16_t", 0 }, { "selector", "uint16_t", 2 } };
+		return r_type_get_bitsize (anal->sdb_types, "uint16_t") == 16
+			&& borland_record (anal, name, 32, members, R_ARRAY_SIZE (members));
+	}
+	if (!strcmp (name, "FarPointerCompareAnalysisState9")) {
+		RAnalBaseType *boolean = r_anal_get_base_type (anal, "bool");
+		if (boolean) {
+			bool valid = boolean->kind == R_ANAL_BASE_TYPE_KIND_ATOMIC && boolean->size == 8
+				&& boolean->type && !strcmp (boolean->type, "b");
+			r_anal_base_type_free (boolean);
+			if (!valid) {
+				return false;
+			}
+		} else {
+			if (sdb_const_get (anal->sdb_types, "bool", NULL)) {
+				return false;
+			}
+			boolean = r_anal_base_type_new (R_ANAL_BASE_TYPE_KIND_ATOMIC);
+			boolean->name = strdup ("bool");
+			boolean->type = strdup ("b");
+			boolean->size = 8;
+			r_anal_save_base_type (anal, boolean);
+			r_anal_base_type_free (boolean);
+		}
+		const HelperMember members[] = { { "equal_zf", "bool", 0 }, { "ax", "uint16_t", 1 }, { "dx", "uint16_t", 3 }, { "bx", "uint16_t", 5 }, { "cx", "uint16_t", 7 } };
+		return r_type_get_bitsize (anal->sdb_types, "bool") == 8
+			&& r_type_get_bitsize (anal->sdb_types, "uint16_t") == 16
+			&& borland_record (anal, name, 72, members, R_ARRAY_SIZE (members));
+	}
+	int bits = !strcmp (name, "uint8_t")? 8: 16;
+	if (!strcmp (name, "int32_t") || !strcmp (name, "uint32_t")) {
+		bits = 32;
+	}
+	return r_type_get_bitsize (anal->sdb_types, name) == bits;
+}
+
+static bool borland_types(RAnal *anal, const HelperContract *helper) {
+	r_anal_types_prepare (anal);
+	if (!borland_type (anal, helper->ret)) {
+		return false;
+	}
+	int i;
+	for (i = 0; i < helper->argc; i++) {
+		if (!borland_type (anal, helper->args[i].type)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+static void borland_comment(RAnal *anal, ut64 addr, const char *text) {
+	if (!text) {
+		return;
+	}
+	const char *previous = r_meta_get_string (anal, R_META_TYPE_COMMENT, addr);
+	if (previous && strstr (previous, text)) {
+		return;
+	}
+	char *comment = previous? r_str_newf ("%s\n\n%s", previous, text): strdup (text);
+	r_meta_set_string (anal, R_META_TYPE_COMMENT, addr, comment);
+	free (comment);
+}
+
+static bool borland_body(RAnalFunction *fcn, ut64 family, int start, int size, const HelperOp *ops) {
 	bool covered[128] = {0};
 	RListIter *iter;
 	RAnalBlock *bb;
@@ -120,7 +209,7 @@ static bool move_body(RAnalFunction *fcn, ut64 family, int start, int size, cons
 			return false;
 		}
 		int off = bb->addr - family, end = off + bb->size, n = 0;
-		const MoveOp *last = NULL;
+		const HelperOp *last = NULL;
 		while (off < end) {
 			last = &ops[off];
 			if (!last->size || off + last->size > end || r_anal_bb_opaddr_i (bb, n++) != family + off) {
@@ -158,33 +247,30 @@ static bool move_body(RAnalFunction *fcn, ut64 family, int start, int size, cons
 	return true;
 }
 
-static bool move_generic_name(const char *name) {
+static bool borland_generic_name(const char *name) {
 	return r_str_startswith (name, "fcn.") || r_str_startswith (name, "fcn_")
 		|| r_str_startswith (name, "loc.") || r_str_startswith (name, "loc_")
 		|| r_str_startswith (name, "sub.") || r_str_startswith (name, "sub_");
 }
 
-static bool move_signature_equal(RAnalFunctionSignature *sig, const char *ret, const char **names, const char *cc) {
-	if (!sig || !sig->ret_type || strcmp (sig->ret_type, ret) || !sig->callconv
-			|| strcmp (sig->callconv, cc) || sig->noreturn || r_list_length (sig->params) != 3) {
+static bool borland_signature_equal(RAnalFunctionSignature *sig, const HelperContract *helper) {
+	if (!sig || !sig->ret_type || strcmp (sig->ret_type, helper->ret) || !sig->callconv
+			|| strcmp (sig->callconv, helper->cc) || sig->noreturn || r_list_length (sig->params) != helper->argc) {
 		return false;
 	}
 	int i;
-	for (i = 0; i < 3; i++) {
+	for (i = 0; i < helper->argc; i++) {
 		RAnalFunctionParam *param = r_list_get_n (sig->params, i);
-		if (!param->name || strcmp (param->name, names[i]) || strcmp (param->type, i == 2? "uint16_t": "FarAddress16")) {
+		if (!param->name || strcmp (param->name, helper->args[i].name) || strcmp (param->type, helper->args[i].type)) {
 			return false;
 		}
 	}
 	return true;
 }
 
-static bool move_apply(RAnal *anal, ut64 family, bool wrapper, const MoveOp *ops) {
-	const int start = wrapper? 89: 0, size = wrapper? 39: 89;
+static bool borland_apply(RAnal *anal, ut64 family, const HelperContract *helper, const HelperOp *ops) {
+	const int start = helper->start, size = helper->size;
 	const ut64 addr = family + start;
-	const char *cc = wrapper? "borland_fmemmove_16far": "borland_fmovmem_16far";
-	const char *ret = wrapper? "FarAddress16": "void";
-	const char *names[] = { wrapper? "destination": "source", wrapper? "source": "destination", "byte_count" };
 	RAnalFunction *fcn = r_anal_get_function_at (anal, addr);
 	RList *blocks = r_anal_get_blocks_intersect (anal, addr, size);
 	RListIter *iter;
@@ -196,22 +282,23 @@ static bool move_apply(RAnal *anal, ut64 family, bool wrapper, const MoveOp *ops
 		}
 	}
 	r_list_free (blocks);
-	if (overlap || (fcn && (!move_body (fcn, family, start, size, ops) || fcn->bits != 16))) {
+	if (overlap || (fcn && (!borland_body (fcn, family, start, size, ops) || fcn->bits != 16))) {
 		R_LOG_WARN ("Borland: preserving body at 0x%08"PFMT64x, addr);
 		return false;
 	}
 	if (fcn) {
 		RAnalFunctionSignature *sig = r_anal_function_get_signature (fcn);
-		bool same = move_signature_equal (sig, ret, names, cc) && fcn->callconv && !strcmp (fcn->callconv, cc);
+		bool same = borland_signature_equal (sig, helper) && fcn->callconv && !strcmp (fcn->callconv, helper->cc);
 		bool conflict = sig && (sig->ret_type || !r_list_empty (sig->params));
 		r_anal_function_signature_free (sig);
 		if (same && RVecAnalVarPtr_empty (&fcn->vars) && !fcn->is_noreturn
-				&& (fcn->meta.stack_pop == R_ANAL_CC_STACK_POP_UNKNOWN || fcn->meta.stack_pop == 0)) {
+				&& (fcn->meta.stack_pop == R_ANAL_CC_STACK_POP_UNKNOWN || fcn->meta.stack_pop == helper->purge)) {
+			borland_comment (anal, addr, helper->comment);
 			return true;
 		}
 		const char *default_cc = r_anal_cc_default (anal);
-		if (!move_generic_name (fcn->name) || conflict || !RVecAnalVarPtr_empty (&fcn->vars) || fcn->is_noreturn
-				|| (fcn->meta.stack_pop != R_ANAL_CC_STACK_POP_UNKNOWN && fcn->meta.stack_pop != 0)
+		if (!borland_generic_name (fcn->name) || conflict || !RVecAnalVarPtr_empty (&fcn->vars) || fcn->is_noreturn
+				|| (fcn->meta.stack_pop != R_ANAL_CC_STACK_POP_UNKNOWN && fcn->meta.stack_pop != helper->purge)
 				|| (fcn->callconv && (!default_cc || strcmp (fcn->callconv, default_cc)))) {
 			R_LOG_WARN ("Borland: preserving prototype/variables/convention at 0x%08"PFMT64x, addr);
 			return false;
@@ -224,7 +311,7 @@ static bool move_apply(RAnal *anal, ut64 family, bool wrapper, const MoveOp *ops
 		return false;
 	}
 	if (!fcn) {
-		char *name = r_str_newf ("qualified_borland_%s.%08"PFMT64x, wrapper? "fmemmove": "fmovmem", addr);
+		char *name = r_str_newf ("qualified_borland_%s.%08"PFMT64x, helper->name, addr);
 		fcn = r_anal_create_function (anal, name, addr, R_ANAL_FCN_TYPE_FCN, NULL);
 		free (name);
 		if (!fcn) {
@@ -234,12 +321,12 @@ static bool move_apply(RAnal *anal, ut64 family, bool wrapper, const MoveOp *ops
 		anal->opt.vars = false;
 		r_anal_function (anal, fcn, addr, R_ANAL_REF_TYPE_CALL);
 		anal->opt.vars = recover_vars;
-		if (!move_body (fcn, family, start, size, ops)) {
+		if (!borland_body (fcn, family, start, size, ops)) {
 			R_LOG_WARN ("Borland: native analysis did not produce the qualified body at 0x%08"PFMT64x, addr);
 			return false;
 		}
 	}
-	char *type_name = r_str_newf ("borland_%s_%08"PFMT64x, wrapper? "fmemmove": "fmovmem", addr);
+	char *type_name = r_str_newf ("borland_%s_%08"PFMT64x, helper->name, addr);
 	if (sdb_const_get (anal->sdb_types, type_name, NULL)) {
 		R_LOG_WARN ("Borland: preserving existing prototype key %s", type_name);
 		free (type_name);
@@ -251,68 +338,93 @@ static bool move_apply(RAnal *anal, ut64 family, bool wrapper, const MoveOp *ops
 	RList *params = r_list_new ();
 	RAnalFunctionParam values[3];
 	int i;
-	for (i = 0; i < 3; i++) {
-		values[i] = (RAnalFunctionParam){ .name = (char *)names[i], .type = i == 2? "uint16_t": "FarAddress16" };
+	for (i = 0; i < helper->argc; i++) {
+		values[i] = (RAnalFunctionParam){ .name = (char *)helper->args[i].name, .type = (char *)helper->args[i].type };
 		r_list_append (params, &values[i]);
 	}
-	RAnalFunctionSignature signature = { .ret_type = (char *)ret, .callconv = (char *)cc, .params = params };
+	RAnalFunctionSignature signature = { .ret_type = (char *)helper->ret, .callconv = (char *)helper->cc, .params = params };
 	bool result = r_anal_function_set_signature (anal, fcn, &signature);
 	r_list_free (params);
 	if (result) {
-		result = r_anal_function_store_callconv (anal, fcn, cc);
+		result = r_anal_function_store_callconv (anal, fcn, helper->cc);
 	}
 	RAnalFunctionSignature *actual = r_anal_function_get_signature (fcn);
-	result = result && move_signature_equal (actual, ret, names, cc);
+	result = result && borland_signature_equal (actual, helper);
 	r_anal_function_signature_free (actual);
 	if (!result) {
 		R_LOG_WARN ("Borland: native signature application failed at 0x%08"PFMT64x, addr);
+	} else {
+		borland_comment (anal, addr, helper->comment);
 	}
 	return result;
+}
+
+static void borland_adapters(RAnal *anal, ut64 addr, const HelperFamily *family) {
+	if (!family->adapters) {
+		return;
+	}
+	size_t i;
+	for (i = 0; i < family->nhelpers; i++) {
+		ut64 adapter = addr + family->helpers[i].start - 3;
+		char *name = r_str_newf ("qualified_borland_%s_near_adapter.%08"PFMT64x, family->helpers[i].name, adapter);
+		if (anal->flb.f && !r_flag_get (anal->flb.f, name)) {
+			r_flag_set (anal->flb.f, name, adapter, 3);
+		}
+		free (name);
+		borland_comment (anal, adapter, "Qualified word-shift near adapter: POP BX; PUSH CS; PUSH BX constructs the four-byte far return frame and falls through to the core. Label/code only, not a three-byte returning function; no near caller is inferred.");
+	}
 }
 
 static int borland_scan(RAnal *anal) {
 	if (borland_eligible (anal) < 0 || !anal->iob.read_at || !anal->binb.get_sections_vec) {
 		return 0;
 	}
-	ut8 bytes[4096], expected[128];
-	r_hex_str2bin (move_hex, expected);
-	int applied = 0;
 	RVecRBinSection *sections = anal->binb.get_sections_vec (anal->binb.bin);
 	if (!sections) {
 		return 0;
 	}
-	RBinSection *section;
-	R_VEC_FOREACH (sections, section) {
-		ut64 size = R_MIN (section->size, section->vsize);
-		if (!(section->perm & R_PERM_X) || size < 128 || section->vaddr > UT64_MAX - size) {
-			continue;
-		}
-		ut64 off = 0;
-		while (off <= size - 128) {
-			const int len = R_MIN (sizeof (bytes), size - off);
-			if (anal->iob.read_at (anal->iob.io, section->vaddr + off, bytes, len) != len) {
-				R_LOG_WARN ("Borland: unreadable executable section at 0x%08"PFMT64x, section->vaddr + off);
-				break;
+	int applied = 0;
+	size_t f;
+	for (f = 0; f < R_ARRAY_SIZE (helper_families); f++) {
+		const HelperFamily *family = &helper_families[f];
+		ut8 bytes[4096], expected[128];
+		const int family_size = r_hex_str2bin (family->hex, expected);
+		RBinSection *section;
+		R_VEC_FOREACH (sections, section) {
+			ut64 size = R_MIN (section->size, section->vsize);
+			if (!(section->perm & R_PERM_X) || size < family_size || section->vaddr > UT64_MAX - size) {
+				continue;
 			}
-			int i;
-			for (i = 0; i <= len - 128; i++) {
-				if (memcmp (bytes + i, expected, 10)) {
-					continue;
+			ut64 off = 0;
+			while (off <= size - family_size) {
+				const int len = R_MIN (sizeof (bytes), size - off);
+				if (anal->iob.read_at (anal->iob.io, section->vaddr + off, bytes, len) != len) {
+					R_LOG_WARN ("Borland: unreadable executable section at 0x%08"PFMT64x, section->vaddr + off);
+					break;
 				}
-				const ut64 addr = section->vaddr + off + i;
-				MoveOp ops[128] = {0};
-				if (!move_qualify (anal, addr, ops)) {
-					R_LOG_WARN ("Borland: refused current bytes/context/flow at 0x%08"PFMT64x, addr);
-					continue;
+				int i;
+				for (i = 0; i <= len - family_size; i++) {
+					if (memcmp (bytes + i, expected, 10)) {
+						continue;
+					}
+					const ut64 addr = section->vaddr + off + i;
+					HelperOp ops[128] = {0};
+					if (!borland_qualify (anal, addr, family, expected, family_size, ops)) {
+						R_LOG_WARN ("Borland: refused current bytes/context/flow at 0x%08"PFMT64x, addr);
+						continue;
+					}
+					borland_adapters (anal, addr, family);
+					size_t h;
+					for (h = 0; h < family->nhelpers; h++) {
+						if (!borland_types (anal, &family->helpers[h])) {
+							R_LOG_WARN ("Borland: preserving conflicting native type for %s", family->helpers[h].name);
+							continue;
+						}
+						applied += borland_apply (anal, addr, &family->helpers[h], ops);
+					}
 				}
-				if (!move_type (anal)) {
-					R_LOG_WARN ("Borland: preserving conflicting FarAddress16/WORD type");
-					continue;
-				}
-				applied += move_apply (anal, addr, false, ops);
-				applied += move_apply (anal, addr, true, ops);
+				off += len - family_size + 1;
 			}
-			off += len - 127;
 		}
 	}
 	return applied;
@@ -327,7 +439,7 @@ static char *borland_command(RAnal *anal, const char *input) {
 		return NULL;
 	}
 	if (input[7] == '?') {
-		return strdup ("| a:borland    qualify current executable 16-bit move families; preserve conflicting analysis\n| a:borland?   show this help; rerun a:borland after changing bytes/context\n");
+		return strdup ("| a:borland    qualify exact executable 16-bit Borland helper families; preserve conflicting analysis\n| a:borland?   show this help; rerun a:borland after changing bytes/context\n");
 	}
 	return r_str_newf ("Borland: %d function contracts qualified (including unchanged); refusals are logged\n", borland_scan (anal));
 }

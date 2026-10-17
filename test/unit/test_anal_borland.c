@@ -6,7 +6,7 @@ static const char family_hex[] =
 	"45558bec56571e8b4e0c8b5e0a8b56088b46063bd1770c72043bc37306fdb80100eb03fc33c0c57606c47e0a8b4e0e0bc0740603f14e03f94ff7c701007404e311a4492bf02bf8d1e9f3a5730503f003f8a4fc1f5f5e5d4dcb"
 	"45558bec5657ff760eff7608ff7606ff760cff760a0ee88eff83c40a8b56088b46065f5e5d4dcb";
 
-static RCore *move_core(void) {
+static RCore *helper_core(const char *hex) {
 	RCore *core = r_core_new ();
 	core->io->va = true;
 	r_io_open_at (core->io, "malloc://128", R_PERM_RWX, 0, MOVE_ADDR);
@@ -14,8 +14,8 @@ static RCore *move_core(void) {
 	r_config_set_i (core->config, "asm.bits", 16);
 	r_anal_types_prepare (core->anal);
 	core->anal->opt.vars = false;
-	ut8 bytes[128];
-	r_hex_str2bin (family_hex, bytes);
+	ut8 bytes[128] = {0};
+	int size = r_hex_str2bin (hex, bytes);
 	r_io_write_at (core->io, MOVE_ADDR, bytes, sizeof (bytes));
 	RBinFile *bf = R_NEW0 (RBinFile);
 	bf->bo = R_NEW0 (RBinObject);
@@ -25,9 +25,13 @@ static RCore *move_core(void) {
 	RBinSection *section = RVecRBinSection_emplace_back (&bf->bo->sections_vec);
 	section->name = strdup ("code");
 	section->vaddr = MOVE_ADDR;
-	section->size = section->vsize = 128;
+	section->size = section->vsize = size;
 	section->perm = R_PERM_RWX;
 	return core;
+}
+
+static RCore *move_core(void) {
+	return helper_core (family_hex);
 }
 
 static void move_core_free(RCore *core) {
@@ -208,11 +212,167 @@ static bool test_move_preserve_type(void) {
 	mu_end;
 }
 
+static const char scopy_hex[] = "558bec56571ec57606c47e0afcd1e9f3a513c9f3a41f5f5e5dca0800";
+static const char forward_hex[] = "45558bec56578cdac47e06c5760a8b4e0ed1e9fcf3a57301a48eda8b56088b46065f5e5d4dcb";
+static const char compare_hex[] = "518ae8b104d3e803d08ac58ae3d3eb5903cb8adc250f0083e30f3bd175023bc3cb";
+static const char fill_hex[] = "45558bec571e078b7e068b4e088a460a8ae0fcf7c701007404e309aa49d1e9f3ab7301aa5f5d4dcb45558bec568b76068a460850ff760a560ee8c4ff83c4068bc65e5d4dcb";
+static const char shifts_hex[] = "5b0e5380f91073108bd8d3e0d3e2f6d980c110d3eb0bd3cb80e9109233c0d3e2cb5b0e5380f91073108bdad3e8d3faf6d980c110d3e30bc3cb80e9109299d3f8cb5b0e5380f91073108bdad3e8d3eaf6d980c110d3e30bc3cb80e9109233d2d3e8cb";
+
+static bool test_remaining_helper_contracts(void) {
+	const struct {
+		const char *hex;
+		int count;
+		int start;
+		int size;
+		const char *cc;
+		const char *ret;
+		const char *first_name;
+		const char *first_type;
+	} cases[] = {
+		{ scopy_hex, 1, 0, 28, "borland_f_scopy_16far", "void", "byte_count", "uint16_t" },
+		{ forward_hex, 1, 0, 38, "borland_far_copy_16far", "FarAddress16", "destination", "FarAddress16" },
+		{ compare_hex, 1, 0, 33, "borland_far_pointer_compare_16far", "FarPointerCompareAnalysisState9", "entry_dx_ax", "FarAddress16" },
+		{ fill_hex, 2, 0, 40, "borland_setmem_16far", "uint16_t", "destination_offset", "uint16_t" },
+		{ shifts_hex, 3, 3, 30, "borland_word_shift_16far", "uint32_t", "value", "uint32_t" },
+	};
+	size_t i;
+	for (i = 0; i < R_ARRAY_SIZE (cases); i++) {
+		RCore *core = helper_core (cases[i].hex);
+		mu_assert_true (move_run (core, cases[i].count), "native helper application");
+		RAnalFunction *fcn = r_anal_get_function_at (core->anal, MOVE_ADDR + cases[i].start);
+		mu_assert_notnull (fcn, "qualified native helper");
+		mu_assert_eq (r_anal_function_realsize (fcn), cases[i].size, "complete body");
+		mu_assert_streq (fcn->callconv, cases[i].cc, "exact native convention name");
+		RAnalFunctionSignature *sig = r_anal_function_get_signature (fcn);
+		mu_assert_notnull (sig, "native signature");
+		mu_assert_streq (sig->ret_type, cases[i].ret, "actual analysis return");
+		RAnalFunctionParam *first = r_list_first (sig->params);
+		mu_assert_streq (first->name, cases[i].first_name, "first parameter name");
+		mu_assert_streq (first->type, cases[i].first_type, "first parameter type");
+		r_anal_function_signature_free (sig);
+		if (i == 0) {
+			mu_assert_eq (fcn->meta.stack_pop, 8, "actual RETF8 callee pop");
+		}
+		if (i == 2) {
+			RAnalBaseType *type = r_anal_get_base_type (core->anal, "FarPointerCompareAnalysisState9");
+			mu_assert_notnull (type, "analysis tuple type");
+			mu_assert_eq (type->size, 72, "exact nine-byte tuple");
+			mu_assert_eq (r_type_get_bitsize (core->anal->sdb_types, "bool"), 8, "one-byte boolean storage");
+			const char *names[] = { "equal_zf", "ax", "dx", "bx", "cx" };
+			int j;
+			for (j = 0; j < 5; j++) {
+				RAnalTypeMember *member = RVecAnalTypeMember_at (&type->struct_data.members, j);
+				mu_assert_streq (member->name, names[j], "native tuple field order");
+				mu_assert_eq (member->offset, j? j * 2 - 1: 0, "packed tuple offset");
+			}
+			r_anal_base_type_free (type);
+		}
+		if (i == 3) {
+			RAnalFunction *wrapper = r_anal_get_function_at (core->anal, MOVE_ADDR + 40);
+			mu_assert_notnull (wrapper, "qualified memset wrapper");
+			mu_assert_streq (wrapper->callconv, "borland_memset_16far", "distinct fill wrapper model");
+			sig = r_anal_function_get_signature (wrapper);
+			mu_assert_streq (((RAnalFunctionParam *)r_list_get_n (sig->params, 1))->name, "value_word_low_byte", "wrapper value before count");
+			mu_assert_streq (((RAnalFunctionParam *)r_list_get_n (sig->params, 2))->name, "byte_count", "wrapper count last");
+			r_anal_function_signature_free (sig);
+		}
+		if (i == 4) {
+			const int starts[] = { 3, 36, 68 }, sizes[] = { 30, 29, 30 };
+			int j;
+			for (j = 0; j < 3; j++) {
+				RAnalFunction *shift = r_anal_get_function_at (core->anal, MOVE_ADDR + starts[j]);
+				mu_assert_notnull (shift, "far shift core");
+				mu_assert_eq (r_anal_function_realsize (shift), sizes[j], "nonoverlapping exact core");
+				mu_assert_eq (r_list_length (shift->bbs), 3, "three native blocks");
+				mu_assert_eq (r_anal_function_instrcount (shift), 15, "fifteen native instructions");
+				mu_assert_null (r_anal_get_function_at (core->anal, shift->addr - 3), "adapter is not a returning function");
+				mu_assert_notnull (r_flag_get_by_spaces (core->flags, false, shift->addr - 3, NULL), "adapter label");
+				sig = r_anal_function_get_signature (shift);
+				mu_assert_streq (sig->ret_type, j == 1? "int32_t": "uint32_t", "only arithmetic shift is signed");
+				mu_assert_streq (((RAnalFunctionParam *)r_list_get_n (sig->params, 1))->type, "uint8_t", "CL is BYTE, not CX");
+				r_anal_function_signature_free (sig);
+			}
+		}
+		ut64 epoch = fcn->dirty_epoch;
+		mu_assert_true (move_run (core, cases[i].count), "all remaining helpers rerun idempotently");
+		mu_assert_eq (fcn->dirty_epoch, epoch, "no signature rewrite on rerun");
+		move_core_free (core);
+	}
+	mu_end;
+}
+
+static bool test_fill_qualification(void) {
+	RCore *core = helper_core (fill_hex);
+	ut8 patch = 0x90;
+	r_io_write_at (core->io, MOVE_ADDR + 39, &patch, 1);
+	mu_assert_true (move_run (core, 0), "unqualified actual setmem target blocks wrapper");
+	move_core_free (core);
+	core = helper_core (fill_hex + 80);
+	mu_assert_true (move_run (core, 0), "isolated wrapper is not admitted");
+	move_core_free (core);
+	core = helper_core (fill_hex);
+	r_anal_hint_set_jump (core->anal, MOVE_ADDR + 57, MOVE_ADDR + 1);
+	mu_assert_true (move_run (core, 1), "wrapper CALL override blocks wrapper, not independent core");
+	move_core_free (core);
+	mu_end;
+}
+
+static bool test_shift_family_qualification(void) {
+	RCore *core = helper_core (shifts_hex);
+	ut8 patch = 0x90;
+	r_io_write_at (core->io, MOVE_ADDR + 97, &patch, 1);
+	mu_assert_true (move_run (core, 0), "partial shift family cannot create any core");
+	move_core_free (core);
+	core = helper_core (shifts_hex);
+	r_anal_hint_set_bits (core->anal, MOVE_ADDR + 34, 32);
+	mu_assert_true (move_run (core, 0), "internal adapter/core context refuses whole family");
+	move_core_free (core);
+	core = helper_core (shifts_hex);
+	RAnalFunction *owner = r_anal_create_function (core->anal, NULL, MOVE_ADDR, R_ANAL_FCN_TYPE_FCN, NULL);
+	r_anal_function (core->anal, owner, owner->addr, R_ANAL_REF_TYPE_CALL);
+	mu_assert_true (move_run (core, 2), "different overlapping owner blocks first core only");
+	mu_assert_null (r_anal_get_function_at (core->anal, MOVE_ADDR + 3), "do not delete/recreate adapter owner");
+	mu_assert_eq (r_anal_function_realsize (owner), 33, "prior adapter body retained");
+	move_core_free (core);
+	mu_end;
+}
+
+static bool test_remaining_type_and_pop_preservation(void) {
+	RCore *core = helper_core (compare_hex);
+	sdb_set (core->anal->sdb_types, "FarPointerCompareAnalysisState9", "struct", 0);
+	sdb_set (core->anal->sdb_types, "struct.FarPointerCompareAnalysisState9", "manual", 0);
+	sdb_set (core->anal->sdb_types, "struct.FarPointerCompareAnalysisState9.manual", "uint8_t,0,0", 0);
+	mu_assert_true (move_run (core, 0), "conflicting analysis record preserved");
+	mu_assert_streq (sdb_const_get (core->anal->sdb_types, "struct.FarPointerCompareAnalysisState9", NULL), "manual", "independent tuple not replaced");
+	move_core_free (core);
+	core = helper_core (compare_hex);
+	sdb_set (core->anal->sdb_types, "bool", "struct", 0);
+	sdb_set (core->anal->sdb_types, "struct.bool", "manual", 0);
+	sdb_set (core->anal->sdb_types, "struct.bool.manual", "uint8_t,0,0", 0);
+	sdb_num_set (core->anal->sdb_types, "type.bool.size", 8, 0);
+	mu_assert_true (move_run (core, 0), "same-width nonboolean definition cannot authorize a boolean tuple");
+	mu_assert_streq (sdb_const_get (core->anal->sdb_types, "bool", NULL), "struct", "independent boolean-name conflict preserved");
+	move_core_free (core);
+	core = helper_core (scopy_hex);
+	RAnalFunction *fcn = r_anal_create_function (core->anal, NULL, MOVE_ADDR, R_ANAL_FCN_TYPE_FCN, NULL);
+	r_anal_function (core->anal, fcn, fcn->addr, R_ANAL_REF_TYPE_CALL);
+	mu_assert_eq (fcn->meta.stack_pop, 8, "normal callee-popped body");
+	fcn->meta.stack_pop = 0;
+	mu_assert_true (move_run (core, 0), "independently conflicting zero pop is preserved for F_SCOPY");
+	mu_assert_eq (fcn->meta.stack_pop, 0, "zero pop not silently replaced by eight");
+	move_core_free (core);
+	mu_end;
+}
+
 int main(int argc, char **argv) {
 	mu_run_test (test_move_family);
 	mu_run_test (test_move_current_qualification);
 	mu_run_test (test_move_preserve_independent_state);
 	mu_run_test (test_move_preserve_body_and_convention);
 	mu_run_test (test_move_preserve_type);
+	mu_run_test (test_remaining_helper_contracts);
+	mu_run_test (test_fill_qualification);
+	mu_run_test (test_shift_family_qualification);
+	mu_run_test (test_remaining_type_and_pop_preservation);
 	return tests_passed != tests_run;
 }
