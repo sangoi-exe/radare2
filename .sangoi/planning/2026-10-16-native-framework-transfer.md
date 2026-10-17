@@ -1,8 +1,8 @@
 # Native RE framework transfer — Intent Contract
 
-Status: on-hold
+Status: active
 Task mode: Doctrine
-Lifecycle phase: Strategy reset
+Lifecycle phase: Implementation
 Strategy epoch: native-transfer-2
 Plan kind: Feature / PRD Plan
 Secondary kinds: none
@@ -25,6 +25,7 @@ The primary kind is Feature / PRD because the deliverable is an integrated user 
 - The initial route was closed. Later current-user message at `2026-10-16T18:53:57.443-03:00`, turn `01a146b0-1cdf-7462-be60-b121142d87f1`, source rollout line 12449, explicitly says “pode seguir pra implementação em caso de proceed, e no code gate vá de local”. This authorizes entry to Implementation on the actual Plan Gate `PROCEED` without another human confirmation and selects this task's first local Code Gate. It does not override the Gate's semantic result or represent an absent verdict as a pass.
 - Native MCP access-policy decision: turn `01a146f1-a3d8-7933-9a17-187d3b932f29`, `2026-10-16T20:00:05.974-03:00` (America/Sao_Paulo), source rollout line 13108, “confirmo”. The user selected the proposed narrow policy: retain default hidden-path refusal, admit hidden descendants only within an explicit canonical `-s` root, retain outside-root/traversal rejection, and report failed opens as errors. This closes the observed implementation conflict at the selected MCP owner and resumes the admitted transfer; Scope, architecture, strategy epoch and first local Code Gate selection remain unchanged.
 - Native persistence direction and paraphrase delta: turn `01a14755-f1cd-73e2-993d-fa5c73da3ccc`, `2026-10-16T21:49:37.403-03:00` (America/Sao_Paulo), source rollout line 14927, “confirmo”. The immediately preceding proposal names normal read-only original loading to rebuild loader-owned state, command-free analysis restoration without implicit backing-file reopening, selected virtual-edit persistence at the native project/cache owners, and an explicit project-artifact directory separate from the binary-input root. The user confirmed that direction. This permits the required planning audit for the material persistence/restore-contract change; it does not select a second persistence owner, script replay or global permission exemption.
+- Post-Gate implementation activation: turn `01a14769-2536-7020-b921-6a3fd0912f11`, `2026-10-16T22:10:36.344-03:00` (America/Sao_Paulo), source rollout line 15040, “sim, de code gate vá de local”. This later message explicitly authorizes the approved persistence implementation and resumption of the remaining transfer after the current Plan Gate `PROCEED`; it also reaffirms the still-unstarted first local Code Gate. No further activation question is pending.
 
 ## Current owner evidence and baseline
 
@@ -100,10 +101,10 @@ Non-goals include rewriting the decompiler, replacing RCore/project storage, rep
 The root-owned Microtask Program sizes implementation after activation. The runtime does not expose `update_plan`, so the one subordinate execution annex retains the current bounded footprints, dependencies, results and remaining frontier across this multi-repository task. It is not another intent or proof owner. Independent source footprints can proceed in parallel; validation waits for stable dependencies. The root retains integration, Git lifecycle and final proof.
 
 Plan Gate: `/root/native_transfer_plan_audit` returned `PROCEED` for the current Doctrine / Strategy reset / `native-transfer-2` Intent audit, with complete required-field coverage and no blocking findings. Its nonblocking stale-follower note was reconciled in this plan and the execution annex without changing Scope or semantics. The sole resident transition retains on-hold and Strategy reset pending implementation authorization. The earlier Initial audit is historical, not a substitute for this result.
-Implementation authority: earlier closed implementation and access-policy decisions remain recorded above. The current user confirmed the persistence direction and paraphrase delta. The current audit has passed; its later implementation-activation checkpoint remains required before substantive mutation resumes.
-Code Gate: first task change-set review selected as local `Senior Code Reviewer` by the current-user message at `2026-10-16T18:53:57.443-03:00` above; no terminal result yet.
-Blocker: no material direction remains open; later current-user implementation authorization after the current Plan Gate is pending. The first exact-image SCRANTIC profile and native uncertainty correction are committed and validated. Direct binary-project reopen's observed byte/metadata loss remains an uncorrected verified defect, not accepted residual risk.
-Next high-level action: obtain implementation authorization, activate the selected route and dispatch bounded host/MCP work. Retain all other seven profiles, bounded NB02 and final native MCP/local Code Gate obligations.
+Implementation authority: active under the later current-user message at `2026-10-16T22:10:36.344-03:00` after the current audit. Earlier closed implementation, route and access-policy decisions remain intact.
+Code Gate: first task change-set review selected as local `Senior Code Reviewer`, reaffirmed by that activation message; no terminal result yet.
+Blocker: no current-user decision is pending. Direct binary-project reopen's observed byte/metadata loss remains an uncorrected verified defect, not accepted residual risk; its selected correction is now admitted for implementation.
+Next high-level action: implement the existing-owner persistence slice and complete SimTower profile in disjoint source footprints, then integrate their results and continue the other six compiler profiles, bounded NB02 and native MCP workflow before the first local Code Gate.
 
 ## Selected closure — native project persistence
 
