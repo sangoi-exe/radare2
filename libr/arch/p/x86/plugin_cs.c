@@ -551,6 +551,17 @@ static const char *reg32_to_name(ut8 reg) {
 }
 #endif
 
+static int ret_word_size(int bits, cs_insn *insn) {
+	if (insn->id == X86_INS_RETFQ || (bits == 64 && insn->id == X86_INS_RET)) {
+		return 8;
+	}
+	int size = bits == 16? 2: 4;
+	if (insn->detail->x86.prefix[2] == X86_PREFIX_OPSIZE) {
+		size = size == 2? 4: 2;
+	}
+	return size;
+}
+
 static void anop_esil(RArchSession *as, RAnalOp *op, ut64 addr, const ut8 *buf, int len, csh handle, cs_insn *insn) {
 	RAnalValue *val = NULL;
 	const int bits = as->config->bits;
@@ -1689,6 +1700,13 @@ static void anop_esil(RArchSession *as, RAnalOp *op, ut64 addr, const ut8 *buf, 
 	case X86_INS_RET:
 	case X86_INS_RETF:
 	case X86_INS_RETFQ:
+		rs = ret_word_size (bits, insn);
+		esilprintf (op, "%s,[%d],%s,=", sp, rs, pc);
+		if (insn->id != X86_INS_RET) {
+			r_strbuf_appendf (&op->esil, ",%d,%s,+,[2],cs,=", rs, sp);
+		}
+		r_strbuf_appendf (&op->esil, ",%" PFMT64d ",%s,+=", -op->stackptr, sp);
+		break;
 	case X86_INS_IRET:
 	case X86_INS_IRETD:
 	case X86_INS_IRETQ:
@@ -3851,13 +3869,19 @@ static void anop(RArchSession *a, RAnalOp *op, ut64 addr, const ut8 *buf, int le
 	case X86_INS_IRETQ:
 	case X86_INS_SYSRET:
 		op->family = R_ANAL_OP_FAMILY_PRIV;
-		/* fallthrough */
+		op->type = R_ANAL_OP_TYPE_RET;
+		op->stackop = R_ANAL_STACK_INC;
+		op->stackptr = -regsz;
+		op->cycles = CYCLE_MEM + CYCLE_JMP;
+		break;
 	case X86_INS_RET:
 	case X86_INS_RETF:
 	case X86_INS_RETFQ:
 		op->type = R_ANAL_OP_TYPE_RET;
 		op->stackop = R_ANAL_STACK_INC;
-		op->stackptr = -regsz;
+		op->val = INSOPS > 0? (ut16)INSOP (0).imm: 0;
+		regsz = ret_word_size (bits, insn);
+		op->stackptr = -(regsz * (insn->id == X86_INS_RET? 1: 2) + (st64)op->val);
 		op->cycles = CYCLE_MEM + CYCLE_JMP;
 		break;
 	case X86_INS_UD0:

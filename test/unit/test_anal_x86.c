@@ -165,10 +165,98 @@ bool test_x86_segmented_targets(void) {
 	mu_end;
 }
 
+bool test_x86_return_cleanup(void) {
+	const struct {
+		int bits;
+		const char *hex;
+		int width;
+		bool far;
+		int cleanup;
+	} cases[] = {
+		{ 16, "ca0800", 2, true, 8 }, // Original SimTower F_SCOPY at 0x13de2.
+		{ 16, "cb", 2, true, 0 },
+		{ 16, "ca0000", 2, true, 0 },
+		{ 16, "c3", 2, false, 0 },
+		{ 16, "c20800", 2, false, 8 },
+		{ 16, "c2ffff", 2, false, UT16_MAX },
+		{ 16, "66c3", 4, false, 0 },
+		{ 16, "66c20800", 4, false, 8 },
+		{ 16, "66cb", 4, true, 0 },
+		{ 16, "66ca0800", 4, true, 8 },
+		{ 32, "c3", 4, false, 0 },
+		{ 32, "c20800", 4, false, 8 },
+		{ 32, "cb", 4, true, 0 },
+		{ 32, "ca0800", 4, true, 8 },
+		{ 32, "66c3", 2, false, 0 },
+		{ 32, "66c20800", 2, false, 8 },
+		{ 32, "66cb", 2, true, 0 },
+		{ 32, "66ca0800", 2, true, 8 },
+		{ 64, "c3", 8, false, 0 },
+		{ 64, "c20800", 8, false, 8 },
+		{ 64, "66c3", 8, false, 0 },
+		{ 64, "66c20800", 8, false, 8 },
+		{ 64, "cb", 4, true, 0 },
+		{ 64, "ca0800", 4, true, 8 },
+		{ 64, "66cb", 2, true, 0 },
+		{ 64, "66ca0800", 2, true, 8 },
+		{ 64, "48cb", 8, true, 0 },
+		{ 64, "48ca0800", 8, true, 8 },
+	};
+	size_t i;
+	for (i = 0; i < R_ARRAY_SIZE (cases); i++) {
+		RCore *core = r_core_new ();
+		RAnal *anal = core->anal;
+		r_config_set (core->config, "asm.arch", "x86");
+		r_config_set_i (core->config, "asm.bits", cases[i].bits);
+		r_config_set_b (core->config, "anal.esil", false);
+		core->io->va = true;
+		mu_assert_notnull (r_io_open_at (core->io, "malloc://512", R_PERM_RWX, 0, 0x1000), "open return and stack buffer");
+		ut8 bytes[8];
+		int len = r_hex_str2bin (cases[i].hex, bytes);
+		mu_assert_true (r_io_write_at (core->io, 0x1000, bytes, len), "write return instruction");
+		RAnalOp op = {0};
+		mu_assert_eq (r_anal_op (anal, &op, 0x1000, bytes, len, R_ARCH_OP_MASK_ESIL), len, "decode return");
+		mu_assert_eq (op.type, R_ANAL_OP_TYPE_RET, "normal return type");
+		mu_assert_eq (op.stackop, R_ANAL_STACK_INC, "return changes stack");
+		int consumed = cases[i].width * (cases[i].far? 2: 1) + cases[i].cleanup;
+		mu_assert_eq (op.stackptr, -consumed, "return frame plus argument purge");
+		mu_assert_eq (op.val, cases[i].cleanup, "decoded unsigned argument purge");
+		const char *sp = cases[i].bits == 16? "sp": cases[i].bits == 32? "esp": "rsp";
+		const char *pc = cases[i].bits == 16? "ip": cases[i].bits == 32? "eip": "rip";
+		ut8 stack[16] = {0};
+		ut64 target = cases[i].width == 8? 0x123456789abc: cases[i].width == 4? 0x12345678: 0x5678;
+		r_write_le64 (stack, target);
+		if (cases[i].far) {
+			r_write_le16 (stack + cases[i].width, 0x55aa);
+		}
+		mu_assert_true (r_io_write_at (core->io, 0x1100, stack, sizeof (stack)), "write return frame");
+		mu_assert_true (r_esil_setup (anal->esil, anal, false, false, false), "initialize native ESIL");
+		r_reg_setv (anal->reg, sp, 0x1100);
+		r_reg_setv (anal->reg, pc, cases[i].bits == 64? 0x1234abcd9876: 0xabcd9876);
+		r_reg_setv (anal->reg, "cs", 0x44);
+		mu_assert_true (r_esil_parse (anal->esil, r_strbuf_get (&op.esil)), "execute decoded return ESIL");
+		ut64 expected_sp = 0x1100 + consumed;
+		if (cases[i].bits == 16) {
+			expected_sp &= UT16_MAX;
+		}
+		mu_assert_eq (r_reg_getv (anal->reg, sp), expected_sp, "ESIL consumes complete return and purge");
+		mu_assert_eq (r_reg_getv (anal->reg, pc), cases[i].bits == 16? target & UT16_MAX: target, "ESIL restores mode-selected PC from operand-sized return offset");
+		mu_assert_eq (r_reg_getv (anal->reg, "cs"), cases[i].far? 0x55aa: 0x44, "only far returns restore selector");
+		r_anal_op_fini (&op);
+		mu_assert_true (r_core_anal_fcn (core, 0x1000, UT64_MAX, R_ANAL_REF_TYPE_NULL, 1), "analyze native return function");
+		RAnalFunction *fcn = r_anal_get_function_at (anal, 0x1000);
+		mu_assert_notnull (fcn, "return function exists");
+		mu_assert_eq (fcn->meta.stack_pop, cases[i].cleanup, "inferred purge excludes near or far return frame");
+		r_core_free (core);
+	}
+	mu_end;
+}
+
 int all_tests(void) {
 	mu_run_test (test_x86_stack_access);
 	mu_run_test (test_x86_cs_frame_pointer);
 	mu_run_test (test_x86_segmented_targets);
+	mu_run_test (test_x86_return_cleanup);
 	return tests_passed != tests_run;
 }
 

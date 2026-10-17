@@ -229,6 +229,10 @@ static int fcn_ret_stack_pop(RAnalFunction *fcn, RAnalOp *op) {
 	if (op->stackop != R_ANAL_STACK_INC || op->stackptr >= 0) {
 		return R_ANAL_CC_STACK_POP_UNKNOWN;
 	}
+	const RArchPlugin *plugin = R_UNWRAP4 (fcn->anal, arch, session, plugin);
+	if (plugin && !strcmp (plugin->meta.name, "x86") && op->family != R_ANAL_OP_FAMILY_PRIV) {
+		return op->val <= UT16_MAX? (int)op->val: R_ANAL_CC_STACK_POP_UNKNOWN;
+	}
 	const int bits = fcn->bits? fcn->bits: fcn->anal->config->bits;
 	const int word = R_MAX (1, bits / 8);
 	const st64 pop = -op->stackptr - word;
