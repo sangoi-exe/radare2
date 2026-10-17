@@ -1,5 +1,10 @@
 # Workspace changelog
 
+## 2026-10-17
+
+- Implemented the native extension/MCP transfer in the existing radare2, r2ghidra, ghidra-native and radare2-mcp owners: coherent NE loading/provenance, qualified Borland helper models, all8 exact-image profiles, native segmented call/stack/conditional-continuation behavior, faithful structured types, and command-free saved analysis with selected virtual edits. Original executables remain read-only; no Ghidra database migration or global installation was performed.
+- Final private matching-component proof passes144 native host cases,28 selected x86-16/NE regressions, the declared native bridge/engine frontier and554 ordinary SDK calls across Johnny, SimTower and six tool images. Warm restoration preserves selected game/manual state and BCC20's explicitly prepared static views/cache edits; current-state conflicts remain visible refusals. Two cold architecture-plugin bootstrap tests remain unverified under explicit private loading. The first local Code Gate is pending; these implementation results do not claim its completion verdict.
+
 ## 2026-10-16
 
 - Relocated the three native checkouts into `/home/lucas/work/radare2/r2ghidra/ghidra-native`, preserving independent Git histories, branches and remotes. Added parent ignores, a principal host workspace map and scoped child guides, and corrected active editable-engine/XPS source paths. Runtime code and the engine pin are unchanged. The local layout Code Gate returned `PROCEED_AFTER_FIXES`; its single README path correction is applied and mechanically verified, completing the task without relabeling the verdict.
