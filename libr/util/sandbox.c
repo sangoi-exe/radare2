@@ -2,6 +2,9 @@
 
 #include <r_util.h>
 #include <signal.h>
+#if R2__WINDOWS__
+#include <wchar.h>
+#endif
 #if _MSC_VER
 #include <process.h> // to compile execl under msvc windows
 #include <direct.h>  // to compile chdir under msvc windows
@@ -110,6 +113,115 @@ R_API void *r_sandbox_run_path(int grain, const char *path, RSandboxCallback cal
 	return result;
 }
 
+#if R2__WINDOWS__
+static wchar_t *sandbox_windows_final_path(HANDLE file) {
+	DWORD (WINAPI *final_path)(HANDLE, LPWSTR, DWORD, DWORD) = (DWORD (WINAPI *)(HANDLE, LPWSTR, DWORD, DWORD))GetProcAddress (GetModuleHandleA ("kernel32.dll"), "GetFinalPathNameByHandleW");
+	if (!final_path) {
+		return NULL;
+	}
+	DWORD capacity = final_path (file, NULL, 0, 0);
+	size_t bytes;
+	if (!capacity || r_mul_overflow_size_t (capacity, sizeof (wchar_t), &bytes)) {
+		return NULL;
+	}
+	wchar_t *path = malloc (bytes);
+	if (!path) {
+		return NULL;
+	}
+	DWORD length = final_path (file, path, capacity, 0);
+	if (!length || length >= capacity) {
+		free (path);
+		return NULL;
+	}
+	return path;
+}
+
+static bool sandbox_windows_check_writepath(const char *root, const char *path) {
+	bool allowed = false;
+	HANDLE directory = INVALID_HANDLE_VALUE;
+	HANDLE file = INVALID_HANDLE_VALUE;
+	HANDLE ancestor = INVALID_HANDLE_VALUE;
+	wchar_t *absolute = NULL;
+	wchar_t *resolved = NULL;
+	wchar_t *rootpath = NULL;
+	wchar_t *wroot = r_utf8_to_utf16 (root);
+	wchar_t *wpath = r_utf8_to_utf16 (path);
+	if (!wroot || !wpath) {
+		goto beach;
+	}
+	directory = CreateFileW (wroot, 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+	BY_HANDLE_FILE_INFORMATION rootinfo;
+	if (directory == INVALID_HANDLE_VALUE || !GetFileInformationByHandle (directory, &rootinfo)
+			|| !(rootinfo.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
+		goto beach;
+	}
+	DWORD capacity = GetFullPathNameW (wpath, 0, NULL, NULL);
+	size_t bytes;
+	if (!capacity || r_mul_overflow_size_t (capacity, sizeof (wchar_t), &bytes)) {
+		goto beach;
+	}
+	absolute = malloc (bytes);
+	if (!absolute) {
+		goto beach;
+	}
+	wchar_t *basename = NULL;
+	DWORD length = GetFullPathNameW (wpath, capacity, absolute, &basename);
+	if (!length || length >= capacity || (basename && wcschr (basename, L':'))) {
+		goto beach;
+	}
+	file = CreateFileW (absolute, 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, NULL);
+	bool parent = file == INVALID_HANDLE_VALUE;
+	if (parent) {
+		DWORD error = GetLastError ();
+		if ((error != ERROR_FILE_NOT_FOUND && error != ERROR_PATH_NOT_FOUND) || !basename || !*basename) {
+			goto beach;
+		}
+		*basename = 0;
+		file = CreateFileW (absolute, 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+	}
+	BY_HANDLE_FILE_INFORMATION info;
+	if (file == INVALID_HANDLE_VALUE || GetFileType (file) != FILE_TYPE_DISK || !GetFileInformationByHandle (file, &info)
+			|| (info.dwFileAttributes & (FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_DEVICE))) {
+		goto beach;
+	}
+	if (!(info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && (parent || info.nNumberOfLinks > 1)) {
+		goto beach;
+	}
+	rootpath = sandbox_windows_final_path (directory);
+	resolved = sandbox_windows_final_path (file);
+	if (!rootpath || !resolved) {
+		goto beach;
+	}
+	size_t len = wcslen (rootpath);
+	if (wcslen (resolved) < len
+			|| (rootpath[len - 1] != L'\\' && resolved[len] && resolved[len] != L'\\')) {
+		goto beach;
+	}
+	// Compare the resolved ancestor by identity, not spelling or case.
+	resolved[len] = 0;
+	ancestor = CreateFileW (resolved, 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+	allowed = ancestor != INVALID_HANDLE_VALUE && GetFileInformationByHandle (ancestor, &info)
+		&& info.dwVolumeSerialNumber == rootinfo.dwVolumeSerialNumber
+		&& info.nFileIndexHigh == rootinfo.nFileIndexHigh && info.nFileIndexLow == rootinfo.nFileIndexLow;
+beach:
+	if (ancestor != INVALID_HANDLE_VALUE) {
+		CloseHandle (ancestor);
+	}
+	if (file != INVALID_HANDLE_VALUE) {
+		CloseHandle (file);
+	}
+	if (directory != INVALID_HANDLE_VALUE) {
+		CloseHandle (directory);
+	}
+	free (wroot);
+	free (wpath);
+	free (absolute);
+	free (resolved);
+	free (rootpath);
+	return allowed;
+}
+#endif
+
 R_API bool r_sandbox_check_writepath(const char *path) {
 	RSandboxScope *scope = sandbox_scope_current ();
 	if (!scope || R_STR_ISEMPTY (scope->path) || R_STR_ISEMPTY (path)) {
@@ -143,6 +255,8 @@ R_API bool r_sandbox_check_writepath(const char *path) {
 		&& (!resolved[len] || resolved[len] == '/' || (len == 1 && scope->path[0] == '/'));
 	free (resolved);
 	return allowed;
+#elif R2__WINDOWS__
+	return sandbox_windows_check_writepath (scope->path, path);
 #else
 	return false;
 #endif
@@ -620,20 +734,21 @@ R_API int r_sandbox_close(int fd) {
 /* perm <-> mode */
 R_API int r_sandbox_open(const char *path, int perm, int mode) {
 	R_RETURN_VAL_IF_FAIL (path, -1);
-	R_SANDBOX_GUARD (R_SANDBOX_GRAIN_DISK, -1);
 	char *epath = expand_home (path);
+	if (!epath) {
+		return -1;
+	}
 	int ret = -1;
 #if R2__WINDOWS__
 	if (!strcmp (path, "/dev/null")) {
 		path = "NUL";
 	}
 #endif
-	if (r_sandbox_enable (false)) {
-		if ((perm & (O_CREAT | O_RDWR | O_WRONLY | O_TRUNC | O_APPEND))
-			|| (!r_sandbox_check_path (epath))) {
-			free (epath);
-			return -1;
-		}
+	if (!r_sandbox_check_writepath (epath)
+			&& (!r_sandbox_check (R_SANDBOX_GRAIN_DISK)
+				|| (r_sandbox_enable (false) && ((perm & (O_CREAT | O_RDWR | O_WRONLY | O_TRUNC | O_APPEND)) || !r_sandbox_check_path (epath))))) {
+		free (epath);
+		return -1;
 	}
 #if R2__WINDOWS__
 	{

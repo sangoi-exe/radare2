@@ -2,6 +2,10 @@
 #include <r_util/r_ref.h>
 #include <r_core.h>
 #include "minunit.h"
+#if R2__UNIX__ && !__wasi__
+#include <signal.h>
+#include <sys/resource.h>
+#endif
 
 static Sdb *setup_sdb(void) {
 	Sdb *res = sdb_new0 ();
@@ -557,6 +561,166 @@ bool test_sandbox_symlink_path(void) {
 	mu_end;
 }
 
+bool test_file_dump_close_failure(void) {
+#if R2__UNIX__ && !__wasi__ && defined(RLIMIT_FSIZE)
+	struct rlimit old_limit;
+	mu_assert_eq (getrlimit (RLIMIT_FSIZE, &old_limit), 0, "read file size limit");
+	struct sigaction ignored = { .sa_handler = SIG_IGN };
+	struct sigaction old_action;
+	sigemptyset (&ignored.sa_mask);
+	mu_assert_eq (sigaction (SIGXFSZ, &ignored, &old_action), 0, "ignore file size signal");
+	struct rlimit limit = old_limit;
+	limit.rlim_cur = 0;
+	int limited = setrlimit (RLIMIT_FSIZE, &limit);
+	bool buffered = false;
+	bool close_failed = false;
+	bool dumped = true;
+	bool touched = false;
+	if (!limited) {
+		FILE *control = fopen ("dump_close_control", "wb");
+		if (control) {
+			buffered = fwrite ("x", 1, 1, control) == 1;
+			close_failed = fclose (control) != 0;
+		}
+		dumped = r_file_dump ("dump_close_failure", (const ut8 *)"x", 1, false);
+		touched = r_file_touch ("dump_close_empty");
+	}
+	int restored_limit = setrlimit (RLIMIT_FSIZE, &old_limit);
+	int restored_action = sigaction (SIGXFSZ, &old_action, NULL);
+	unlink ("dump_close_control");
+	unlink ("dump_close_failure");
+	unlink ("dump_close_empty");
+	mu_assert_eq (limited, 0, "apply file size limit");
+	mu_assert_eq (restored_limit, 0, "restore file size limit");
+	mu_assert_eq (restored_action, 0, "restore file size signal");
+	mu_assert_true (buffered && close_failed, "control must fail during final close, not fwrite");
+	mu_assert_false (dumped, "dump must report final close failure");
+	mu_assert_true (touched, "empty file should still succeed under the file size limit");
+#endif
+	mu_end;
+}
+
+static void *sandbox_scope_check(void *path) {
+	return r_sandbox_check_writepath (path)? path: NULL;
+}
+
+static void *sandbox_scope_dump(void *path) {
+	return r_file_dump (path, (const ut8 *)"DATA", 4, false)? path: NULL;
+}
+
+static void *sandbox_scope_open(void *path) {
+	int fd = r_sandbox_open (path, O_WRONLY | O_CREAT | O_EXCL | O_BINARY, 0600);
+	if (fd < 0) {
+		return NULL;
+	}
+	bool written = r_sandbox_write (fd, (const ut8 *)"TEMP", 4) == 4;
+	bool closed = r_sandbox_close (fd) == 0;
+	return written && closed? path: NULL;
+}
+
+bool test_sandbox_write_scope(void) {
+#if (R2__UNIX__ && !__wasi__) || R2__WINDOWS__
+	const int grain = R_SANDBOX_GRAIN_FILES | R_SANDBOX_GRAIN_DISK;
+	mu_assert_true (r_sys_mkdir ("sbx_scope"), "create scoped directory");
+	mu_assert_true (r_sys_mkdir ("sbx_scope_outside"), "create sibling directory");
+	char *root = r_file_abspath ("sbx_scope");
+	char *inside = r_file_new (root, "state-\xc3\xa9.r2prj", NULL);
+	char *temporary = r_file_new (root, "exclusive.tmp", NULL);
+	char *outside = r_file_abspath ("sbx_scope_outside/keep");
+	char *outside_new = r_file_abspath ("sbx_scope_outside/new");
+	mu_assert_true (r_file_dump (outside, (const ut8 *)"KEEP", 4, false), "create outside control");
+	bool root_allowed = r_sandbox_run_path (grain, root, sandbox_scope_check, root) != NULL;
+	bool new_allowed = r_sandbox_run_path (grain, root, sandbox_scope_check, inside) != NULL;
+	bool dumped = r_sandbox_run_path (grain, root, sandbox_scope_dump, inside) != NULL;
+	bool existing_allowed = r_sandbox_run_path (grain, root, sandbox_scope_check, inside) != NULL;
+	bool overwritten = r_sandbox_run_path (grain, root, sandbox_scope_dump, inside) != NULL;
+	bool opened = r_sandbox_run_path (grain, root, sandbox_scope_open, temporary) != NULL;
+	bool reopened = r_sandbox_run_path (grain, root, sandbox_scope_open, temporary) != NULL;
+	bool outside_allowed = r_sandbox_run_path (grain, root, sandbox_scope_check, outside) != NULL;
+	bool outside_dumped = r_sandbox_run_path (grain, root, sandbox_scope_dump, outside) != NULL;
+	bool outside_opened = r_sandbox_run_path (grain, root, sandbox_scope_open, outside_new) != NULL;
+	bool scope_leaked = r_sandbox_check_writepath (inside);
+	char *inside_data = r_file_slurp (inside, NULL);
+	char *temporary_data = r_file_slurp (temporary, NULL);
+	char *outside_data = r_file_slurp (outside, NULL);
+#if R2__WINDOWS__
+	char *backslashes = strdup (inside);
+	r_str_replace_char (backslashes, '/', '\\');
+	bool backslashes_allowed = r_sandbox_run_path (grain, root, sandbox_scope_check, backslashes) != NULL;
+	char *stream = r_str_newf ("%s:stream", inside);
+	bool stream_allowed = r_sandbox_run_path (grain, root, sandbox_scope_check, stream) != NULL;
+	free (stream);
+	free (backslashes);
+#endif
+	r_file_rm (inside);
+	r_file_rm (temporary);
+	r_file_rm (outside);
+	r_file_rm (outside_new);
+	rmdir ("sbx_scope");
+	rmdir ("sbx_scope_outside");
+	free (outside_new);
+	free (outside);
+	free (temporary);
+	free (inside);
+	free (root);
+	mu_assert_true (root_allowed && new_allowed && existing_allowed, "scope admits its directory, new and existing files");
+	mu_assert_true (dumped && overwritten, "scope admits fopen writes");
+	mu_assert_true (opened, "scope admits exclusive file creation");
+	mu_assert_false (reopened, "exclusive creation must not replace an existing file");
+	mu_assert_false (outside_allowed || outside_dumped || outside_opened, "scope refuses sibling paths sharing its prefix");
+	mu_assert_false (scope_leaked, "path exception must end with the scope");
+	mu_assert_streq_free (inside_data, "DATA", "scoped dump contents");
+	mu_assert_streq_free (temporary_data, "TEMP", "scoped open contents");
+	mu_assert_streq_free (outside_data, "KEEP", "outside artifact must not change");
+#if R2__WINDOWS__
+	mu_assert_true (backslashes_allowed, "native Windows path separators");
+	mu_assert_false (stream_allowed, "alternate streams are not project artifacts");
+#endif
+#endif
+	mu_end;
+}
+
+bool test_sandbox_write_scope_links(void) {
+#if (R2__UNIX__ && !__wasi__) || R2__WINDOWS__
+	const int grain = R_SANDBOX_GRAIN_FILES | R_SANDBOX_GRAIN_DISK;
+	mu_assert_true (r_sys_mkdir ("sbx_scope_links"), "create scoped directory");
+	mu_assert_true (r_sys_mkdir ("sbx_scope_target"), "create outside directory");
+	mu_assert_true (r_file_dump ("sbx_scope_target/keep", (const ut8 *)"KEEP", 4, false), "create outside artifact");
+#if R2__UNIX__
+	mu_assert_eq (symlink ("../sbx_scope_target/keep", "sbx_scope_links/symlink"), 0, "create file symlink");
+	mu_assert_eq (symlink ("../sbx_scope_target", "sbx_scope_links/directory"), 0, "create directory symlink");
+	mu_assert_eq (link ("sbx_scope_target/keep", "sbx_scope_links/hardlink"), 0, "create hardlink");
+	mu_assert_eq (mkfifo ("sbx_scope_links/fifo", 0600), 0, "create nonregular file");
+	const char *paths[] = { "symlink", "directory/keep", "directory/new", "hardlink", "fifo" };
+#else
+	mu_assert_true (CreateHardLinkW (L"sbx_scope_links\\hardlink", L"sbx_scope_target\\keep", NULL), "create hardlink");
+	const char *paths[] = { "hardlink" };
+#endif
+	char *root = r_file_abspath ("sbx_scope_links");
+	bool allowed = false;
+	size_t i;
+	for (i = 0; i < R_ARRAY_SIZE (paths); i++) {
+		char *path = r_str_newf ("%s/%s", root, paths[i]);
+		if (r_sandbox_run_path (grain, root, sandbox_scope_check, path)) {
+			allowed = true;
+		}
+		free (path);
+	}
+#if R2__UNIX__
+	r_file_rm ("sbx_scope_links/fifo");
+	r_file_rm ("sbx_scope_links/symlink");
+	r_file_rm ("sbx_scope_links/directory");
+#endif
+	r_file_rm ("sbx_scope_links/hardlink");
+	r_file_rm ("sbx_scope_target/keep");
+	rmdir ("sbx_scope_links");
+	rmdir ("sbx_scope_target");
+	free (root);
+	mu_assert_false (allowed, "scope rejects symlink escapes, hardlinks and nonregular files");
+#endif
+	mu_end;
+}
+
 bool test_file_rm_rf_symlink(void) {
 #if R2__UNIX__
 	mu_assert_eq (mkdir ("rmrf_outside", 0755), 0, "cannot create outside directory");
@@ -668,6 +832,9 @@ int all_tests(void) {
 	mu_run_test (test_sandbox_localhost);
 	mu_run_test (test_sandbox_hidden_path);
 	mu_run_test (test_sandbox_symlink_path);
+	mu_run_test (test_file_dump_close_failure);
+	mu_run_test (test_sandbox_write_scope);
+	mu_run_test (test_sandbox_write_scope_links);
 	mu_run_test (test_file_rm_rf_symlink);
 	mu_run_test (test_session_pidfile_symlink);
 	return tests_passed != tests_run;

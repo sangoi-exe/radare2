@@ -926,7 +926,10 @@ R_API bool r_file_dump(const char *file, const ut8 *buf, int len, bool append) {
 			return false;
 		}
 	}
-	fclose (fd);
+	if (fclose (fd) != 0) {
+		r_sys_perror ("r_file_dump: fclose: error\n");
+		return false;
+	}
 	return true;
 }
 
