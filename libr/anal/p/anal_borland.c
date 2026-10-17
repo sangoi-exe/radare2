@@ -430,8 +430,12 @@ static int borland_scan(RAnal *anal) {
 	return applied;
 }
 
+#include "borland_profile_context.inc.c"
+#include "borland_profiles.inc.c"
+
 static bool borland_pre_analysis(RAnal *anal) {
-	return borland_scan (anal) > 0;
+	int count = borland_profiles (anal);
+	return borland_scan (anal) + count > 0;
 }
 
 static char *borland_command(RAnal *anal, const char *input) {
@@ -439,9 +443,10 @@ static char *borland_command(RAnal *anal, const char *input) {
 		return NULL;
 	}
 	if (input[7] == '?') {
-		return strdup ("| a:borland    qualify exact executable 16-bit Borland helper families; preserve conflicting analysis\n| a:borland?   show this help; rerun a:borland after changing bytes/context\n");
+		return strdup ("| a:borland    qualify exact executable 16-bit Borland helper families and exact-original profiles; preserve conflicting analysis\n| a:borland?   show this help; rerun a:borland after changing bytes/context\n");
 	}
-	return r_str_newf ("Borland: %d function contracts qualified (including unchanged); refusals are logged\n", borland_scan (anal));
+	int count = borland_profiles (anal);
+	return r_str_newf ("Borland: %d function contracts qualified (including unchanged); refusals are logged\n", borland_scan (anal) + count);
 }
 
 RAnalPlugin r_anal_plugin_borland = {
