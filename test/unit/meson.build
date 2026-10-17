@@ -7,6 +7,7 @@ if get_option('enable_tests')
     'anal_borland',
     'anal_borland_data',
     'anal_borland_profiles',
+    'anal_borland_simtower',
     'anal_cc',
     'anal_class_graph',
     'anal_function',

@@ -40,7 +40,7 @@ static const struct {
 	{ 0x2b00, "scrantic_original_22f8_kernel7_binding", SCRANTIC_MARKER "Original singleton/nonadditive NE type3 width4 flags1 imported operand; module index3 KERNEL ordinal7. Original FFFF0000 is the source-chain terminator plus placeholder, NOT a callee address. Native loader import binding is analysis indirection, not the loaded imported implementation or runtime selector. This profile annotates the established ordinal but does not fabricate imported effects, cleanup or API prototype.", 4160 },
 };
 
-static int borland_profiles(RAnal *anal) {
+static int borland_scrantic_profile(RAnal *anal) {
 	BorlandProfileContext ctx;
 	if (borland_eligible (anal) < 0 || !profile_identity (anal, &ctx, "ne", 295952, "f0552c281a2a9b367ad5f41402a907a3c99e73ad0a221ba14d063e31cff594ac")) {
 		return 0;
@@ -86,3 +86,9 @@ static int borland_profiles(RAnal *anal) {
 }
 
 #undef SCRANTIC_MARKER
+
+#include "borland_profile_simtower.inc.c"
+
+static int borland_profiles(RAnal *anal) {
+	return borland_scrantic_profile (anal) + borland_simtower_profile (anal);
+}
