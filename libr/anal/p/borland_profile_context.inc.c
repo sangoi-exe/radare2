@@ -357,7 +357,59 @@ static bool profile_leaders(const BorlandCodeRange *ranges, int count, bool *lea
 	return true;
 }
 
-static bool profile_function_ranges(BorlandProfileContext *ctx, const BorlandProfileRange *input, int count, const char *name, int purge, const char *comment) {
+static bool profile_signature_equal(const RAnalFunctionSignature *actual, const RAnalFunctionSignature *expected) {
+	if (!actual || !actual->ret_type || strcmp (actual->ret_type, expected->ret_type)
+			|| !actual->callconv || strcmp (actual->callconv, expected->callconv)
+			|| actual->noreturn != expected->noreturn || r_list_length (actual->params) != r_list_length (expected->params)) {
+		return false;
+	}
+	RListIter *iter;
+	RAnalFunctionParam *param;
+	int i = 0;
+	r_list_foreach (expected->params, iter, param) {
+		RAnalFunctionParam *value = r_list_get_n (actual->params, i++);
+		if (!value->name || !value->type || strcmp (value->name, param->name) || strcmp (value->type, param->type)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+static bool profile_signature_admit(RAnal *anal, RAnalFunction *fcn, ut64 address, const char *name, const RAnalFunctionSignature *expected, bool *same) {
+	if (R_STR_ISEMPTY (expected->ret_type) || R_STR_ISEMPTY (expected->callconv) || !expected->params || expected->noreturn) {
+		return false;
+	}
+	RListIter *iter;
+	RAnalFunctionParam *param;
+	r_list_foreach (expected->params, iter, param) {
+		if (!param || R_STR_ISEMPTY (param->name) || R_STR_ISEMPTY (param->type)) {
+			return false;
+		}
+	}
+	RAnalFunction lookup = { .anal = anal, .addr = address, .name = (char *)name };
+	if (!fcn) {
+		fcn = &lookup;
+	}
+	char *linked = r_type_link_at (anal->sdb_types, address);
+	const char *dwarf = sdb_const_getf (anal->sdb_types, NULL, "fcnlink.%08"PFMT64x, address);
+	bool conflict = (linked && r_type_kind (anal->sdb_types, linked) != R_TYPE_FUNCTION)
+		|| (dwarf && r_type_kind (anal->sdb_types, dwarf) != R_TYPE_FUNCTION);
+	char *key = r_type_func_key (anal->sdb_types, fcn->name);
+	bool occupied = linked || dwarf || key || sdb_const_get (anal->sdb_types, fcn->name, NULL);
+	RAnalFunctionSignature *actual = r_anal_function_get_signature (fcn);
+	*same = profile_signature_equal (actual, expected);
+	const char *cc = r_anal_cc_default (anal);
+	bool empty = actual && !actual->ret_type && r_list_empty (actual->params) && !actual->noreturn
+		&& (!actual->callconv || (cc && !strcmp (actual->callconv, cc)));
+	bool admitted = !conflict && RVecAnalVarPtr_empty (&fcn->vars)
+		&& (*same || (!occupied && empty));
+	r_anal_function_signature_free (actual);
+	free (linked);
+	free (key);
+	return admitted;
+}
+
+static bool profile_function_ranges_contract(BorlandProfileContext *ctx, const BorlandProfileRange *input, int count, const char *name, int purge, const char *comment, const RAnalFunctionSignature *expected) {
 	RAnal *anal = ctx->anal;
 	size_t allocation, total = 0;
 	if (count < 1 || r_mul_overflow ((size_t)count, sizeof (BorlandCodeRange), &allocation)) {
@@ -392,6 +444,7 @@ static bool profile_function_ranges(BorlandProfileContext *ctx, const BorlandPro
 	RListIter *iter;
 	RAnalBlock *bb;
 	bool conflict = false;
+	bool same = false;
 	for (i = 0; i < count; i++) {
 		RList *blocks = r_anal_get_blocks_intersect (anal, ranges[i].address, ranges[i].size);
 		r_list_foreach (blocks, iter, bb) {
@@ -412,14 +465,19 @@ static bool profile_function_ranges(BorlandProfileContext *ctx, const BorlandPro
 		}
 		RVecIntervalNodePtr_free (metadata);
 	}
+	if (expected && !profile_signature_admit (anal, fcn, address, name, expected, &same)) {
+		R_LOG_WARN ("Borland profile: preserving signature/variables/type link at FILE 0x%08"PFMT64x, input[0].physical);
+		goto beach;
+	}
 	if (fcn) {
-		RAnalFunctionSignature *signature = r_anal_function_get_signature (fcn);
+		RAnalFunctionSignature *signature = expected? NULL: r_anal_function_get_signature (fcn);
 		const char *cc = r_anal_cc_default (anal);
 		conflict |= fcn->bits != 16 || !borland_body_ranges (fcn, ranges, count)
 			|| (strcmp (fcn->name, name) && !borland_generic_name (fcn->name))
 			|| (purge != R_ANAL_CC_STACK_POP_UNKNOWN && fcn->meta.stack_pop != R_ANAL_CC_STACK_POP_UNKNOWN && fcn->meta.stack_pop != purge)
-			|| (fcn->callconv && (!cc || strcmp (cc, fcn->callconv))) || fcn->is_noreturn
-			|| (signature && (signature->ret_type || !r_list_empty (signature->params)));
+			|| (fcn->callconv && (!cc || strcmp (cc, fcn->callconv))
+				&& (!expected || strcmp (expected->callconv, fcn->callconv))) || fcn->is_noreturn
+			|| (!expected && signature && (signature->ret_type || !r_list_empty (signature->params)));
 		r_anal_function_signature_free (signature);
 	}
 	RFlagItem *flag = anal->flb.f? r_flag_get (anal->flb.f, name): NULL;
@@ -462,6 +520,18 @@ static bool profile_function_ranges(BorlandProfileContext *ctx, const BorlandPro
 			index += range->size;
 		}
 	}
+	if (expected) {
+		if ((!same && !r_anal_function_set_signature (anal, fcn, expected))
+				|| !r_anal_function_store_callconv (anal, fcn, expected->callconv)) {
+			goto beach;
+		}
+		RAnalFunctionSignature *actual = r_anal_function_get_signature (fcn);
+		bool equivalent = profile_signature_equal (actual, expected);
+		r_anal_function_signature_free (actual);
+		if (!equivalent) {
+			goto beach;
+		}
+	}
 	if (purge != R_ANAL_CC_STACK_POP_UNKNOWN && fcn->meta.stack_pop == R_ANAL_CC_STACK_POP_UNKNOWN) {
 		fcn->meta.stack_pop = purge;
 	}
@@ -487,6 +557,10 @@ beach:
 	free (ranges);
 	free (leaders);
 	return applied;
+}
+
+static bool profile_function_ranges(BorlandProfileContext *ctx, const BorlandProfileRange *input, int count, const char *name, int purge, const char *comment) {
+	return profile_function_ranges_contract (ctx, input, count, name, purge, comment, NULL);
 }
 
 static bool profile_function(BorlandProfileContext *ctx, ut64 physical, int size, const char *name, int purge, const char *comment) {
