@@ -115,3 +115,19 @@ Root executed the exact B1 metadata through the real bridge plugin and matching 
 The host observation used final private host `/home/lucas/.cache/codex/radare2/m12-host-WFS7Cw/install` and private `anim8.exe`. The control strict snapshot succeeded and wrote a 131955-byte artifact. In a fresh process, `aaa` added map `mem.0x100000_0xf0000`; `prj snapshot` then reported `Cannot save snapshot: requires a restorable read-only original and valid virtual edits`, returned through the command's refusal branch and created no artifact. Evidence is retained under `/home/lucas/.cache/codex/radare2/remediation-b1-aaa-0zx0igpp/`. This observation confirms the disclosed Route A limitation. It does not classify the refusal as a new defect or authorize baseline recertification.
 
 Lifecycle is now `Remediation review`. The next correction frontier is only the existing bridge factory and its direct type regression file. The first verification is the exact mutual-recursion graph in both root orders together with the invalid-union and post-failure-latch controls. The host, engine, MCP, project codec and baseline qualification remain outside this correction.
+
+## B1 remediation checkpoint
+
+Worker `/root/remediate_bridge_union` changed only `r2ghidra/src/R2TypeFactory.cpp`, `src/R2TypeFactory.h`, and `test/db/extras/r2ghidra_types`. The bridge commit is `a718a85e4a7a51969a5980b0acb2a268e8e147e2`, with the required Codex trailer. The other three repositories remained unchanged during source implementation.
+
+The existing CString parser now allows a union pointer member to reference a native forward union identity without eagerly completing the pointee. The containing union establishes its fields and extent first. The factory then completes deferred pointees that are not already under construction. Native lookup completes an inactive forward union before returning it. The change retains the incomplete/zero-size guard for by-value members, factory-owned native identities and the terminal first-error latch. It adds no persistent pending registry, graph validator, fallback, public API, engine change or new owner.
+
+Fresh validation root: `/home/lucas/.cache/codex/radare2/remediate-b1/M17-20Xr4v`.
+
+- The exact mutual-recursion regression passes 1/1 and proves both root orders export size-8 `A` and `B`, stable IDs, `A.p` as `B *`, `B.a` as `A`, and scalar `B.value`. The same test fails on the pre-fix candidate and passes on the baseline.
+- Four directly affected existing union controls pass 4/4. The full qualified bridge type suite passes 65/65. P-code XML passes 1/1.
+- Zero-size and overflowing-count production controls still refuse.
+- The original same-factory failure probe refuses all ten later resolutions. A second probe proves an invalid deferred pointee preserves its first error and also refuses all ten later resolutions, even after the outer union completed.
+- Meson used the final private host through explicit `pkg_config_path`; all three live changed files matched the validated private source. Root inspected the complete diff, `git diff --check` passed, and root independently reran both B1 root orders against the built plugin with the expected size-8 identities and fields.
+
+The source correction is complete. General struct/typedef-cycle repair, post-`aaa` qualification, engine changes, fresh MCP→bridge execution, Windows, hosted CI, real Frida and game runs remain outside or unverified as previously classified. The next completion authority is the default local `Remediation delta review` on the committed candidate.
