@@ -164,8 +164,13 @@ R_API bool r_io_map_set_perm(RIO *io, ut32 id, int perm) {
 		R_LOG_WARN ("invalid map->fd");
 		return false;
 	}
-	map->perm = perm & desc->perm & R_PERM_RWX;
-	map->sperm = perm & R_PERM_RWX;
+	const int effective = perm & desc->perm & R_PERM_RWX;
+	const int requested = perm & R_PERM_RWX;
+	if (map->perm != effective || map->sperm != requested) {
+		map->perm = effective;
+		map->sperm = requested;
+		io->mts++;
+	}
 	return true;
 }
 

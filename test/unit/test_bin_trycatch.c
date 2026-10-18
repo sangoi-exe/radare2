@@ -451,6 +451,26 @@ static bool test_loader_baseline_failed_and_stale(void) {
 	mu_assert_true (r_io_map_remap (fixture.io, map->id, 0), "restore map geometry");
 	mu_assert_null (r_bin_loader_baseline_get (fixture.bf, false), "restored geometry cannot recertify capture generation");
 	fixture_fini (&fixture);
+	fixture = fixture_new ();
+	mu_assert_true (baseline_open_io (&fixture), "open permission-change baseline IO");
+	r_bin_loader_baseline_begin (fixture.bf, false);
+	r_bin_loader_baseline_finish (fixture.bf, false);
+	map = r_io_map_get_at (fixture.io, 0);
+	mu_assert_notnull (map, "permission baseline map exists");
+	mu_assert_true (r_io_map_set_perm (fixture.io, map->id, 0), "remove baseline read permission");
+	mu_assert_true (r_io_map_set_perm (fixture.io, map->id, R_PERM_RW), "restore baseline permission");
+	mu_assert_null (r_bin_loader_baseline_get (fixture.bf, false), "restored permissions cannot recertify capture generation");
+	fixture_fini (&fixture);
+	fixture = fixture_new ();
+	mu_assert_true (baseline_open_io (&fixture), "open bank-change baseline IO");
+	r_bin_loader_baseline_begin (fixture.bf, false);
+	r_bin_loader_baseline_finish (fixture.bf, false);
+	map = r_io_map_get_at (fixture.io, 0);
+	mu_assert_notnull (map, "bank baseline map exists");
+	r_io_bank_del_map (fixture.io, fixture.io->bank, map->id);
+	mu_assert_true (r_io_bank_map_add_top (fixture.io, fixture.io->bank, map->id), "restore baseline membership");
+	mu_assert_null (r_bin_loader_baseline_get (fixture.bf, false), "restored membership cannot recertify capture generation");
+	fixture_fini (&fixture);
 	mu_end;
 }
 

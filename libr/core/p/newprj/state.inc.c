@@ -16,6 +16,23 @@ typedef struct {
 	ut32 relocs;
 } RPrjState;
 
+static bool rprj_state_current_matches(RPrjCursor *cur, const ut8 *data, RBuffer *loader);
+
+static bool rprj_state_read_at(RIO *io, ut64 addr, ut8 *buf, int len) {
+	if (!io->va) {
+		return r_io_pread_at (io, addr, buf, len) == len;
+	}
+	int at = 0;
+	while (at < len) {
+		const int n = r_io_bank_read_from_submap_at (io, io->bank, addr + at, buf + at, len - at);
+		if (n < 1) {
+			return false;
+		}
+		at += n;
+	}
+	return true;
+}
+
 static bool rprj_state_current(RPrjCursor *cur, RPrjState *state, const char **loader) {
 	RCore *core = cur->core;
 	RBinFile *bf = r_bin_cur (core->bin);
@@ -71,6 +88,11 @@ static bool rprj_state_write(RPrjCursor *cur, bool snapshot) {
 		}
 		state = (RPrjState) {0};
 	}
+	RBinFile *bf = r_bin_cur (cur->core->bin);
+	const RBinLoaderBaseline *baseline = snapshot && bf? r_bin_loader_baseline_get (bf, state.relocs): NULL;
+	if (snapshot && (!cur->maps || (bf && !baseline))) {
+		return false;
+	}
 	state.loader = rprj_st_append (cur->st, loader);
 	if (state.loader == UT32_MAX) {
 		return false;
@@ -107,7 +129,8 @@ static bool rprj_state_write(RPrjCursor *cur, bool snapshot) {
 				return false;
 			}
 			// Save effective bytes only, not cache layer or undo history.
-			const bool ok = r_io_cache_read_at (cur->core->io, span->addr, data, span->size);
+			const bool ok = (!snapshot || rprj_state_read_at (cur->core->io, span->addr, data, span->size))
+				&& r_io_cache_read_at (cur->core->io, span->addr, data, span->size);
 			if (ok) {
 				rprj_write_le64 (b, span->addr);
 				rprj_write_le32 (b, span->size);
@@ -123,13 +146,18 @@ static bool rprj_state_write(RPrjCursor *cur, bool snapshot) {
 	ut8 encoded[4];
 	r_write_le32 (encoded, count);
 	r_buf_write_at (b, count_at, encoded, sizeof (encoded));
+	if (snapshot) {
+		ut64 size;
+		const ut8 *data = r_buf_data (b, &size);
+		return data && rprj_state_current_matches (cur, data + start, baseline? baseline->bytes: NULL);
+	}
 	return true;
 }
 
 static bool rprj_state_maps_match(RPrjCursor *cur) {
 	ut32 size;
 	ut8 *data = rprj_find (cur->b, RPRJ_MAPS, &size);
-	RVecPrjMap *maps = rprj_maps_current (cur);
+	RVecPrjMap *maps = rprj_maps_from_bank (cur);
 	bool ok = data && maps && size % RPRJ_MAP_SIZE == 0
 		&& size / RPRJ_MAP_SIZE == RVecPrjMap_length (maps);
 	RBuffer *b = data? r_buf_new_with_bytes (data, size): NULL;
@@ -139,7 +167,7 @@ static bool rprj_state_maps_match(RPrjCursor *cur) {
 		R_VEC_FOREACH (maps, map) {
 			R2ProjectMap saved;
 			if (!rprj_map_read (b, &saved) || saved.pmin != map->pmin || saved.pmax != map->pmax
-					|| saved.vmin != map->vmin || saved.vmax != map->vmax) {
+					|| saved.vmin != map->vmin || saved.vmax != map->vmax || !(saved.perm & R_PERM_R)) {
 				ok = false;
 				break;
 			}
@@ -168,6 +196,9 @@ static bool rprj_state_validate(RPrjCursor *cur, const ut8 *data, ut32 size) {
 		return false;
 	}
 	ut32 count = r_read_le32 (data + 76);
+	if (count && r_list_empty (cur->core->io->cache.layers)) {
+		return false;
+	}
 	ut64 at = RPRJ_STATE_HEADER_SIZE;
 	while (count--) {
 		if (size - at < 12) {
@@ -179,9 +210,71 @@ static bool rprj_state_validate(RPrjCursor *cur, const ut8 *data, ut32 size) {
 		if (!len || len > INT_MAX || len > size - at || addr > UT64_MAX - len) {
 			return false;
 		}
+		ut64 offset = 0;
+		while (offset < len) {
+			ut8 buf[4096];
+			const int n = R_MIN ((ut64)sizeof (buf), len - offset);
+			if (!rprj_state_read_at (cur->core->io, addr + offset, buf, n)) {
+				return false;
+			}
+			offset += n;
+		}
 		at += len;
 	}
 	return at == size;
+}
+
+static bool rprj_state_range_matches(RIO *io, const ut8 *data, RList *ranges, ut64 addr, ut64 size, bool read_cache) {
+	if (addr > UT64_MAX - size) {
+		return false;
+	}
+	ut64 offset = 0;
+	while (offset < size) {
+		ut8 current[4096], normal[4096], saved[4096];
+		ut8 normal_covered[4096] = {0}, saved_covered[4096] = {0};
+		const ut64 start_addr = addr + offset;
+		const int len = R_MIN ((ut64)sizeof (current), size - offset);
+		if (!rprj_state_read_at (io, start_addr, current, len)) {
+			return false;
+		}
+		if (read_cache) {
+			(void)r_io_cache_read_at (io, start_addr, current, len);
+		}
+		RListIter *iter;
+		RBufferSparseItem *range;
+		r_list_foreach (ranges, iter, range) {
+			const ut64 start = R_MAX (start_addr, range->from);
+			const ut64 end = R_MIN (start_addr + len, range->to);
+			if (start < end) {
+				memcpy (normal + start - start_addr, range->data + start - range->from, end - start);
+				memset (normal_covered + start - start_addr, 1, end - start);
+			}
+		}
+		ut32 count = r_read_le32 (data + 76);
+		ut64 at = RPRJ_STATE_HEADER_SIZE;
+		while (count--) {
+			const ut64 saved_addr = r_read_le64 (data + at);
+			const ut32 saved_len = r_read_le32 (data + at + 8);
+			at += 12;
+			const ut64 start = R_MAX (start_addr, saved_addr);
+			const ut64 end = R_MIN (start_addr + len, saved_addr + saved_len);
+			if (start < end) {
+				// Retain the final saved value separately from the normal loader alternative.
+				memcpy (saved + start - start_addr, data + at + start - saved_addr, end - start);
+				memset (saved_covered + start - start_addr, 1, end - start);
+			}
+			at += saved_len;
+		}
+		int i;
+		for (i = 0; i < len; i++) {
+			if (!(normal_covered[i] && current[i] == normal[i])
+					&& !(saved_covered[i] && current[i] == saved[i])) {
+				return false;
+			}
+		}
+		offset += len;
+	}
+	return true;
 }
 
 static bool rprj_state_current_matches(RPrjCursor *cur, const ut8 *data, RBuffer *loader) {
@@ -192,54 +285,24 @@ static bool rprj_state_current_matches(RPrjCursor *cur, const ut8 *data, RBuffer
 	}
 	bool ok = false;
 	RListIter *iter;
+	RBufferSparseItem *range;
+	const bool read_cache = io->cache.mode & R_PERM_R;
+	const bool saved_read_cache = r_read_le32 (data + 4) & R_PERM_R;
+	// Required loader bytes must survive even when their cache entries have been removed.
+	r_list_foreach (ranges, iter, range) {
+		if (!rprj_state_range_matches (io, data, ranges, range->from, range->to - range->from, read_cache)
+				|| (read_cache != saved_read_cache
+					&& !rprj_state_range_matches (io, data, ranges, range->from, range->to - range->from, saved_read_cache))) {
+			goto done;
+		}
+	}
 	RIOCacheLayer *layer;
 	r_list_foreach (io->cache.layers, iter, layer) {
 		RIOCacheItem **item;
 		R_VEC_FOREACH (layer->vec, item) {
 			const RInterval *span = (*item)->tree_itv;
-			if (!span || !span->size) {
-				continue;
-			}
-			if (span->addr > UT64_MAX - span->size) {
+			if (span && span->size && !rprj_state_range_matches (io, data, ranges, span->addr, span->size, true)) {
 				goto done;
-			}
-			ut64 offset = 0;
-			while (offset < span->size) {
-				ut8 current[4096], expected[4096], covered[4096] = {0};
-				const ut64 addr = span->addr + offset;
-				const int len = R_MIN ((ut64)sizeof (current), span->size - offset);
-				if (!r_io_cache_read_at (io, addr, current, len)) {
-					goto done;
-				}
-				RListIter *range_iter;
-				RBufferSparseItem *range;
-				r_list_foreach (ranges, range_iter, range) {
-					const ut64 start = R_MAX (addr, range->from);
-					const ut64 end = R_MIN (addr + len, range->to);
-					if (start < end) {
-						memcpy (expected + start - addr, range->data + start - range->from, end - start);
-						memset (covered + start - addr, 1, end - start);
-					}
-				}
-				ut32 count = r_read_le32 (data + 76);
-				ut64 at = RPRJ_STATE_HEADER_SIZE;
-				while (count--) {
-					const ut64 saved_addr = r_read_le64 (data + at);
-					const ut32 saved_len = r_read_le32 (data + at + 8);
-					at += 12;
-					const ut64 start = R_MAX (addr, saved_addr);
-					const ut64 end = R_MIN (addr + len, saved_addr + saved_len);
-					if (start < end) {
-						// Replay saved spans in order, including overlaps and duplicate layers.
-						memcpy (expected + start - addr, data + at + start - saved_addr, end - start);
-						memset (covered + start - addr, 1, end - start);
-					}
-					at += saved_len;
-				}
-				if (memchr (covered, 0, len) || memcmp (current, expected, len)) {
-					goto done;
-				}
-				offset += len;
 			}
 		}
 	}

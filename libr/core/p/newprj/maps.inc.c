@@ -296,6 +296,31 @@ static RVecPrjMap *rprj_maps_current(RPrjCursor *cur) {
 	return rprj_maps_from_io (cur);
 }
 
+static RVecPrjMap *rprj_maps_from_bank(RPrjCursor *cur) {
+	RIO *io = cur->core->io;
+	RIOBank *bank = r_io_bank_get (io, io->bank);
+	if (!bank) {
+		return NULL;
+	}
+	r_io_bank_drain (io, io->bank);
+	RVecPrjMap *maps = RVecPrjMap_new ();
+	RRBNode *node;
+	for (node = r_crbtree_first_node (bank->submaps); node; node = r_rbnode_next (node)) {
+		RIOSubMap *submap = node->data;
+		RIOMap *map = r_io_map_get_by_ref (io, &submap->mapref);
+		if (!map || !(map->perm & R_PERM_R)) {
+			RVecPrjMap_free (maps);
+			return NULL;
+		}
+		const ut64 vmin = r_io_submap_from (submap);
+		const ut64 vmax = r_io_submap_to (submap);
+		const ut64 pmin = vmin - r_io_map_from (map) + map->delta;
+		const ut64 pmax = rprj_range_end (pmin, r_itv_size (submap->itv));
+		rprj_map_add (cur, maps, r_str_get (map->name), r_io_fd_get_name (io, map->fd), pmin, pmax, vmin, vmax, map->perm);
+	}
+	return rprj_maps_done (maps);
+}
+
 static R2ProjectMod *rprj_mod_find(RPrjCursor *cur, ut64 addr, ut32 *mid) {
 	ut32 id = 0;
 	R2ProjectMod *mod;

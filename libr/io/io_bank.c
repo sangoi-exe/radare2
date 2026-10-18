@@ -104,6 +104,9 @@ R_API bool r_io_bank_use(RIO *io, ut32 bankid) {
 	R_RETURN_VAL_IF_FAIL (io, false);
 	RIOBank *bank = r_io_bank_get (io, bankid);
 	if (bank) {
+		if (io->bank != bankid) {
+			io->mts++;
+		}
 		io->bank = bankid;
 		return true;
 	}
@@ -226,6 +229,7 @@ R_API bool r_io_bank_map_add_top(RIO *io, const ut32 bankid, const ut32 mapid) {
 			free (mapref);
 			return false;
 		}
+		io->mts++;
 		r_list_append (bank->maprefs, mapref);
 		return true;
 	}
@@ -238,6 +242,7 @@ R_API bool r_io_bank_map_add_top(RIO *io, const ut32 bankid, const ut32 mapid) {
 		// we can just memcpy
 		memcpy (bd, sm, sizeof (RIOSubMap));
 		free (sm);
+		io->mts++;
 		r_list_append (bank->maprefs, mapref);
 		return true;
 	}
@@ -264,6 +269,7 @@ R_API bool r_io_bank_map_add_top(RIO *io, const ut32 bankid, const ut32 mapid) {
 			return false;
 		}
 		r_io_submap_set_to (bd, r_io_submap_from (sm) - 1);
+		io->mts++;
 		r_list_append (bank->maprefs, mapref);
 		return true;
 	}
@@ -289,6 +295,7 @@ R_API bool r_io_bank_map_add_top(RIO *io, const ut32 bankid, const ut32 mapid) {
 		free (mapref);
 		return false;
 	}
+	io->mts++;
 	r_list_append (bank->maprefs, mapref);
 	return true;
 }
@@ -320,6 +327,7 @@ R_API bool r_io_bank_map_add_bottom(RIO *io, const ut32 bankid, const ut32 mapid
 			free (mapref);
 			return false;
 		}
+		io->mts++;
 		r_list_prepend (bank->maprefs, mapref);
 		return true;
 	}
@@ -331,6 +339,7 @@ R_API bool r_io_bank_map_add_bottom(RIO *io, const ut32 bankid, const ut32 mapid
 			r_crbtree_insert (bank->submaps, bdsm, _find_sm_by_from_vaddr_cb, NULL);
 		}
 		if (r_io_submap_to (sm) <= r_io_submap_to (bd)) {
+			io->mts++;
 			r_list_prepend (bank->maprefs, mapref);
 			free (sm);
 			return true;
@@ -339,6 +348,7 @@ R_API bool r_io_bank_map_add_bottom(RIO *io, const ut32 bankid, const ut32 mapid
 		entry = r_rbnode_next (entry);
 	}
 	r_crbtree_insert (bank->submaps, sm, _find_sm_by_from_vaddr_cb, NULL);
+	io->mts++;
 	r_list_prepend (bank->maprefs, mapref);
 	return true;
 }
@@ -371,6 +381,7 @@ found:
 		free (sm);
 		return false;
 	}
+	io->mts++;
 	bank->last_used = NULL;
 	RIOSubMap *bd = (RIOSubMap *)entry->data;
 	if (r_itv_eq (bd->itv, sm->itv)) {
@@ -542,6 +553,7 @@ found:
 		// map is already lowest priority
 		return true;
 	}
+	io->mts++;
 	bank->last_used = NULL;
 	_delete_submaps_from_bank_tree (io, bank, iter, map);
 	r_list_delete (bank->maprefs, iter);
@@ -1173,6 +1185,7 @@ R_API void r_io_bank_del_map(RIO *io, const ut32 bankid, const ut32 mapid) {
 	RIOMapRef *mapref = NULL;
 	r_list_foreach_prev (bank->maprefs, iter, mapref) {
 		if (mapref->id == map->id) {
+			io->mts++;
 			_delete_submaps_from_bank_tree (io, bank, iter, map);
 			r_list_delete (bank->maprefs, iter);
 			break;
@@ -1184,6 +1197,9 @@ R_API void r_io_bank_del_map(RIO *io, const ut32 bankid, const ut32 mapid) {
 
 R_API void r_io_bank_del(RIO *io, const ut32 bankid) {
 	R_RETURN_IF_FAIL (io);
+	if (r_io_bank_get (io, bankid)) {
+		io->mts++;
+	}
 	r_id_storage_delete (&io->banks, bankid);
 	if (io->bank == bankid) {
 		io->bank = r_io_bank_first (io);

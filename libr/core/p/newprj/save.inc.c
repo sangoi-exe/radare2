@@ -628,17 +628,18 @@ static bool r_core_newprj_save(RCore *core, const char *file, bool snapshot) {
 		.b = b,
 	};
 	RVecPrjMod_init (&cur.mods);
+	cur.maps = snapshot? rprj_maps_from_bank (&cur): rprj_maps_current (&cur);
 	ut64 state_at;
 	rprj_entry_begin (b, &state_at, RPRJ_STATE, 1);
 	if (!rprj_state_write (&cur, snapshot)) {
 		R_LOG_ERROR ("%s", snapshot? "Cannot save snapshot: requires a restorable read-only original and valid virtual edits": "Cannot save original identity and virtual edits");
 		r_unref (b);
 		free (st.data);
+		RVecPrjMap_free (cur.maps);
 		RVecPrjMod_fini (&cur.mods);
 		return false;
 	}
 	rprj_entry_end (b, state_at);
-	cur.maps = rprj_maps_current (&cur);
 	rprj_write_entry (&cur, RPRJ_INFO, rprj_info_write_entry);
 	rprj_write_entry (&cur, RPRJ_MAPS, rprj_maps_write);
 	rprj_write_entry (&cur, RPRJ_MODS, rprj_mods_write);

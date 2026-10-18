@@ -1818,3 +1818,162 @@ EXPECT=<<EOF
 [{"addr":0,"size":10,"opaddr":0,"inputs":0,"outputs":0,"ninstr":5,"instrs":[0,1,3,6,7],"traced":0}]
 EOF
 RUN
+
+NAME=newprj restores a saved relocation edit onto both normal loader and compatible saved bytes
+FILE=bins/ne/anim8.exe
+ARGS=-e bin.relocs.apply=true
+CMDS=<<EOF
+mkdir .tmp
+rm .tmp/newprj-relocation-edit.prj
+e io.cache=true
+wx aa @0x10002
+f relocation.saved=0x10020
+CCu saved_comment @0x10020
+prj snapshot .tmp/newprj-relocation-edit.prj
+!r2 -NNq -e bin.cache=true -e bin.relocs.apply=true -c 'p8 4 @0x10001;prj restore .tmp/newprj-relocation-edit.prj && echo fresh-restored;p8 4 @0x10001;f~relocation.saved;CC. @0x10020;prj restore .tmp/newprj-relocation-edit.prj && echo compatible-restored;p8 4 @0x10001' bins/ne/anim8.exe
+rm .tmp/newprj-relocation-edit.prj
+EOF
+EXPECT=<<EOF
+00000300
+fresh-restored
+00aa0300
+0x00010020 1 relocation.saved
+saved_comment
+compatible-restored
+00aa0300
+EOF
+RUN
+
+NAME=newprj refuses an empty replay cache before applying saved analysis
+FILE=bins/ne/anim8.exe
+ARGS=-n -a x86 -b 16
+CMDS=<<EOF
+mkdir .tmp
+rm .tmp/newprj-empty-replay.prj
+e io.cache=true
+wx aa @0x20
+f replay.saved=0x20
+CCu saved_comment @0x20
+prj snapshot .tmp/newprj-empty-replay.prj
+!r2 -NNnq -a x86 -b 16 -c 'wc--*;f replay.current=0x20;CCu current_comment @0x20;prj restore .tmp/newprj-empty-replay.prj || echo replay-refused;f~replay.saved;f~replay.current;CC. @0x20' bins/ne/anim8.exe
+rm .tmp/newprj-empty-replay.prj
+EOF
+EXPECT=<<EOF
+replay-refused
+0x00000020 1 replay.current
+current_comment
+EOF
+EXPECT_ERR=<<EOF
+ERROR: Project restore requires the matching read-only original, loader and map layout, with valid saved virtual edits
+EOF
+RUN
+
+NAME=newprj refuses removed required loader bytes even with no surviving cache ranges
+FILE=bins/ne/anim8.exe
+ARGS=-e bin.relocs.apply=true
+CMDS=<<EOF
+mkdir .tmp
+rm .tmp/newprj-missing-loader.prj
+f loader.saved=0x10020
+CCu saved_comment @0x10020
+prj snapshot .tmp/newprj-missing-loader.prj
+!r2 -NNq -e bin.cache=true -e bin.relocs.apply=true -c 'p8 4 @0x10001;wcr;p8 4 @0x10001;f loader.current=0x10020;CCu current_comment @0x10020;prj restore .tmp/newprj-missing-loader.prj || echo loader-refused;f~loader.saved;f~loader.current;CC. @0x10020;p8 4 @0x10001' bins/ne/anim8.exe
+rm .tmp/newprj-missing-loader.prj
+EOF
+EXPECT=<<EOF
+00000300
+ffff0000
+loader-refused
+0x00010020 1 loader.current
+current_comment
+ffff0000
+EOF
+EXPECT_ERR=<<EOF
+ERROR: Project restore conflicts with current virtual edits
+EOF
+RUN
+
+NAME=newprj refuses unreadable or inactive maps before applying saved analysis
+FILE=bins/ne/anim8.exe
+ARGS=-e bin.relocs.apply=true
+CMDS=<<EOF
+mkdir .tmp
+rm .tmp/newprj-inactive-map.prj
+CCu saved_comment @0x10020
+prj snapshot .tmp/newprj-inactive-map.prj
+!r2 -NNq -e bin.relocs.apply=true -c 'CCu current_comment @0x10020;omp 2 ---;prj restore .tmp/newprj-inactive-map.prj || echo unreadable-refused;CC. @0x10020;p8 4 @0x10020' bins/ne/anim8.exe
+!r2 -NNq -e bin.relocs.apply=true -c 'CCu current_comment @0x10020;ombd 2;prj restore .tmp/newprj-inactive-map.prj || echo inactive-refused;CC. @0x10020;p8 4 @0x10020' bins/ne/anim8.exe
+rm .tmp/newprj-inactive-map.prj
+EOF
+EXPECT=<<EOF
+unreadable-refused
+current_comment
+ffffffff
+inactive-refused
+current_comment
+ffffffff
+EOF
+EXPECT_ERR=<<EOF
+ERROR: Project restore requires the matching read-only original, loader and map layout, with valid saved virtual edits
+ERROR: Project restore requires the matching read-only original, loader and map layout, with valid saved virtual edits
+EOF
+RUN
+
+NAME=newprj qualifies required loader bytes under the restored cache read mode
+FILE=bins/ne/anim8.exe
+ARGS=-e bin.relocs.apply=true
+CMDS=<<EOF
+mkdir .tmp
+rm .tmp/newprj-loader-read-mode.prj
+e io.cache.read=false
+f readmode.saved=0x10020
+CCu saved_comment @0x10020
+prj snapshot .tmp/newprj-loader-read-mode.prj
+!r2 -NNq -e bin.relocs.apply=true -c 'prj restore .tmp/newprj-loader-read-mode.prj && echo overlay-restored;e io.cache.read;p8 4 @0x10001;f~readmode.saved;CC. @0x10020' bins/ne/anim8.exe
+!r2 -NNq -e bin.cache=true -e bin.relocs.apply=true -c 'CCu current_comment @0x10020;prj restore .tmp/newprj-loader-read-mode.prj || echo readmode-refused;e io.cache.read;p8 4 @0x10001;f~readmode.saved;CC. @0x10020' bins/ne/anim8.exe
+rm .tmp/newprj-loader-read-mode.prj
+EOF
+EXPECT=<<EOF
+overlay-restored
+false
+00000300
+0x00010020 1 readmode.saved
+saved_comment
+readmode-refused
+true
+00000300
+current_comment
+EOF
+EXPECT_ERR=<<EOF
+ERROR: Project restore conflicts with current virtual edits
+EOF
+RUN
+
+NAME=newprj mapless raw snapshot refusal preserves the previous artifact and generic save
+FILE=bins/ne/anim8.exe
+ARGS=-n -a x86 -b 16
+CMDS=<<EOF
+mkdir .tmp
+rm .tmp/newprj-mapless.prj
+rm .tmp/newprj-mapless-generic.prj
+f snapshot.original=0x20
+prj snapshot .tmp/newprj-mapless.prj
+om-*
+f-snapshot.original
+prj snapshot .tmp/newprj-mapless.prj || echo mapless-refused
+prj load .tmp/newprj-mapless.prj && echo previous-loaded
+f~snapshot.original
+prj save .tmp/newprj-mapless-generic.prj && echo generic-saved
+rm .tmp/newprj-mapless.prj
+rm .tmp/newprj-mapless-generic.prj
+EOF
+EXPECT=<<EOF
+mapless-refused
+previous-loaded
+0x00000020 1 snapshot.original
+generic-saved
+EOF
+EXPECT_ERR=<<EOF
+ERROR: Cannot save snapshot: requires a restorable read-only original and valid virtual edits
+EOF
+RUN

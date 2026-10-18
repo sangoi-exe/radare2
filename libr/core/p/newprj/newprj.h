@@ -331,6 +331,7 @@ static void rprj_entry_end(RBuffer *b, ut64 at);
 static bool rprj_string_read(RBuffer *b, ut64 next_entry, char **s);
 static bool rprj_map_read(RBuffer *b, R2ProjectMap *map);
 static RVecPrjMap *rprj_maps_current(RPrjCursor *cur);
+static RVecPrjMap *rprj_maps_from_bank(RPrjCursor *cur);
 static void rprj_maps_write(RPrjCursor *cur);
 static void rprj_maps_restore(RPrjCursor *cur);
 static bool rprj_mods_read(RBuffer *b, R2ProjectMod *mod);
