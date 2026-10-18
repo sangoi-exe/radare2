@@ -1,5 +1,9 @@
 # Workspace changelog
 
+## 2026-10-18
+
+- Checkpointed the user-selected native-baseline remediation in the host, bridge and MCP owners: effective-state snapshot/restore qualification, safe failed-union resolution, session-owned remote routing and pre-load raw mapping. Validation passes host projects 73/73, trycatch 8/8, eight active IO followers, bridge types 64/64, pcode 1/1 and full MCP `make test` against the corrected host. The user explicitly authorized using the revised paired Code Gate in the current session without reload; review remains pending and no retroactive configuration reload is claimed. No review approval, task completion, global installation or publication is claimed; the task log records evidence, test-environment limits and the fixture-cache metadata incident.
+
 ## 2026-10-17
 
 - Consolidated and published all4 native forks on sole master/default, preserving reviewed work and existing principal history without merging inherited experiments. Deleted169 old remote heads and5 local names after verified standalone recovery bundles; every checkout tracks origin/master and tags/upstream wiring are preserved. Host principal integration passes strings58/native147/selected NE-x86-16 regressions28 and both original-game CLI smokes; the local Code Gate returned `PROCEED`. Backups remain under `/home/lucas/.cache/codex/native-master-w7hnzj8e/`. The inherited optional installer-prefix defect is recorded separately, not repaired or made a blocker for this completed operation.
