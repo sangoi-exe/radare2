@@ -3,7 +3,7 @@
 Status: active
 Task mode: Doctrine
 Lifecycle phase: Implementation
-Strategy epoch: 3
+Strategy epoch: 4
 Plan kind: Bugfix / Regression Plan
 Secondary kind: Instruction / Policy Plan, limited to prospective commit attribution.
 
@@ -11,13 +11,15 @@ Secondary kind: Instruction / Policy Plan, limited to prospective commit attribu
 
 Make the existing radare2, r2ghidra, ghidra-native and r2mcp integration a trustworthy baseline for the Johnny Castaway and SimTower work. Correct the demonstrated defects in their current canonical owners, adopt the selected strict project semantics, and validate the resulting production paths. Do not turn the supplied reviews into an automatic patch list.
 
-The current user confirmed this paraphrase with `sim, confirmo` at `2026-10-17T18:20:43.821-03:00` (America/Sao_Paulo), turn `01a14bbd-0cb4-7dd2-8b3c-835ad0b5d0db`, current session `01a13bb1-5597-7090-a92b-8426359342a8`, rollout line 23182. The later `continue` at `2026-10-17T18:29:35.073-03:00`, turn `01a14bc5-295f-7f50-880d-25e8aced41f3`, retains that objective and Scope. These messages confirm planning; they do not fabricate a Gate outcome or waive the implementation checkpoint in this session's loaded instructions.
+The current user confirmed this paraphrase with `sim, confirmo` at `2026-10-17T18:20:43.821-03:00` (America/Sao_Paulo), turn `01a14bbd-0cb4-7dd2-8b3c-835ad0b5d0db`, session `01a13bb1-5597-7090-a92b-8426359342a8`, rollout line 23182. The later `continue` at `2026-10-17T18:29:35.073-03:00`, turn `01a14bc5-295f-7f50-880d-25e8aced41f3`, retains that objective and Scope.
 
 The earlier current-user answer `Sim, nos quatro repositórios` confirmed prospective `Co-authored-by: Codex <codex@openai.com>` attribution. This plan includes that already-selected change. Do not rewrite history or change Git author, committer or configuration.
 
 The user selected the exact project-contract delta at `2026-10-17T18:48:05.382-03:00`, current turn `01a14bcc-d093-72f0-97dc-1b99dfecaa8f`, rollout line 23555, async question `call_4v3S61KgQgAoMzgvmO2Z8yqF`: `Criar prj snapshot; manter prj save genérico (recomendado).` This confirms the presented delta: keep generic native projects, add one strict native snapshot action in the same codec, and route MCP saving exclusively through that action. Scope and all other selected results remain unchanged. The new CLI surface changes the external-contract strategy boundary, so this plan enters Strategy reset before any implementation of that delta.
 
 The first strict-restore implementation exposed that the shared IO cache has no trustworthy producer identity and therefore cannot distinguish legitimate loader relocation bytes from later user edits. The current user selected Route A with `vá de A` at `2026-10-17T19:46:59.658-03:00` (America/Sao_Paulo), turn `01a14c0c-0630-7813-901c-7511f102619b`, current session `01a13bb1-5597-7090-a92b-8426359342a8`, rollout line 24813. Route A assigns a transient, independently owned normal-loader byte baseline to the host loading lifecycle and lets strict restore consume it after the existing identity/layout qualification. Scope and the required result remain unchanged, but this changes the host architecture/owner chain and starts Strategy epoch 3.
+
+After the epoch-3 Code Gate returned `DO_NOT_PROCEED`, the root rechecked the material owner chains and reproduced the disputed project failures through the retained production runtime. The root presented a corrected paraphrase: close the findings as three cohesive owner corrections, not eight independent patches; retain the load-time baseline and project format; repair shared project/effective-state qualification, place the remote endpoint and mode in the existing MCP session owner, and prevent failed union publication in the existing bridge factory. The current user confirmed and selected that recommendation with `perfeito, vamos executar então` at `2026-10-17T21:34:02.851-03:00` (America/Sao_Paulo), turn `01a14c6e-0b64-78b0-b4e8-ca0726dbe9d3`, session `01a14c49-9c6e-7df2-a1eb-2c29aaec3480`, rollout line 735. This decision preserves Scope, generic save, strict snapshot, public project bytes and multiplexed/remote support. Moving the existing remote target state into its session owner is the bounded architecture delta for epoch 4. The rejected alternative is to prohibit mixed remote and multiplexed use. No independent target manager, new protocol, persistence, compatibility path or speculative performance work is selected.
 
 ## Current object and owners
 
@@ -28,7 +30,22 @@ The first strict-restore implementation exposed that the shared IO cache has no 
 | `/home/lucas/work/radare2/r2ghidra/ghidra-native` | `cd9a067b7ec14bed6f6faaa5192343742bc1953e` | Canonical native patch stack and its directly affected processor specifications/tests |
 | `/home/lucas/work/radare2/r2mcp` | `e8fb3ac34e98d633661127d9b13e1b0174b8f2d8` | Input admission, per-core lifecycle, opaque native project tools and MCP workflow triggers |
 
-All four worktrees were clean at intake. The repositories remain independent Git roots. The root workspace owns this one plan, the execution projection, integration and task bookkeeping. The root `AGENTS.md` owns the shared prospective attribution rule; the three component guides are direct discovery followers.
+All four worktrees were clean at intake and before epoch-4 preparation. The reviewed epoch-3 candidates are host `86f3a061549b728b35f39daef79823674f11e3b9`, bridge `cc51cbdbbb9d2067e103e67300d46bb578a13fd8`, engine `ac2f4fed9184b453f235f6250c14c0e2c23b35a5`, and MCP `a1e2fae58547132d155cb1312fd4fa22b1b6aa91`. These committed candidates are the remediation comparison baseline; the earlier audit bases remain the cumulative task range. The repositories remain independent Git roots. The root workspace owns this one plan, the execution projection, integration and task bookkeeping. The root `AGENTS.md` owns the shared prospective attribution rule; the three component guides are direct discovery followers.
+
+## Current Code Gate findings and selected closure
+
+The local Senior Code Reviewer completed the epoch-3 Gate on `/root/native_baseline_code_gate` after independent Senior/Claude review, reciprocal examination, four complete semantic source partitions and root analysis. The actual cumulative result is `DO_NOT_PROCEED`, route condition `user-decision`; it is not overridden or relabeled as a pass. The current user's decision above selects the following substantive remediation:
+
+| Owner block | Finding class and demonstrated consequence | Required closure |
+| --- | --- | --- |
+| Bridge union construction | R1 `verified_defect`: failed extent validation leaves an interned size-zero union reachable by another spelling. | Prevent failed construction from becoming a usable native type; preserve legitimate recursive types and valid explicit union extent/stride. |
+| Project admission and completed loading | R2 `verified_defect`: mapless raw snapshots publish but can never restore. R3 `follower_gap`: MCP adds an explicit-base raw map after host baseline finalization and immediately makes the baseline stale. | Qualify a restorable source before publication at the existing codec; retain generic save; put legitimate initial mapping before completed-load qualification rather than recertifying arbitrary mutations. |
+| Project effective-state qualification and replay | R4-R7 `verified_defect`: relocation-overlapping saved edits refuse a fresh valid load; empty cache layers fail after analysis mutation; removed loader-cache bytes and missing/unreadable active mappings can report successful restore. | Accept qualified loader bytes or the compatible saved state, reject incompatible or missing effective state, and verify replay prerequisites before analysis mutation. Use the current loader/cache/map owners rather than command-specific exceptions. |
+| MCP target lifecycle | R8 `verified_defect`: global remote routing redirects/disconnects another HTTP session and leaves session-local Frida mode stranded. | Keep endpoint and mode with the existing selected `RadareState`, including default state, remote tools, CLI/plugin producers, close and eviction. Preserve supported remote and multiplexed behavior. |
+
+Root production corroboration used the unchanged qualified host and fresh task-scoped snapshots under `/home/lucas/.cache/codex/radare2/route-reassessment-dj7yq4cl/`. Observations include saved analysis present after an empty-cache restore failure; valid relocation overlap refused; and restore success with removed relocation bytes, unreadable code-map permissions, or code-map removal from the active bank. The earlier P1/P4 production observations and direct source chains support the remaining findings. Original game data was not changed.
+
+No material workload failure was established for the source-backed quadratic-capture concern. Do not add performance machinery or speculative optimization to this remediation. The retained M05 real publication-failure observation remains sufficient current evidence; the lack of a maintained publisher-failure test is not a requirement to add a proof framework. Native Windows, hosted CI, network-only pin fetching and real Frida execution remain explicit proof gaps, not fictitious successful validation.
 
 ## Wrong behavior, evidence and selected result
 
@@ -57,7 +74,7 @@ Known-good comparisons are declaration-equivalent compiler controls, the signatu
 
 Repair the current host, bridge, native patch and MCP owner chain. Reuse the existing structured project readers and native IO boundaries. Keep project bytes opaque to the MCP. Use the existing component build/test owners and matching plugin/language inputs.
 
-The architecture delta is bounded to the selected strict native project behavior, correction of the active IO/state boundaries, and per-core ownership of MCP mode. No daemon, sidecar, database, second project parser, new persistent provenance service, migration or compatibility layer is authorized. If implementation requires a new public contract, persisted shape or independent owner beyond that delta, stop only its dependent frontier for the current user's decision.
+The architecture delta is bounded to the selected strict native project behavior, correction of the active IO/state boundaries, and per-session ownership of the existing MCP target endpoint and mode. Reuse `RadareState` initialization, selection, destruction and eviction; keep listener, supervisor and server configuration at their server owners. No daemon, external sidecar, database, second project parser, new target manager, new persistent provenance service, migration or compatibility layer is authorized. If implementation requires a new public contract, persisted shape or independent owner beyond that delta, stop only its dependent frontier for the current user's decision.
 
 The only newly selected public contract is `prj snapshot [file]`. It shares serialization and publication with `prj save`, but must refuse a non-restorable source instead of writing kind-0 STATE. The generic action remains the canonical owner for merge-capable projects, including in-memory sessions; this is an explicit current-user product requirement, not a deprecated alias or dual snapshot path. The MCP tool name stays `save_project` and invokes only the strict host action. No new persisted format, schema version, migration, eligibility protocol or parser is selected.
 
@@ -70,6 +87,8 @@ Save must not report success on failed final writes or replace a complete artifa
 The instruction change is prospective and workspace-local. Add one canonical attribution rule and short component pointers as needed; do not copy global workflow bodies. The current user's direct attribution instruction applies to new task commits. Persistent discovery of revised instruction text requires the appropriate fresh-session/reload disclosure.
 
 ## Primary-path acceptance and first slice
+
+The first epoch-4 slice is the already reproduced valid saved relocation edit restored onto a fresh normally loaded target while the warm-NE and incompatible changed/extra-edit controls still hold. The remaining demonstrated project cases must refuse before mutation or complete with correct effective bytes; mapless strict save must refuse without replacing a previous usable artifact. MCP acceptance includes the same-parameter raw/base roundtrip and an actual two-session HTTP observation in which A's remote open/close does not redirect, disconnect or strand B. Bridge acceptance is the invalid two-spelling union reproduction with no exported usable size-zero type, plus the valid extent/stride and recursive-type controls. These are existing primary-path defects, not a hypothetical failure matrix.
 
 The first directly verifiable slice is the callback import at the host owner: the exact valid same-batch declaration must import CB and S with target-correct pointer layout, while the established array-of-pointer and typedef behavior remains correct. Use the existing unit/command surface and an independent compiler-valid equivalent as the oracle. Process exit 0 alone is not a parser-success oracle.
 
@@ -91,15 +110,15 @@ Do not correct the unresolved signature-assignment policy, recognized-image mixe
 
 ## High-level execution and continuity
 
-1. Close the Strategy-reset Intent Contract audit for Route A and its first slice.
-2. After the active session's post-Gate implementation checkpoint, replace the rejected cache-only M06 candidate with one bounded Worker entry whose exact footprint covers the normal-load baseline owner, lifecycle invalidation and strict-project consumer.
-3. Rebuild the host in a fresh task-scoped cache, require all 65 project tests plus the focused loader-baseline adversarial cases, then rerun the already-qualified bridge, engine and MCP followers against the stabilized host.
-4. Commit the validated host candidate with the exact Codex trailer, obtain the Code Gate required by the active resident instructions, then finish task-log/changelog bookkeeping and final Git verification.
+1. Close the epoch-4 Strategy-reset Intent Contract audit for the current-user-selected owner correction.
+2. Run the three bounded Worker owner blocks from the execution annex. Keep implementation writes disjoint and defer integration checks whose host dependencies are changing.
+3. Validate the demonstrated failures and directly affected current followers, then qualify the combined native runtime against the stabilized host without adding another proof owner.
+4. Commit coherent validated candidates with the exact Codex trailer, obtain the default local Code Gate for the changed candidate, then finish task-log/changelog bookkeeping and exact final Git inspection.
 
-Material decisions still open: none for the confirmed result or selected Route A. Residual-risk acceptances: none. The previous Strategy-reset Plan Gate produced `PROCEED` for epoch 2 on `/root/native_baseline_plan_audit` at `2026-10-17T18:58:06.598-03:00`; the user then activated that implementation at `2026-10-17T18:59:35.079-03:00`, turn `01a14bde-a311-7332-b37f-1c137c212c08`, rollout line 23781. The 64/65 M06 result supplied new factual evidence that changed the host architecture/owner chain. The replacement epoch-3 Strategy-reset audit on the same task path produced `PROCEED` at `2026-10-17T19:51:07.979-03:00`, turn `01a14c0c-0630-7813-901c-7511f102619b`, rollout line 24895, with complete Intent Contract coverage and no material findings. The user then authorized epoch-3 implementation with `sim, pode executar` at `2026-10-17T19:57:10.512-03:00`, turn `01a14c15-5942-7130-9095-ee0e704457f0`, rollout line 24955. The plan is active in Implementation. The cache-only M06 candidate remains uncommitted and not accepted; Route A must replace it. Code Gate operation: not yet selected for the final candidate.
+Material decisions still open: none for the user-selected epoch-4 route. Residual-risk acceptances: none. Earlier epoch-2/3 Plan Gates and implementation activations are historical decisions, not approval of the current findings. The epoch-3 Code Gate remains `DO_NOT_PROCEED`. The epoch-4 Strategy-reset Plan Gate on `/root/native_baseline_plan_audit` returned `PROCEED` with complete Intent Contract coverage and no material findings. Its registered transition activates Implementation without another user checkpoint; implementation correctness and the subsequent Code Gate remain outstanding.
 
 The active execution annex is `.sangoi/planning/2026-10-17-native-baseline-remediation-microtasks.md`. It records only the root-owned mutable Microtask Program and is current for this implementation. The runtime exposes no `update_plan` tool in this session, so this one subordinate annex carries the projection; it owns no Scope, strategy, lifecycle or acceptance.
 
-Runtime continuity caveat: the on-disk resident/shared instruction files now describe automatic implementation activation after PROCEED, while this session's injected shared instructions still require a later current-user authorization. Do not treat the revised disk instructions as active without the required session reload. This task does not edit the global instruction corpus or use that drift as an override.
+The new session loaded the automatic local Code Gate route. This task does not edit global instructions or dynamic runtime settings. Instruction-loading changes are not inferred from model/effort settings, and this task does not use instruction drift as an override.
 
-Blocker: none. Route A is committed at host `374cd7d`; the fresh combined host, bridge, engine and MCP qualification passes, including native Johnny and SimTower MCP witnesses. Next high-level action: obtain the current user's selection for the exact task-level Code Gate candidate.
+Blocker: none. Next high-level action: execute the bounded owner corrections, validate their production paths and direct followers, and commit the resulting candidate before the next local Code Gate.
