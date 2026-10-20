@@ -15,7 +15,9 @@ Runtime flow is native r2mcp tools → linked radare2 RCore analysis and command
 
 Validation entry points are the host Make build and `r2r`/unit tests below, bridge Meson and `test/db/extras/`, engine `make test`, and the MCP root Make build/test targets; child guidance narrows the component procedures. [The qualified local-component procedure](r2ghidra/doc/win16-fmovmem.md) describes the existing private host/bridge/engine build and matching runtime inputs. Directory nesting or an MCP checkout alone does not select matching linked host libraries, plugins or language files, or establish runtime readiness. File-switch preservation and saved-analysis roundtrips require production-path observation, not source inspection alone; persistence belongs to the host, while the server owns its RCore lifecycle.
 
-Last reviewed: 2026-10-16 on `win16-fmovmem`. Maintainers changing topology, ownership, build/test entry points or dependency integration must refresh this map and the affected child guidance against live files; branch names and installed components are not proof that this map is current.
+Native preparation and Meson build reuse validate matching patches/source inputs through the engine's shared runner. Stale or ambiguous preparation refuses without changing source bytes; preserve changes and prepare a new matching checkout or distribution rather than removing `patch.done` and retrying. Matching prepared distributions remain buildable without Git. The child guides own the preparation details and combined native/bridge test procedure.
+
+Last reviewed: 2026-10-20 on `master`. Maintainers changing topology, ownership, build/test entry points or dependency integration must refresh this map and the affected child guidance against live files; branch names and installed components are not proof that this map is current.
 
 ## Shared prospective commit attribution
 
