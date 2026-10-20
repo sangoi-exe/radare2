@@ -1,6 +1,6 @@
 # Intent Contract: native toolchain observations and agent usage
 
-Status: active
+Status: on-hold
 Task mode: Doctrine
 Lifecycle phase: Implementation
 Strategy epoch: 1
@@ -80,8 +80,9 @@ Actual native F687 inspection exposed its fully known 074B leaf using an inferre
 
 The matching bridge/plugin/languages build and all three registered checks pass: native units34/34, preparation and p-code XML. Full MCP `make test` passes with the NE/OMF original witnesses enabled. Initial full-suite/number-test failures also reproduced at the MCP baseline; actual native replay traced them to hidden task-cache fixtures opened without an explicit `-s` scope. The existing test producers now admit only their owned fixture directory and assert opening success; runtime policy, test oracles and explicit refusal cases are unchanged. The packaged skill includes the exercised startup/provenance path and the existing cast-display option needed for semantic C inspection.
 
-Current-user decisions open: none.
+Current-user decisions open: select substantive remediation for Code Gate findings F1–F4 and P2. The lead recommends correction at the existing OMF and TASM owners. F3/F4 require an explicit decision because repairing inherited SEGDEF/LEDATA decoding changes affected existing geometry/mappings. An implemented support limitation or accepted residual risk is an alternative only if the current user selects it; documentation alone does not change runtime behavior.
 Residual-risk acceptance: none supplied.
 Plan audit: `/root/toolchain_plan_audit` returned `PROCEED` for the complete initial Intent Contract. All required fields were reviewed; no material finding or current-user decision remained. The sole matching resident transition publishes the same plan locator and enters Implementation without another authorization checkpoint.
-Blocker: none.
-Next action: submit the committed candidate to the default paired local Code Gate, partitioned into native formats, qualified TASM/bridge contracts and MCP/skill, followed by cross-partition integration. The task log records the source commits and exact required reviewer pairs; source mutation stays blocked while that review object is open.
+Code Gate: `/root/toolchain_integration_senior` issued the final cumulative `DO_NOT_PROCEED` for host `a1e9fc93025ab77f2a22fd62aaafab797ac6dbed`, bridge `0405ec5e39bc95d797d9e74c3fc4d671baff7592`, native `3ee06068bc8e5c483bbb35a45a23b9f4eafadfa6` and MCP `ea78625ee962fdd352cb222e115e2e9dd4ce7857`. Required semantic coverage is complete for all 28 paths. The recorded actual-call-error exception dispenses only the missing formats-Claude completion/reciprocal, not its initial findings or required Senior coverage. The task log records evidence, disagreements, proof limits and the decision package.
+Blocker: current-user selection of material remediation; no source correction, support restriction, residual-risk acceptance or review override is authorized.
+Next action: present the five verified defects and the mapping-change boundary to the current user. Preserve the committed implementation and evidence while awaiting that decision. The lifecycle remains Implementation in epoch 1; this bookkeeping does not select a correction or amend the admitted result.

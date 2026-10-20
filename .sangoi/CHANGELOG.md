@@ -2,7 +2,7 @@
 
 ## 2026-10-20
 
-- Added source-bound OMF external/group/FIXUPP provenance and explicit NE enumeration/resolution/application statuses. Added exact-image TASM3.1 CF/ZF register-state contracts with a qualified supporting far leaf, the matching native-engine pin, a structured read-only MCP source-record query and expanded existing agent usage/startup guidance. Private host units, native/bridge checks, full MCP tests and original-input production observations pass; formal local Code review and final delivery bookkeeping remain pending. The ordinary checkout still lacks its optional ZIP dependency, and fresh network acquisition/publication are not claimed.
+- Implemented candidate OMF external/group/FIXUPP provenance, explicit NE statuses, exact-image TASM3.1 CF/ZF contracts, the matching native-engine pin, a read-only MCP query and expanded existing agent startup guidance. Qualified private host/native/bridge/MCP checks and original-input observations pass, but the cumulative local Code Gate returned `DO_NOT_PROCEED` for five verified source defects: source-header module counting, shared LLNAMES indexing, inherited SEGDEF/LEDATA decoder seams and dependent TASM current-callee qualification. The plan is on hold for the user's correction decision, including affected existing mapping changes; no correction or residual risk was accepted. The ordinary checkout's optional ZIP dependency, specialized execution gaps and fresh acquisition/publication remain unverified or excluded as recorded in the task log.
 
 ## 2026-10-18
 
