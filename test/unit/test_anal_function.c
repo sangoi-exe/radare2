@@ -456,6 +456,142 @@ bool test_r_anal_function_set_signature_uses_canonical_type_name(void) {
 	mu_end;
 }
 
+bool test_r_anal_function_signature_preserves_declarator_shapes(void) {
+	const struct {
+		const char *ret_type;
+		const char *param_type;
+		const char *param_name;
+		const char *stored_name;
+		const char *signature;
+	} cases[] = {
+		{ "void", "int (*)(int)", "callback", "callback", "void shaped (int (*callback)(int));" },
+		{ "void", "int (far * const )(char near *, int)", "callback", "callback", "void shaped (int (far * const callback)(char near *, int));" },
+		{ "void", "const int (far * const )[3]", "matrix", "matrix", "void shaped (const int (far * const matrix)[3]);" },
+		{ "int (near *)[3]", "int", "count", "count", "int (near *shaped (int count))[3];" },
+		{ "int (far *)(char near *, int)", "int", "count", "count", "int (far *shaped (int count))(char near *, int);" },
+		{ "int far * near *", "int near * far *", "value", "value", "int far * near *shaped (int near * far *value);" },
+		{ "void", "int (*)[3]", NULL, "arg0", "void shaped (int (*arg0)[3]);" },
+	};
+	size_t i;
+	for (i = 0; i < R_ARRAY_SIZE (cases); i++) {
+		RAnal *anal = r_anal_new ();
+		mu_assert_notnull (anal, "create analysis for structured signature");
+		mu_assert_true (r_anal_cc_set (anal, "void shapecc (stack)"), "seed independent calling convention");
+		RAnalFunction *fcn = r_anal_create_function (anal, "shaped", 0x3000, 0, NULL);
+		mu_assert_notnull (fcn, "create function for structured signature");
+		RAnalFunctionParam param = { .name = (char *)cases[i].param_name, .type = (char *)cases[i].param_type };
+		RList *params = r_list_new ();
+		r_list_append (params, &param);
+		RAnalFunctionSignature input = {
+			.ret_type = (char *)cases[i].ret_type,
+			.callconv = "shapecc",
+			.params = params,
+			.noreturn = true,
+		};
+		ut64 function_epoch = r_anal_function_dirty_epoch (fcn);
+		ut64 types_epoch = r_anal_types_dirty_epoch (anal);
+		mu_assert_true (r_anal_function_set_signature (anal, fcn, &input), "apply abstract declarator types");
+		r_list_free (params);
+		mu_assert_neq (r_anal_function_dirty_epoch (fcn), function_epoch, "signature write dirties the function");
+		mu_assert_neq (r_anal_types_dirty_epoch (anal), types_epoch, "signature write dirties types");
+		mu_assert_streq (r_anal_function_cc (fcn), "shapecc", "pointer qualifiers do not choose calling convention");
+		mu_assert_true (fcn->is_noreturn, "signature write retains explicit noreturn");
+		function_epoch = r_anal_function_dirty_epoch (fcn);
+		types_epoch = r_anal_types_dirty_epoch (anal);
+		RAnalFunctionSignature *signature = r_anal_function_get_signature (fcn);
+		mu_assert_notnull (signature, "read structured signature");
+		mu_assert_eq (signature->origin, R_ANAL_FUNCTION_SIGNATURE_ORIGIN_NAME, "read producer-owned prototype");
+		mu_assert_streq (signature->signature, cases[i].signature, "declaration places names at the correct layer");
+		mu_assert_streq (signature->ret_type, cases[i].ret_type, "stored return retains ordered shape");
+		mu_assert_eq (r_list_length (signature->params), 1, "nested callback arguments are not outer arguments");
+		RAnalFunctionParam *stored = r_list_first (signature->params);
+		mu_assert_notnull (stored, "read stored parameter");
+		mu_assert_streq (stored->name, cases[i].stored_name, "stored parameter retains its name");
+		mu_assert_streq (stored->type, cases[i].param_type, "stored parameter retains qualifiers and ordered shape");
+		char *row = r_str_newf ("%s,%s", cases[i].param_type, cases[i].stored_name);
+		mu_assert_streq (sdb_const_get (anal->sdb_types, "func.shaped.arg.0", 0), row, "c2 remains the argument metadata producer");
+		free (row);
+		mu_assert_eq (r_anal_function_dirty_epoch (fcn), function_epoch, "structured signature read leaves function clean");
+		mu_assert_eq (r_anal_types_dirty_epoch (anal), types_epoch, "structured signature read leaves types clean");
+		mu_assert_true (r_anal_function_set_signature (anal, fcn, signature), "write back the getter's structured result");
+		RAnalFunctionSignature *again = r_anal_function_get_signature (fcn);
+		mu_assert_notnull (again, "read structured signature after writeback");
+		mu_assert_streq (again->signature, signature->signature, "writeback preserves the whole declaration");
+		mu_assert_streq (again->callconv, "shapecc", "writeback retains calling convention");
+		mu_assert_true (again->noreturn, "writeback retains noreturn");
+		r_anal_function_signature_free (again);
+
+		RAnal *reparsed = r_anal_new ();
+		RAnalFunction *copy = r_anal_create_function (reparsed, "shaped", 0x3000, 0, NULL);
+		mu_assert_true (r_anal_str_to_fcn (reparsed, copy, signature->signature), "reparse rendered declaration through c2");
+		again = r_anal_function_get_signature (copy);
+		mu_assert_notnull (again, "read reparsed declaration");
+		mu_assert_streq (again->signature, signature->signature, "render and reparse retain declaration shape");
+		mu_assert_streq (again->ret_type, signature->ret_type, "reparse retains return type");
+		stored = r_list_first (again->params);
+		mu_assert_notnull (stored, "read reparsed parameter");
+		mu_assert_streq (stored->name, cases[i].stored_name, "reparse retains parameter name");
+		mu_assert_streq (stored->type, cases[i].param_type, "reparse retains parameter shape");
+		r_anal_function_signature_free (again);
+		r_anal_free (reparsed);
+		r_anal_function_signature_free (signature);
+		r_anal_free (anal);
+	}
+	mu_end;
+}
+
+bool test_r_anal_function_set_signature_rejects_invalid_declarators(void) {
+	RAnal *anal = r_anal_new ();
+	RAnalFunction *fcn = r_anal_create_function (anal, "shaped", 0x3000, 0, NULL);
+	mu_assert_true (r_anal_str_to_fcn (anal, fcn, "int shaped (int original);"), "seed signature before invalid write");
+	ut64 function_epoch = r_anal_function_dirty_epoch (fcn);
+	ut64 types_epoch = r_anal_types_dirty_epoch (anal);
+	RAnalFunctionParam param = { .name = "callback", .type = "int (*)(" };
+	RList *params = r_list_new ();
+	r_list_append (params, &param);
+	RAnalFunctionSignature input = { .ret_type = "void", .params = params };
+	mu_assert_false (r_anal_function_set_signature (anal, fcn, &input), "refuse malformed callback without textual fallback");
+	input.ret_type = "int (*)[";
+	param.type = "int";
+	mu_assert_false (r_anal_function_set_signature (anal, fcn, &input), "refuse malformed return declarator");
+	r_list_free (params);
+	RAnalFunctionSignature *signature = r_anal_function_get_signature (fcn);
+	mu_assert_notnull (signature, "existing signature survives refused write");
+	mu_assert_streq (signature->signature, "int shaped (int original);", "invalid declaration does not overwrite metadata");
+	mu_assert_eq (r_anal_function_dirty_epoch (fcn), function_epoch, "refused signature leaves function epoch unchanged");
+	mu_assert_eq (r_anal_types_dirty_epoch (anal), types_epoch, "refused signature leaves type epoch unchanged");
+	r_anal_function_signature_free (signature);
+	r_anal_free (anal);
+	mu_end;
+}
+
+bool test_r_anal_str_to_fcn_defaults_omitted_return_type(void) {
+	const struct {
+		const char *name;
+		const char *input;
+		const char *signature;
+		int argc;
+	} cases[] = {
+		{ "no_type", "no_type(int a, char **b);", "void no_type (int a, char * *b);", 2 },
+		{ "foo.bar", "foo.bar();;", "void foo.bar ();", 0 },
+	};
+	size_t i;
+	for (i = 0; i < R_ARRAY_SIZE (cases); i++) {
+		RAnal *anal = r_anal_new ();
+		RAnalFunction *fcn = r_anal_create_function (anal, cases[i].name, 0x3000, 0, NULL);
+		mu_assert_true (r_anal_str_to_fcn (anal, fcn, cases[i].input), "signature command accepts an omitted return type");
+		RAnalFunctionSignature *signature = r_anal_function_get_signature (fcn);
+		mu_assert_notnull (signature, "read signature with defaulted return type");
+		mu_assert_streq (signature->signature, cases[i].signature, "default return preserves function and parameter declarators");
+		mu_assert_streq (signature->ret_type, "void", "omitted result defaults to void");
+		mu_assert_eq (r_list_length (signature->params), cases[i].argc, "default return preserves parameter count");
+		mu_assert_streq (r_type_func_ret (anal->sdb_types, cases[i].name), "void", "c2 owns the defaulted prototype metadata");
+		r_anal_function_signature_free (signature);
+		r_anal_free (anal);
+	}
+	mu_end;
+}
+
 bool test_r_anal_function_get_signature_string_resolves_import_flag_prototype(void) {
 	RCore *core = r_core_new ();
 	mu_assert_notnull (core, "Couldn't create new RCore");
@@ -739,11 +875,14 @@ bool test_r_anal_function_get_signature_reports_origin_and_only_reads(void) {
 bool test_r_anal_function_get_signature_origin_of_a_zero_argument_prototype(void) {
 	RAnal *anal = r_anal_new ();
 	mu_assert_notnull (anal, "Couldn't create new RAnal");
+	r_anal_types_reload (anal, R2_PREFIX, NULL, NULL);
 	// the struct tag takes the shared kind key; the prototype is still there
+	char *error = NULL;
 	bool ok = r_anal_import_c_decls (anal,
 		"int foo (void);"
-		"struct foo { int x; };", NULL);
-	mu_assert_true (ok, "seed a prototype whose name a struct also uses");
+		"struct foo { int x; };", &error);
+	mu_assert_true (ok, error? error: "seed a prototype whose name a struct also uses");
+	free (error);
 
 	RAnalFunction *f = r_anal_create_function (anal, "foo", 0x5000, 0, NULL);
 	mu_assert_notnull (f, "Couldn't create function for the zero-argument test");
@@ -983,6 +1122,9 @@ int all_tests(void) {
 	mu_run_test (test_r_anal_function_get_signature);
 	mu_run_test (test_r_anal_function_get_signature_prefers_exact_type_link);
 	mu_run_test (test_r_anal_function_set_signature_uses_canonical_type_name);
+	mu_run_test (test_r_anal_function_signature_preserves_declarator_shapes);
+	mu_run_test (test_r_anal_function_set_signature_rejects_invalid_declarators);
+	mu_run_test (test_r_anal_str_to_fcn_defaults_omitted_return_type);
 	mu_run_test (test_r_anal_function_get_signature_string_resolves_import_flag_prototype);
 	mu_run_test (test_r_anal_function_get_signature_uses_basename_for_dbg_prefixed_function);
 	mu_run_test (test_r_anal_function_get_signature_string_falls_back_to_vars);

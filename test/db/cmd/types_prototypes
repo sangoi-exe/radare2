@@ -41,6 +41,24 @@ void custom_fatal (long declared);
 EOF
 RUN
 
+NAME=Win16 nested callback parameters retain commas and pointer qualification
+FILE=--
+ARGS=-a x86 -b 16
+CMDS=<<EOF
+'td typedef unsigned char BYTE;void use(int (far *fn)(int left, int right), BYTE far * near *ptr);
+tk func.use.arg.0
+tk func.use.arg.1
+tk func.use.cc
+tfc use
+EOF
+EXPECT=<<EOF
+int (far *)(int left, int right),fn
+BYTE far * near *,ptr
+cdecl
+void use(int (far *fn)(int left, int right), BYTE far * near *ptr);
+EOF
+RUN
+
 NAME=recovered signatures keep register arguments before sorted stack arguments
 FILE=malloc://64
 ARGS=-a x86 -b 64

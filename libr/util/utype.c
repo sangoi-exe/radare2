@@ -22,55 +22,19 @@ R_API bool r_type_set(Sdb *TDB, ut64 at, const char *field, ut64 val) {
 	return false;
 }
 
-static const char *const type_qualifiers[] = {
-	"const", "volatile", "restrict", "atomic", "_Atomic", NULL
-};
-
-static const char *type_skip_qualifiers(const char *R_NONNULL type) {
-	int i;
-	do {
-		type = r_str_trim_head_ro (type);
-		for (i = 0; type_qualifiers[i]; i++) {
-			size_t qlen = strlen (type_qualifiers[i]);
-			if (r_str_startswith (type, type_qualifiers[i]) && (!type[qlen] || IS_WHITESPACE (type[qlen]))) {
-				type += qlen;
-				break;
-			}
-		}
-	} while (type_qualifiers[i]);
-	return type;
-}
-
-static void type_trim_qualifiers(char *type) {
-	r_str_trim (type);
-	size_t len = strlen (type);
-	int i;
-	do {
-		for (i = 0; type_qualifiers[i]; i++) {
-			size_t qlen = strlen (type_qualifiers[i]);
-			if (len > qlen && IS_WHITESPACE (type[len - qlen - 1])
-					&& !strcmp (type + len - qlen, type_qualifiers[i])) {
-				type[len - qlen] = 0;
-				r_str_trim_tail (type);
-				len = strlen (type);
-				break;
-			}
-		}
-	} while (type_qualifiers[i]);
-}
-
-static bool type_format_is_pointer(const char *type) {
-	int depth = 0;
-	for (; *type; type++) {
-		if (*type == '<') {
-			depth++;
-		} else if (*type == '>' && depth > 0) {
-			depth--;
-		} else if (!depth && (*type == '*' || *type == '&')) {
-			return true;
-		}
+static char *type_unqualified(const char *type) {
+	RTypeDecl *decl = r_type_decl_parse (type, NULL);
+	if (!decl || decl->name) {
+		r_type_decl_free (decl);
+		return NULL;
 	}
-	return false;
+	RTypeDeclNode *node;
+	for (node = decl->type; node; node = node->child) {
+		node->qualifiers = 0;
+	}
+	char *text = r_type_decl_render (decl, false);
+	r_type_decl_free (decl);
+	return text;
 }
 
 static const char *type_aggregate_prefixed(const char *R_NONNULL type, const char **R_NONNULL name) {
@@ -86,38 +50,35 @@ static const char *type_aggregate_prefixed(const char *R_NONNULL type, const cha
 }
 
 R_API RTypeKind r_type_kind(Sdb *TDB, const char *name) {
-	R_RETURN_VAL_IF_FAIL (TDB && R_STR_ISNOTEMPTY (name), -1);
-	// a type may be spelled with qualifiers and its aggregate keyword; the sdb keys it bare
-	const char *bare = type_skip_qualifiers (name);
-	const char *inner = NULL;
-	if (type_aggregate_prefixed (bare, &inner)) {
-		bare = inner;
-	}
-	if (R_STR_ISEMPTY (bare)) {
+	R_RETURN_VAL_IF_FAIL (TDB && name, R_TYPE_INVALID);
+	RTypeDecl *decl = r_type_decl_parse (name, NULL);
+	if (!decl || decl->name || decl->type->kind != R_TYPE_DECL_BASE) {
+		r_type_decl_free (decl);
 		return R_TYPE_INVALID;
 	}
-	const char *type = sdb_const_get (TDB, bare, 0);
-	if (type) {
-		if (!strcmp (type, "enum")) {
-			return R_TYPE_ENUM;
-		}
-		if (!strcmp (type, "struct")) {
-			return R_TYPE_STRUCT;
-		}
-		if (!strcmp (type, "union")) {
-			return R_TYPE_UNION;
-		}
-		if (!strcmp (type, "func")) {
-			return R_TYPE_FUNCTION;
-		}
-		if (!strcmp (type, "type")) {
-			return R_TYPE_BASIC;
-		}
-		if (!strcmp (type, "typedef")) {
-			return R_TYPE_TYPEDEF;
+	const char *bare = decl->type->base.name;
+	if (r_str_startswith (bare, "struct ") || r_str_startswith (bare, "union ") || r_str_startswith (bare, "enum ")) {
+		bare = strchr (bare, ' ') + 1;
+	}
+	const char *kind = sdb_const_get (TDB, bare, NULL);
+	RTypeKind result = R_TYPE_INVALID;
+	if (kind) {
+		if (!strcmp (kind, "type")) {
+			result = R_TYPE_BASIC;
+		} else if (!strcmp (kind, "struct")) {
+			result = R_TYPE_STRUCT;
+		} else if (!strcmp (kind, "union")) {
+			result = R_TYPE_UNION;
+		} else if (!strcmp (kind, "enum")) {
+			result = R_TYPE_ENUM;
+		} else if (!strcmp (kind, "typedef")) {
+			result = R_TYPE_TYPEDEF;
+		} else if (!strcmp (kind, "func")) {
+			result = R_TYPE_FUNCTION;
 		}
 	}
-	return R_TYPE_INVALID;
+	r_type_decl_free (decl);
+	return result;
 }
 
 // key is "struct.name.member" holding "type,offset,count"; split from the end since the type may itself contain commas
@@ -278,17 +239,24 @@ static inline const char *typedef_target(Sdb *R_NONNULL TDB, const char *R_NONNU
 R_API R_OWNED char *r_type_resolve_typedef(Sdb *R_NONNULL TDB, const char *R_NONNULL type) {
 	R_RETURN_VAL_IF_FAIL (TDB && type, NULL);
 	// a typedef may be spelled with qualifiers; the sdb keys it bare
-	const char *tortoise = type_skip_qualifiers (type);
+	char *normalized = type_unqualified (type);
+	if (!normalized) {
+		return NULL;
+	}
+	const char *tortoise = normalized;
 	const char *hare = typedef_target (TDB, tortoise);
 	int power = 1, lam = 1, links;
 	for (links = 1; hare && links <= TYPEDEF_MAX_CHAIN; links++) {
 		if (!strcmp (tortoise, hare)) {
 			R_LOG_DEBUG ("typedef %s is cyclic", type);
+			free (normalized);
 			return NULL;
 		}
 		const char *next = typedef_target (TDB, hare);
 		if (!next) {
-			return strdup (hare);
+			char *result = strdup (hare);
+			free (normalized);
+			return result;
 		}
 		if (power == lam) {
 			tortoise = hare;
@@ -301,6 +269,7 @@ R_API R_OWNED char *r_type_resolve_typedef(Sdb *R_NONNULL TDB, const char *R_NON
 	if (hare) {
 		R_LOG_DEBUG ("typedef %s is longer than %d links", type, TYPEDEF_MAX_CHAIN);
 	}
+	free (normalized);
 	return NULL;
 }
 
@@ -323,209 +292,40 @@ static bool type_name_is_signed(const char *R_NONNULL t) {
 		|| (r_str_startswith (t, "int") && r_str_endswith (t, "_t"));
 }
 
-R_API bool r_type_is_signed(Sdb *R_NONNULL TDB, const char *R_NONNULL type) {
+R_API bool r_type_is_signed(Sdb *TDB, const char *type) {
 	R_RETURN_VAL_IF_FAIL (TDB && type, false);
-	const char *base = type_skip_qualifiers (type);
-	char *resolved = r_type_resolve_typedef (TDB, base);
-	const char *t = type_skip_qualifiers (resolved? resolved: base);
-	const bool ret = !strchr (t, '*') && type_name_is_signed (t);
+	char *resolved = r_type_resolve_typedef (TDB, type);
+	RTypeDecl *decl = r_type_decl_parse (resolved? resolved: type, NULL);
+	bool result = decl && !decl->name && decl->type->kind == R_TYPE_DECL_BASE && type_name_is_signed (decl->type->base.name);
+	r_type_decl_free (decl);
 	free (resolved);
-	return ret;
+	return result;
 }
 
 static bool type_kind_is_aggregate(const char *R_NONNULL kind) {
 	return !strcmp (kind, "struct") || !strcmp (kind, "union");
 }
 
-// the per-target type dbs carry the pointer width as the size of "char *"
-static ut64 type_ptr_bitsize(Sdb *R_NONNULL TDB) {
-	const ut64 bits = sdb_num_get (TDB, "type.char *.size", NULL);
-	return bits? bits: 32;
-}
-
-// how many nested structs, unions or typedefs a measurement follows before giving up
 #define TYPE_CHAIN_MAX 32
 
-static bool type_array_parse(char *type, ut64 *elements) {
-	*elements = 1;
-	char *array = strchr (type, '[');
-	if (!array) {
-		return true;
-	}
-	const bool pointee = memchr (type, ')', array - type) && memchr (type, '*', array - type);
-	const char *extent = array;
-	while (*extent == '[') {
-		const char *number = r_str_trim_head_ro (extent + 1);
-		if (!isdigit ((ut8)*number)) {
-			return false;
-		}
-		char *end;
-		errno = 0;
-		ut64 count = strtoull (number, &end, 0);
-		extent = r_str_trim_head_ro (end);
-		if (errno == ERANGE || !count || *extent != ']'
-			|| (!pointee && r_mul_overflow (*elements, count, elements))) {
-			return false;
-		}
-		extent = r_str_trim_head_ro (extent + 1);
-	}
-	if (*extent && !(*extent == ')' && memchr (type, '(', array - type) && memchr (type, '*', array - type))) {
-		return false;
-	}
-	*array = 0;
-	r_str_trim (type);
-	return true;
-}
-
-// UT64_MAX means an aggregate reached itself; r_type_get_bitsize turns that into 0
-static ut64 type_bitsize(Sdb *TDB, const char *type, const char **chain, int depth) {
-	if (depth >= TYPE_CHAIN_MAX) {
-		return UT64_MAX;
-	}
-	if (strchr (type, '[')) {
-		char *base = strdup (type);
-		if (!base) {
-			return 0;
-		}
-		ut64 elements, bits = 0;
-		if (type_array_parse (base, &elements)) {
-			type_trim_qualifiers (base);
-			bits = type_bitsize (TDB, base, chain, depth);
-			if (bits == UT64_MAX || r_mul_overflow (bits, elements, &bits)) {
-				bits = UT64_MAX;
-			}
-		}
-		free (base);
-		return bits;
-	}
-	const char *type_view = type_skip_qualifiers (type);
-	if (strchr (type_view, '*')) {
-		return type_ptr_bitsize (TDB);
-	}
-	// a type may be spelled with its aggregate keyword, as in "struct mystruct"
-	const char *name = NULL;
-	const char *tmptype = type_aggregate_prefixed (type_view, &name)? name: type_view;
-	const char *t = sdb_const_get (TDB, tmptype, 0);
-	if (!t) {
-		if (r_str_startswith (tmptype, "enum ")) {
-			//XXX: Need a proper way to determine size of enum
-			return 32;
-		}
-		return 0;
-	}
-	if (!strcmp (t, "type")) {
-		return sdb_num_getf (TDB, NULL, "type.%s.size", tmptype); // returns size in bits
-	}
-	if (!strcmp (t, "func")) {
-		// Canonical function-pointer members carry the same marker under type.*.
-		const char *mt = sdb_const_getf (TDB, NULL, "type.%s", tmptype);
-		return mt && !strcmp (mt, "func")? type_ptr_bitsize (TDB): 0;
-	}
-	if (!strcmp (t, "enum")) {
-		const ut64 size = sdb_num_getf (TDB, NULL, "type.%s.size", tmptype);
-		return size? size: 32;
-	}
-	if (!strcmp (t, "typedef")) {
-		// a typedef is as wide as the type it names: recorded width first, else the alias
-		ut64 size = sdb_num_getf (TDB, NULL, "type.%s.size", tmptype);
-		if (size) {
-			return size; // returns size in bits
-		}
-		char *resolved = r_type_resolve_typedef (TDB, tmptype);
-		if (resolved) {
-			chain[depth] = tmptype;
-			size = type_bitsize (TDB, resolved, chain, depth + 1);
-			free (resolved);
-		}
-		return size;
-	}
-	if (!strcmp (t, "struct") || !strcmp (t, "union")) {
-		const ut64 recorded = sdb_num_getf (TDB, NULL, "type.%s.size", tmptype);
-		if (recorded) {
-			return recorded;
-		}
-		int i;
-		for (i = 0; i < depth; i++) {
-			if (!strcmp (chain[i], tmptype)) {
-				return UT64_MAX;
-			}
-		}
-		if (depth >= TYPE_CHAIN_MAX) {
-			return UT64_MAX;
-		}
-		chain[depth] = tmptype;
-		const char *value = sdb_const_getf (TDB, NULL, "%s.%s", t, tmptype);
-		char *members = value? strdup (value): NULL;
-		char *next, *ptr = members;
-		ut64 ret = 0;
-		if (members) {
-			do {
-				char *name = sdb_anext (ptr, &next);
-				if (!name) {
-					break;
-				}
-				char *query = r_str_newf ("%s.%s.%s", t, tmptype, name);
-				int elements = 0;
-				ut64 offset = 0;
-				char *subtype = r_type_get_member (TDB, query, &offset, &elements);
-				free (query);
-				if (!subtype) {
-					break;
-				}
-				if (elements == 0) {
-					elements = 1;
-				}
-				const ut64 member = type_bitsize (TDB, subtype, chain, depth + 1);
-				free (subtype);
-				if (member == UT64_MAX) {
-					ret = UT64_MAX;
-					break;
-				}
-				ut64 end;
-				if (r_mul_overflow (member, (ut64)elements, &end)
-						|| r_mul_overflow (offset, (ut64)8, &offset)
-						|| r_add_overflow (offset, end, &end)) {
-					ret = UT64_MAX;
-					break;
-				}
-				ret = R_MAX (ret, end);
-				ptr = next;
-			} while (next);
-			free (members);
-		}
-		return ret;
-	}
-	return 0;
-}
-
-R_API ut64 r_type_get_bitsize(Sdb *R_NONNULL TDB, const char *R_NONNULL type) {
-	R_RETURN_VAL_IF_FAIL (TDB && type, 0);
-	char *normalized = strdup (type_skip_qualifiers (type));
-	if (!normalized) {
-		return 0;
-	}
-	type_trim_qualifiers (normalized);
-	const char *chain[TYPE_CHAIN_MAX];
-	const ut64 bits = type_bitsize (TDB, normalized, chain, 0);
-	free (normalized);
-	return bits == UT64_MAX? 0: bits;
-}
-
-static const char *type_aggregate_kind(Sdb *R_NONNULL TDB, const char *R_NONNULL type, const char **R_NONNULL name) {
-	const char *type_view = type_skip_qualifiers (type);
-	if (strchr (type_view, '*')) {
+static const char *type_aggregate_kind(Sdb *TDB, const char *type, char **name) {
+	*name = NULL;
+	RTypeDecl *decl = r_type_decl_parse (type, NULL);
+	if (!decl || decl->name || decl->type->kind != R_TYPE_DECL_BASE) {
+		r_type_decl_free (decl);
 		return NULL;
 	}
-	const char *kind = type_aggregate_prefixed (type_view, name);
+	const char *bare = decl->type->base.name;
+	const char *kind = type_aggregate_prefixed (bare, &bare);
+	if (!kind) {
+		const char *stored = sdb_const_get (TDB, bare, NULL);
+		kind = stored && type_kind_is_aggregate (stored)? stored: NULL;
+	}
 	if (kind) {
-		return kind;
+		*name = strdup (bare);
 	}
-	const char *type_kind = sdb_const_get (TDB, type_view, NULL);
-	if (type_kind && type_kind_is_aggregate (type_kind)) {
-		*name = type_view;
-		return type_kind;
-	}
-	return NULL;
+	r_type_decl_free (decl);
+	return kind;
 }
 
 static char *type_get_memb(Sdb *R_NONNULL TDB, const char *R_NONNULL kind, const char *R_NONNULL type, int offset, const char *R_NONNULL path) {
@@ -584,7 +384,7 @@ static char *type_get_memb(Sdb *R_NONNULL TDB, const char *R_NONNULL kind, const
 		}
 		if (offset > cur_offset && offset < member_end) {
 			const char *nested_type = r_str_word_get0 (subtype, 0);
-			const char *nested_name = NULL;
+			char *nested_name = NULL;
 			const char *nested_kind = type_aggregate_kind (TDB, nested_type, &nested_name);
 			if (nested_kind) {
 				char *nested_path = r_str_newf ("%s.%s", path, name);
@@ -593,10 +393,12 @@ static char *type_get_memb(Sdb *R_NONNULL TDB, const char *R_NONNULL kind, const
 					free (nested_path);
 				}
 				if (res) {
+					free (nested_name);
 					free (subtype);
 					break;
 				}
 			}
+			free (nested_name);
 		}
 		free (subtype);
 	}
@@ -713,253 +515,172 @@ R_API int r_type_unlink(Sdb *TDB, ut64 addr) {
 	return true;
 }
 
-static int fmt_type_size(const char *tfmt, bool isfp, int elements) {
-	int size = 0;
-	if (isfp) {
-		size = 8;
-	} else if (tfmt) {
-		if (!strcmp (tfmt, "d") || !strcmp (tfmt, "i") || !strcmp (tfmt, "x") || !strcmp (tfmt, "o") || !strcmp (tfmt, "f")) {
-			size = 4;
-		} else if (!strcmp (tfmt, "q") || !strcmp (tfmt, "F") || !strcmp (tfmt, "p") || !strcmp (tfmt, "z") || !strcmp (tfmt, "*z")) {
-			size = 8;
-		} else if (!strcmp (tfmt, "w")) {
-			size = 2;
-		} else if (!strcmp (tfmt, "b") || !strcmp (tfmt, "c") || !strcmp (tfmt, "C")) {
-			size = 1;
-		} else {
-			size = 4;
+static char *type_format(Sdb *TDB, const char *t, int depth);
+static char *type_format_base(Sdb *TDB, const char *t, int depth);
+
+static RTypeDecl *type_format_resolve(Sdb *db, const char *text, RTypeDeclNode **element, ut64 *elements) {
+	RTypeDecl *decl = r_type_decl_parse (text, NULL);
+	*elements = 1;
+	int depth;
+	for (depth = 0; decl && !decl->name && depth < TYPE_CHAIN_MAX; depth++) {
+		RTypeDeclNode *node = decl->type;
+		while (node->kind == R_TYPE_DECL_ARRAY) {
+			if (*node->array.count) {
+				char *end;
+				errno = 0;
+				ut64 count = strtoull (node->array.count, &end, 0);
+				if (errno == ERANGE || !isdigit ((ut8)*node->array.count) || !count || *end || r_mul_overflow (*elements, count, elements)) {
+					r_type_decl_free (decl);
+					return NULL;
+				}
+			}
+			node = node->child;
 		}
-	} else {
-		size = 8;
+		const char *target = node->kind == R_TYPE_DECL_BASE? sdb_const_getf (db, NULL, "typedef.%s", node->base.name): NULL;
+		if (!target || !strcmp (target, "struct") || !strcmp (target, "union")) {
+			*element = node;
+			return decl;
+		}
+		RTypeDecl *next = r_type_decl_parse (target, NULL);
+		r_type_decl_free (decl);
+		decl = next;
 	}
-	if (elements > 0) {
-		size *= elements;
-	}
-	return size;
+	r_type_decl_free (decl);
+	return NULL;
 }
 
-static char *fmt_struct_union(Sdb *TDB, char *var, bool is_typedef) {
-	char *p = NULL, var2[132];
-	size_t n;
-	char *fields = r_str_newf ("%s.fields", var);
-	char *nfields = (is_typedef) ? fields : var;
-	RStrBuf *fmt_sb = r_strbuf_new ("");
-	RStrBuf *vars_sb = r_strbuf_new ("");
-	int current_offset = 0;
+static char *type_pointer_format(Sdb *db, const RTypeDeclNode *node) {
+	RTypeLayout layout;
+	if (!r_type_decl_layout (db, node, &layout)) {
+		return NULL;
+	}
+	if (node->pointer.kind == R_TYPE_POINTER_DEFAULT && node->child->kind == R_TYPE_DECL_BASE && !strcmp (node->child->base.name, "char")) {
+		return strdup ("z");
+	}
+	if (node->pointer.kind == R_TYPE_POINTER_DEFAULT && node->child->kind == R_TYPE_DECL_POINTER
+			&& node->child->pointer.kind == R_TYPE_POINTER_DEFAULT && node->child->child->kind == R_TYPE_DECL_BASE
+			&& !strcmp (node->child->child->base.name, "char")) {
+		return strdup ("*z");
+	}
+	return layout.bits == sdb_num_get (db, "type.char *.size", NULL)? strdup ("p"): r_str_newf ("p%" PFMT64u, layout.bits / 8);
+}
+
+static char *fmt_struct_union(Sdb *db, char *var, bool is_typedef) {
+	char *fields = is_typedef? r_str_newf ("%s.fields", var): strdup (var);
+	if (!fields) {
+		return NULL;
+	}
+	RStrBuf *fmt = r_strbuf_new ("");
+	RStrBuf *names = r_strbuf_new ("");
+	ut64 current = 0;
 	bool complete = true;
-	for (n = 0; (p = sdb_array_get (TDB, nfields, n, NULL)); n++) {
-		char *struct_name = NULL;
-		const char *tfmt = NULL;
-		bool isStruct = false;
-		bool isEnum = false;
-		bool isfp = false;
-		bool isHidden = false;
-		snprintf (var2, sizeof (var2), "%s.%s", var, p);
-		ut64 member_offset = 0;
-		int elements = 0;
-		char *type = r_type_get_member (TDB, var2, &member_offset, &elements);
-		int field_offset = (int)member_offset;
-		if (field_offset > current_offset) {
-			int pad = field_offset - current_offset;
-			r_strbuf_appendf (fmt_sb, "[%d].", pad);
-			current_offset = field_offset;
+	char *member;
+	int i;
+	for (i = 0; (member = sdb_array_get (db, fields, i, NULL)); i++) {
+		char *key = r_str_newf ("%s.%s", var, member);
+		if (!key) {
+			free (member);
+			complete = false;
+			break;
 		}
-		// Check for @visibility(hidden) attribute
-		const char *visibility = sdb_const_getf (TDB, NULL, "%s.@.visibility", var2);
-		if (visibility && !strcmp (visibility, "hidden")) {
-			isHidden = true;
+		ut64 offset;
+		int count;
+		char *text = r_type_get_member (db, key, &offset, &count);
+		RTypeDeclNode *element = NULL;
+		ut64 elements = 1;
+		RTypeDecl *decl = text? type_format_resolve (db, text, &element, &elements): NULL;
+		RTypeLayout layout;
+		bool measured = text && r_type_get_layout (db, text, &layout);
+		ut64 bytes = measured? layout.bits / 8: 0;
+		bool reference = element && (element->kind == R_TYPE_DECL_LVALUE_REFERENCE || element->kind == R_TYPE_DECL_RVALUE_REFERENCE);
+		if (reference) {
+			// Address formatting consumes target-sized slots; this does not define a reference ABI.
+			ut64 slot = sdb_num_get (db, "type.char *.size", NULL) / 8;
+			complete = slot && !r_mul_overflow (slot, elements, &bytes);
 		}
-		if (type) {
-			char var3[128] = { 0 };
-			char type_name[256] = { 0 };
-			const char *enum_name = NULL;
-			r_str_trim (type);
-			r_str_ncpy (type_name, type_skip_qualifiers (type), sizeof (type_name));
-			type_trim_qualifiers (type_name);
-			char *arr = strchr (type_name, '[');
-			if (arr) {
-				char *arr_end = strchr (arr + 1, ']');
-				if (arr_end) {
-					bool pointee_array = false;
-					char *close_paren = arr;
-					while (close_paren > type_name && (close_paren[-1] == ' ' || close_paren[-1] == '\t')) {
-						close_paren--;
-					}
-					if (close_paren > type_name && close_paren[-1] == ')') {
-						char *open_paren = close_paren - 1;
-						while (open_paren >= type_name && *open_paren != '(') {
-							open_paren--;
-						}
-						if (open_paren >= type_name && memchr (open_paren, '*', (size_t)(close_paren - open_paren))) {
-							pointee_array = true;
-						}
-					}
-					*arr_end = 0;
-					if (!pointee_array && elements <= 0) {
-						int parsed_elems = atoi (arr + 1);
-						if (parsed_elems > 0) {
-							elements = parsed_elems;
-						}
-					}
-					*arr = 0;
-					r_str_trim (type_name);
-				}
-			}
-			const char *base_type = type_name;
-			if (r_str_startswith (base_type, "type.")) {
-				base_type += 5;
-			}
-			// a member typed by a scalar typedef formats as the typedef's target
-			char *resolved_member = r_type_resolve_typedef (TDB, base_type);
-			if (resolved_member && !type_aggregate_kind (TDB, resolved_member, &(const char *){ NULL })) {
-				r_str_ncpy (type_name, type_skip_qualifiers (resolved_member), sizeof (type_name));
-				type_trim_qualifiers (type_name);
-				base_type = type_name;
-			}
-			free (resolved_member);
-			// Handle general pointers except for char *
-			if (type_format_is_pointer (base_type) && strcmp (base_type, "char *") && strcmp (base_type, "char **")) {
-				isfp = true;
-			} else {
-				const char *aggregate_name = NULL;
-				const char *type_kind = type_aggregate_kind (TDB, base_type, &aggregate_name);
-				if (type_kind) {
-					struct_name = (char *)aggregate_name;
-					int name_len = (int)(sizeof (var3) - strlen (type_kind) - 2);
-					snprintf (var3, sizeof (var3), "%s.%.*s", type_kind, name_len, aggregate_name);
-					tfmt = sdb_const_get (TDB, var3, NULL);
-					isStruct = true;
-				} else {
-					// special case for char[]. Use char* format type without *
-					if (!strcmp (base_type, "char") && elements > 0) {
-						tfmt = sdb_const_get (TDB, "type.char *", NULL);
-						if (tfmt && *tfmt == '*') {
-							tfmt++;
-						}
-					} else {
-						if (r_str_startswith (base_type, "enum ") || r_type_kind (TDB, base_type) == R_TYPE_ENUM) {
-							enum_name = r_str_startswith (base_type, "enum ")? base_type + 5: base_type;
-							snprintf (var3, sizeof (var3), "%.*s",
-									(int)(sizeof (var3) - 1), enum_name);
-							isEnum = true;
-						} else {
-							snprintf (var3, sizeof (var3), "type.%.*s",
-									(int)(sizeof (var3) - sizeof ("type.")), base_type);
-						}
-						tfmt = sdb_const_get (TDB, var3, NULL);
-						if (!tfmt) {
-							if (!strcmp (base_type, "int")) {
-								tfmt = sdb_const_get (TDB, "type.int32_t", NULL);
-								if (!tfmt) {
-									tfmt = "d";
-								}
-							} else if (!strcmp (base_type, "short") || !strcmp (base_type, "short int")) {
-								tfmt = sdb_const_get (TDB, "type.int16_t", NULL);
-								if (!tfmt) {
-									tfmt = "w";
-								}
-							} else if (!strcmp (base_type, "char")) {
-								tfmt = sdb_const_get (TDB, "type.int8_t", NULL);
-								if (!tfmt) {
-									tfmt = "c";
-								}
-							} else if (!strcmp (base_type, "long long")
-								|| !strcmp (base_type, "long long int")
-								|| !strcmp (base_type, "int64_t")) {
-								tfmt = sdb_const_get (TDB, "type.int64_t", NULL);
-								if (!tfmt) {
-									tfmt = "q";
-								}
-							}
-						}
-					}
-				}
-			}
-			if (tfmt && !strcmp (tfmt, "func")) {
-				isfp = true;
-				// function pointer
-			}
-			if (!tfmt && !isfp) {
-				R_LOG_DEBUG ("Cannot format member '%s' of type '%s'", p, type);
-				complete = false;
-			} else if (isHidden) {
-				// For hidden fields, skip the bytes without displaying
-				// Use [N]. to skip N bytes (. skips 1 byte)
-				int skip_bytes = 0;
-				if (isfp) {
-					// pointer size depends on platform, assume 8 for now
-					skip_bytes = 8;
-				} else if (tfmt) {
-					// Get size from type format
-					if (!strcmp (tfmt, "d") || !strcmp (tfmt, "i") || !strcmp (tfmt, "x") || !strcmp (tfmt, "o") || !strcmp (tfmt, "f")) {
-						skip_bytes = 4;
-					} else if (!strcmp (tfmt, "q") || !strcmp (tfmt, "F") || !strcmp (tfmt, "p")) {
-						skip_bytes = 8;
-					} else if (!strcmp (tfmt, "w")) {
-						skip_bytes = 2;
-					} else if (!strcmp (tfmt, "b") || !strcmp (tfmt, "c") || !strcmp (tfmt, "C") || !strcmp (tfmt, "z")) {
-						skip_bytes = 1;
-					} else {
-						skip_bytes = 4; // default
-					}
-				} else {
-					skip_bytes = 8; // assume pointer for unknown types
-				}
-				if (elements > 0) {
-					skip_bytes *= elements;
-				}
-				if (skip_bytes > 0) {
-					r_strbuf_appendf (fmt_sb, "[%d].", skip_bytes);
-					current_offset += skip_bytes;
-				}
-			} else if (isfp) {
-				r_strbuf_append (fmt_sb, "p");
-				r_strbuf_appendf (vars_sb, "%s ", p);
-				current_offset += fmt_type_size (NULL, true, elements);
-			} else if (tfmt) {
-				(void)r_str_replace_ch (type, ' ', '_', true);
-				if (elements > 0) {
-					r_strbuf_appendf (fmt_sb, "[%d]", elements);
-				}
-					if (isStruct) {
-						r_strbuf_append (fmt_sb, "?");
-						if (struct_name) {
-							r_strbuf_appendf (vars_sb, "(%s)%s", struct_name, p);
-						}
-						r_strbuf_append (vars_sb, " ");
-					} else if (isEnum) {
-						r_strbuf_append (fmt_sb, "E");
-						r_strbuf_appendf (vars_sb, "(%s)%s ", enum_name ? enum_name : base_type, p);
-					} else {
-						r_strbuf_append (fmt_sb, tfmt);
-						r_strbuf_append (vars_sb, p);
-					r_strbuf_append (vars_sb, " ");
-				}
-				current_offset += fmt_type_size (tfmt, false, elements);
-			}
-			free (type);
-		} else {
+		if (count > 0 && (r_mul_overflow (elements, (ut64)count, &elements) || r_mul_overflow (bytes, (ut64)count, &bytes))) {
 			complete = false;
 		}
-		free (p);
+		if (offset > current) {
+			r_strbuf_appendf (fmt, "[%" PFMT64u "].", offset - current);
+		}
+		const char *visibility = sdb_const_getf (db, NULL, "%s.@.visibility", key);
+		if (!decl || !complete) {
+			complete = false;
+		} else if (visibility && !strcmp (visibility, "hidden")) {
+			if (!measured && !reference) {
+				complete = false;
+			} else {
+				r_strbuf_appendf (fmt, "[%" PFMT64u "].", bytes);
+			}
+		} else {
+			char *body = NULL;
+			char *aggregate_name = NULL;
+			bool aggregate = false;
+			bool enumeration = false;
+			const char *base = element->kind == R_TYPE_DECL_BASE? element->base.name: NULL;
+			if (element->kind == R_TYPE_DECL_POINTER) {
+				body = type_pointer_format (db, element);
+			} else if (reference) {
+				body = strdup ("p");
+			} else if (base) {
+				aggregate = type_aggregate_kind (db, base, &aggregate_name) != NULL;
+				enumeration = r_type_kind (db, base) == R_TYPE_ENUM;
+				if (aggregate) {
+					body = strdup ("?");
+				} else if (enumeration) {
+					body = strdup ("E");
+				} else if (!strcmp (base, "char") && (count > 0 || decl->type->kind == R_TYPE_DECL_ARRAY)) {
+					body = strdup ("z");
+				} else {
+					body = type_format_base (db, base, 0);
+				}
+			}
+			if (!body) {
+				complete = false;
+			} else {
+				if (elements > 1 || count > 0) {
+					r_strbuf_appendf (fmt, "[%" PFMT64u "]", elements);
+				}
+				r_strbuf_append (fmt, body);
+				if (aggregate || enumeration) {
+					const char *name = aggregate? aggregate_name: base;
+					if (enumeration && r_str_startswith (base, "enum ")) {
+						name = base + 5;
+					}
+					r_strbuf_appendf (names, "(%s)%s ", name, member);
+				} else {
+					r_strbuf_appendf (names, "%s ", member);
+				}
+			}
+			free (aggregate_name);
+			free (body);
+		}
+		ut64 end;
+		if (r_add_overflow (offset, bytes, &end)) {
+			complete = false;
+		} else {
+			current = R_MAX (current, end);
+		}
+		r_type_decl_free (decl);
+		free (text);
+		free (key);
+		free (member);
 		if (!complete) {
 			break;
 		}
 	}
 	free (fields);
+	if (complete) {
+		r_strbuf_appendf (fmt, " %s", r_strbuf_get (names));
+	}
+	r_strbuf_free (names);
 	if (!complete) {
-		r_strbuf_free (fmt_sb);
-		r_strbuf_free (vars_sb);
+		r_strbuf_free (fmt);
 		return NULL;
 	}
-	r_strbuf_append (fmt_sb, " ");
-	char *vars_s = r_strbuf_drain (vars_sb);
-	r_strbuf_append (fmt_sb, vars_s);
-	free (vars_s);
-	return r_strbuf_drain (fmt_sb);
+	return r_strbuf_drain (fmt);
 }
-
-static char *type_format(Sdb *TDB, const char *t, int depth);
 
 static char *type_format_base(Sdb *TDB, const char *t, int depth) {
 	const char *kind = sdb_const_get (TDB, t, NULL);
@@ -1010,40 +731,31 @@ static char *type_format(Sdb *TDB, const char *t, int depth) {
 	if (depth >= TYPE_CHAIN_MAX) {
 		return NULL;
 	}
-	char *base = strdup (type_skip_qualifiers (t));
-	if (!base) {
-		return NULL;
-	}
-	type_trim_qualifiers (base);
+	RTypeDeclNode *element = NULL;
 	ut64 elements;
-	if (!type_array_parse (base, &elements)) {
-		free (base);
+	RTypeDecl *decl = type_format_resolve (TDB, t, &element, &elements);
+	if (!decl) {
 		return NULL;
 	}
-	type_trim_qualifiers (base);
-	const char *name = NULL;
-	const char *bare = type_aggregate_prefixed (base, &name)? name: base;
-	char *fmt = type_format_base (TDB, bare, depth);
-	if (!fmt && type_format_is_pointer (bare)) {
+	char *fmt = NULL;
+	if (element->kind == R_TYPE_DECL_POINTER) {
+		fmt = type_pointer_format (TDB, element);
+	} else if (element->kind == R_TYPE_DECL_LVALUE_REFERENCE || element->kind == R_TYPE_DECL_RVALUE_REFERENCE) {
 		fmt = strdup ("p");
+	} else if (element->kind == R_TYPE_DECL_BASE) {
+		const char *name = element->base.name;
+		const char *bare = NULL;
+		if (type_aggregate_prefixed (name, &bare)) {
+			name = bare;
+		}
+		fmt = type_format_base (TDB, name, depth);
 	}
 	if (fmt && elements > 1) {
-		const char *body = fmt;
-		if (isdigit ((ut8)*fmt) && *fmt != '0') {
-			char *end;
-			ut64 count = strtoull (fmt, &end, 10);
-			if (r_mul_overflow (elements, count, &elements)) {
-				free (fmt);
-				free (base);
-				return NULL;
-			}
-			body = end;
-		}
-		char *array_fmt = r_str_newf (*body == '0'? "[%" PFMT64u "]? (pf %s)": "%" PFMT64u "%s", elements, body);
+		char *array = r_str_newf (*fmt == '0'? "[%" PFMT64u "]? (pf %s)": "%" PFMT64u "%s", elements, fmt);
 		free (fmt);
-		fmt = array_fmt;
+		fmt = array;
 	}
-	free (base);
+	r_type_decl_free (decl);
 	return fmt;
 }
 

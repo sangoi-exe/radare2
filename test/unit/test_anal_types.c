@@ -313,6 +313,8 @@ static bool test_anal_get_base_type_typedef(void) {
 	mu_assert_notnull (anal, "Couldn't create new RAnal");
 	mu_assert_notnull (anal->sdb_types, "Couldn't create new RAnal.sdb_types");
 
+	anal->config->bits = 64;
+	r_anal_types_reload (anal, R2_PREFIX, NULL, NULL);
 	setup_sdb_for_typedef (anal->sdb_types);
 
 	RAnalBaseType *base = r_anal_get_base_type (anal, "string");
@@ -321,7 +323,6 @@ static bool test_anal_get_base_type_typedef(void) {
 	mu_assert_eq (R_ANAL_BASE_TYPE_KIND_TYPEDEF, base->kind, "Wrong base type");
 	mu_assert_streq (base->name, "string", "type name");
 	mu_assert_streq (base->type, "char *", "typedefd type");
-	anal->config->bits = 64;
 	mu_assert_eq (r_anal_type_bitsize (anal, "string"), 64,
 		"Pointer typedef uses the current architecture width");
 	sdb_set (anal->sdb_types, "word", "typedef", 0);
@@ -737,11 +738,12 @@ static bool test_anal_base_type_to_kv(void) {
 
 static bool test_anal_cparse_multiline_fnptr(void) {
 	RAnal *anal = r_anal_new ();
+	r_anal_types_reload (anal, R2_PREFIX, NULL, NULL);
 	char *error = NULL;
 	char *kv = r_anal_cparse (anal, "void once(void (*cb)(\n\tint\n));", &error);
 	mu_assert_null (error, "parse multiline function pointer parameter");
 	mu_assert_notnull (kv, "serialize multiline function pointer parameter");
-	mu_assert_notnull (strstr (kv, "func.once.arg.0=void (*)( int ),cb\n"),
+	mu_assert_notnull (strstr (kv, "func.once.arg.0=void (*)(int),cb\n"),
 		"function pointer type stays within one SDB row");
 	free (kv);
 	r_anal_free (anal);
@@ -753,6 +755,7 @@ static bool test_anal_cparse_nested_layout(void) {
 	for (bits = 32; bits <= 64; bits += 32) {
 		RAnal *anal = r_anal_new ();
 		anal->config->bits = bits;
+		r_anal_types_reload (anal, R2_PREFIX, NULL, NULL);
 		char *error = NULL;
 		char *kv = r_anal_cparse (anal,
 			"struct Window {const char *sunlight;};"
@@ -772,7 +775,7 @@ static bool test_anal_cparse_nested_layout(void) {
 			"typedef union Choice {char c;Group groups[2];} Choice;"
 			"struct Outer {char lead;Choice choice;char tail;};", &error), "import aliases, arrays and definition-form aggregates");
 		mu_assert_null (error, "measure previously imported definitions");
-		mu_assert_streq (sdb_const_get (anal->sdb_types, "typedef.WindowPair", NULL), "WindowAlias[2]", "array typedef retains its element type and extent");
+		mu_assert_streq (sdb_const_get (anal->sdb_types, "typedef.WindowPair", NULL), "WindowAlias [2]", "array typedef retains its element type and extent");
 		mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.Group.tail", NULL), bits == 64? "char,24,0": "char,12,0", "definition-form struct measures array alias elements");
 		mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.Outer.tail", NULL), bits == 64? "char,72,0": "char,36,0", "definition-form union extent governs its consumer");
 		mu_assert_eq (r_anal_type_bitsize (anal, "Group"), bits == 64? 256: 128, "definition-form struct has tail padding");
@@ -794,11 +797,12 @@ static bool test_anal_cparse_callback_array_layout(void) {
 	for (bits = 32; bits <= 64; bits += 32) {
 		RAnal *anal = r_anal_new ();
 		anal->config->bits = bits;
+		r_anal_types_reload (anal, R2_PREFIX, NULL, NULL);
 		char *error = NULL;
 		mu_assert_true (r_anal_import_c_decls (anal,
 			"typedef int (*CB)(int x[4]); struct S { CB callback; char tail; };", &error), "import callback with an array parameter and its consumer together");
 		mu_assert_null (error, "callback parameter array does not prevent record layout");
-		mu_assert_streq (sdb_const_get (anal->sdb_types, "typedef.CB", NULL), "func.CB", "callback typedef is imported");
+		mu_assert_streq (sdb_const_get (anal->sdb_types, "typedef.CB", NULL), "func.CB *", "callback typedef is imported");
 		mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.S.callback", NULL), "CB,0,0", "record retains its callback member");
 		mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.S.tail", NULL), bits == 64? "char,8,0": "char,4,0", "callback occupies one target pointer");
 		mu_assert_eq (r_anal_type_bitsize (anal, "S"), bits * 2, "callback record retains pointer alignment and tail padding");
@@ -821,6 +825,7 @@ static bool test_anal_cparse_callback_array_layout(void) {
 static bool test_anal_cparse_definition_alias(void) {
 	RAnal *anal = r_anal_new ();
 	anal->config->bits = 64;
+	r_anal_types_reload (anal, R2_PREFIX, NULL, NULL);
 	char *error = NULL;
 	mu_assert_true (r_anal_import_c_decls (anal,
 		"typedef struct Tag {int x;int y;} Alias;"
@@ -960,6 +965,8 @@ static bool test_anal_type_bitsize_struct_cycle(void) {
 
 static bool test_anal_type_bitsize_arrays(void) {
 	RAnal *anal = r_anal_new ();
+	anal->config->bits = 64;
+	r_anal_types_reload (anal, R2_PREFIX, NULL, NULL);
 	Sdb *types = anal->sdb_types;
 	sdb_set (types, "word", "type", 0);
 	sdb_num_set (types, "type.word.size", 16, 0);
@@ -967,7 +974,6 @@ static bool test_anal_type_bitsize_arrays(void) {
 	sdb_set (types, "typedef.Ptr", "word *", 0);
 	sdb_set (types, "Row", "typedef", 0);
 	sdb_set (types, "typedef.Row", "word[3]", 0);
-	anal->config->bits = 64;
 	mu_assert_eq (r_anal_type_bitsize (anal, "word[2][3]"), 96, "Multidimensional arrays measure every element");
 	mu_assert_eq (r_anal_type_bitsize (anal, "Row[2]"), 96, "Array typedef dimensions multiply");
 	mu_assert_eq (r_anal_type_bitsize (anal, "Ptr[3]"), 192, "Pointer typedef arrays use the target width");
@@ -981,7 +987,84 @@ static bool test_anal_type_bitsize_arrays(void) {
 	mu_end;
 }
 
+static bool test_anal_x86_16_declaration_layout(void) {
+	RAnal *anal = r_anal_new ();
+	r_arch_config_use (anal->config, "x86");
+	anal->config->bits = 16;
+	r_anal_types_reload (anal, R2_PREFIX, NULL, NULL);
+	const char *types[] = { "int", "short", "long", "float", "double", "long double", "long long", "void *", "void near *", "void far *", "uint64_t", "signed char" };
+	const ut64 sizes[] = { 16, 16, 32, 32, 64, 80, 64, 16, 16, 32, 64, 8 };
+	size_t i;
+	for (i = 0; i < R_ARRAY_SIZE (types); i++) {
+		mu_assert_eq (r_anal_type_bitsize (anal, types[i]), sizes[i], types[i]);
+	}
+	RTypeLayout long_doubles;
+	mu_assert_true (r_type_get_layout (anal->sdb_types, "long double [2]", &long_doubles), "measure a contiguous long-double pair");
+	mu_assert_eq (long_doubles.bits, 160, "two ten-byte elements occupy twenty bytes");
+	mu_assert_eq (long_doubles.align, 2, "long-double alignment divides its representation");
+	mu_assert_false (r_type_get_layout (anal->sdb_types, "int &", &long_doubles), "reference syntax does not infer a data-object ABI width");
+	char *error = NULL;
+	mu_assert_true (r_anal_import_c_decls (anal,
+		"typedef unsigned char BYTE;typedef BYTE far * volatile near *MIX;"
+		"typedef int (far *CB)(int x[4], void (*cb)(int, int));"
+		"struct Mixed {char lead;MIX p;int far *farptr;CB cb;char tail;};"
+		"void consume(int values[4], int callback(int));struct Wide {long double values[2];};"
+		"typedef int FN(int);typedef int Row[4];void aliases(Row values, FN callback, CB qualified);", &error), "import mixed pointers and explicit far callback");
+	mu_assert_null (error, "target declaration import succeeds");
+	mu_assert_streq (sdb_const_get (anal->sdb_types, "typedef.MIX", NULL), "BYTE far * volatile near *", "mixed pointer typedef retains ordered explicit layers");
+	mu_assert_streq (sdb_const_get (anal->sdb_types, "typedef.CB", NULL), "func.CB far *", "callback object has an explicit far pointer around its function reference");
+	mu_assert_eq (r_anal_type_bitsize (anal, "func.CB"), 0, "function reference is not a sized object");
+	mu_assert_eq (r_anal_type_bitsize (anal, "MIX"), 16, "outer near pointer determines object width");
+	mu_assert_eq (r_anal_type_bitsize (anal, "CB"), 32, "far callback pointer width is independent from the convention");
+	mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.Mixed.p", NULL), "MIX,2,0", "near pointer retains target alignment");
+	mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.Mixed.farptr", NULL), "int far *,4,0", "far pointer has four-byte extent without imposing four-byte alignment");
+	mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.Mixed.cb", NULL), "CB,8,0", "far callback follows the far data pointer");
+	mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.Mixed.tail", NULL), "char,12,0", "callback occupies four bytes");
+	mu_assert_eq (r_anal_type_bitsize (anal, "Mixed"), 112, "aggregate retains two-byte pointer alignment and tail padding");
+	mu_assert_eq (r_anal_type_bitsize (anal, "Wide"), 160, "long-double array aggregate retains twenty-byte extent");
+	char *argument = r_type_func_args_type (anal->sdb_types, "CB", 1);
+	mu_assert_streq (argument, "void (*)(int, int)", "nested callback commas are not discarded");
+	mu_assert_streq (r_type_func_args_name (anal->sdb_types, "CB", 1), "cb", "nested callback name uses the canonical final delimiter");
+	free (argument);
+	argument = r_type_func_args_type (anal->sdb_types, "consume", 0);
+	mu_assert_streq (argument, "int *", "array adjustment is specific to the parameter producer");
+	free (argument);
+	argument = r_type_func_args_type (anal->sdb_types, "consume", 1);
+	mu_assert_streq (argument, "int (*)(int)", "function adjustment is specific to the parameter producer");
+	free (argument);
+	argument = r_type_func_args_type (anal->sdb_types, "aliases", 0);
+	mu_assert_streq (argument, "int *", "array typedef parameters decay to their element type");
+	free (argument);
+	argument = r_type_func_args_type (anal->sdb_types, "aliases", 1);
+	mu_assert_streq (argument, "FN *", "function typedef parameters acquire one explicit pointer");
+	free (argument);
+	argument = r_type_func_args_type (anal->sdb_types, "aliases", 2);
+	mu_assert_streq (argument, "CB", "a callback pointer typedef does not acquire another pointer");
+	free (argument);
+	mu_assert_eq (r_anal_type_bitsize (anal, "FN"), 0, "function typedef is not globally coerced to a pointer object");
+	mu_assert_streq (sdb_const_get (anal->sdb_types, "func.CB.cc", NULL), "cdecl", "pointer qualification does not rewrite the current convention");
+	RAnalBaseType *record = r_anal_get_base_type (anal, "Mixed");
+	char *serialized = r_anal_base_type_to_kv (record);
+	mu_assert_notnull (serialized, "serialize the current explicit-layer record");
+	r_anal_remove_parsed_type (anal, "Mixed");
+	r_anal_save_parsed_type (anal, serialized);
+	mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.Mixed.farptr", NULL), "int far *,4,0", "saved-analysis representation retains the far pointer");
+	mu_assert_eq (r_anal_type_bitsize (anal, "Mixed"), 112, "current-shape record retains its extent after storage roundtrip");
+	free (serialized);
+	r_anal_base_type_free (record);
+	free (error);
+	r_anal_free (anal);
+	anal = r_anal_new ();
+	r_arch_config_use (anal->config, "arm");
+	anal->config->bits = 16;
+	r_anal_types_reload (anal, R2_PREFIX, NULL, NULL);
+	mu_assert_eq (r_anal_type_bitsize (anal, "int"), 32, "x86-16 data model does not redefine ARM Thumb int");
+	r_anal_free (anal);
+	mu_end;
+}
+
 int all_tests(void) {
+	mu_run_test (test_anal_x86_16_declaration_layout);
 	mu_run_test (test_anal_get_base_type_struct);
 	mu_run_test (test_anal_save_base_type_struct);
 	mu_run_test (test_anal_base_type_struct_array_roundtrip);

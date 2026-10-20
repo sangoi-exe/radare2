@@ -104,6 +104,7 @@ r_util_sources = [
   'trie.c',
   'treemap.c',
   'type_decl.c',
+  'type_layout.c',
   'ubase64.c',
   'udiff.c',
   'uleb128.c',

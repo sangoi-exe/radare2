@@ -41,6 +41,7 @@ sdb_files = [
   'types',
   'types-windows',
   'types-x86-macos-64',
+  'types-x86-16',
   'types-x86-windows-32',
   'types-x86-windows-64'
 ]

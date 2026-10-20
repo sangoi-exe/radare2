@@ -27,7 +27,9 @@ typedef enum {
 	R_TYPE_DECL_BASE,
 	R_TYPE_DECL_POINTER,
 	R_TYPE_DECL_ARRAY,
-	R_TYPE_DECL_FUNCTION
+	R_TYPE_DECL_FUNCTION,
+	R_TYPE_DECL_LVALUE_REFERENCE,
+	R_TYPE_DECL_RVALUE_REFERENCE
 } RTypeDeclKind;
 
 typedef enum {
@@ -46,7 +48,7 @@ typedef enum {
 typedef struct r_type_decl_node_t {
 	RTypeDeclKind kind;
 	unsigned int qualifiers; // RTypeDeclQualifier flags on base and pointer nodes
-	struct r_type_decl_node_t * R_OWNED child; // pointee, array element or function return type; NULL on bases
+	struct r_type_decl_node_t * R_OWNED child; // pointee, referent, array element or function return type; NULL on bases
 	union {
 		struct {
 			char * R_OWNED name; // unresolved type name, including a struct/union/enum prefix if present
@@ -79,6 +81,15 @@ R_API R_OWNED RTypeDecl *r_type_decl_parse(const char * R_NONNULL text, char ** 
 // Render canonical syntax without a semicolon; include_name affects only the top-level name.
 R_API R_OWNED char *r_type_decl_render(const RTypeDecl * R_NONNULL decl, bool include_name);
 R_API void r_type_decl_free(RTypeDecl * R_NULLABLE decl);
+
+typedef struct r_type_layout_t {
+	ut64 bits;
+	ut64 align; // bytes, before aggregate/field packing overrides
+} RTypeLayout;
+
+// Measure object types against the selected type database; functions, syntactic references and unknown types fail.
+R_API bool r_type_decl_layout(Sdb * R_NONNULL TDB, const RTypeDeclNode * R_NONNULL type, RTypeLayout * R_NONNULL layout);
+R_API bool r_type_get_layout(Sdb * R_NONNULL TDB, const char * R_NONNULL type, RTypeLayout * R_NONNULL layout);
 
 R_API bool r_type_set(Sdb *TDB, ut64 at, const char *field, ut64 val);
 R_API void r_type_del(Sdb *TDB, const char *name);

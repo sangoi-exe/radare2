@@ -6,12 +6,12 @@ CMDS=<<EOF
 tk struct.rea_callbacks
 tk struct.rea_callbacks.xDlSym
 tk struct.rea_callbacks.next
-tk~func.rea_callbacks
+tk~^func.rea_callbacks
 EOF
 EXPECT=<<EOF
 xDlSym,next
-rea_callbacks.xDlSym,0,0
-rea_callbacks.next,8,0
+func.rea_callbacks.xDlSym *,0,0
+func.rea_callbacks.next *,8,0
 func.rea_callbacks.next=n
 func.rea_callbacks.next.arg.0=int,n
 func.rea_callbacks.next.args=1
@@ -38,7 +38,7 @@ tk struct.S.tail
 tk type.S.size
 EOF
 EXPECT=<<EOF
-func.CB
+func.CB *
 CB,0,0
 char,8,0
 128
@@ -83,10 +83,63 @@ tk func.rea_callback_union.first.arg.0
 EOF
 EXPECT=<<EOF
 first,second,value
-rea_callback_union.first,0,0
-rea_callback_union.second,0,0
+func.rea_callback_union.first *,0,0
+func.rea_callback_union.second *,0,0
 int,0,0
-void*
+void *
 int,n
+EOF
+RUN
+
+NAME=Win16 far callback retains explicit object layers and readable declarations
+FILE=--
+ARGS=-a x86 -b 16
+CMDS=<<EOF
+'td typedef int (far *CB)(int n);struct F {char lead;CB cb;char tail;};
+tk typedef.CB
+tss func.CB
+tss CB
+tk struct.F.cb
+tk struct.F.tail
+tss F
+ttc CB
+tsc F
+ts F
+EOF
+EXPECT=<<EOF
+func.CB far *
+0
+4
+CB,2,0
+char,6,0
+8
+typedef int (far *CB)(int n);
+struct F {
+  char lead;
+  CB cb;
+  char tail;
+};
+'pf c[1].p4c lead cb tail
+EOF
+RUN
+
+NAME=Win16 mixed pointer declarations preserve their individual layers
+FILE=--
+ARGS=-a x86 -b 16
+CMDS=<<EOF
+'td typedef unsigned char BYTE;struct Layers {BYTE far * volatile near *p;BYTE far **q;};
+tk struct.Layers.p
+tk struct.Layers.q
+tss Layers
+tsc Layers
+EOF
+EXPECT=<<EOF
+BYTE far * volatile near *,0,0
+BYTE far * *,2,0
+4
+struct Layers {
+  BYTE far * volatile near *p;
+  BYTE far * *q;
+};
 EOF
 RUN

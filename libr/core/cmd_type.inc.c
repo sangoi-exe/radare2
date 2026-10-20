@@ -863,6 +863,101 @@ static void print_structs_by_size(RCore *core, Sdb *TDB, ut64 size) {
 	ls_free (l);
 }
 
+static bool type_expand_function_refs(Sdb *db, RTypeDeclNode **slot, int depth) {
+	if (depth >= 64) {
+		return false;
+	}
+	RTypeDeclNode *node = *slot;
+	if (node->kind == R_TYPE_DECL_BASE && r_str_startswith (node->base.name, "func.")) {
+		const char *name = node->base.name + 5;
+		const char *ret = r_type_func_ret (db, name);
+		int argc;
+		if (!ret || !r_type_func_args_count (db, name, &argc)) {
+			return false;
+		}
+		RTypeDecl *result = r_type_decl_parse (ret, NULL);
+		if (!result || result->name) {
+			r_type_decl_free (result);
+			return false;
+		}
+		RTypeDeclNode *function = R_NEW0 (RTypeDeclNode);
+		function->kind = R_TYPE_DECL_FUNCTION;
+		function->child = result->type;
+		result->type = NULL;
+		r_type_decl_free (result);
+		function->function.parameters = r_list_newf ((RListFree)r_type_decl_free);
+		function->function.prototype = true;
+		int i;
+		bool ok = true;
+		for (i = 0; i < argc; i++) {
+			char *type = r_type_func_args_type (db, name, i);
+			const char *argument = r_type_func_args_name (db, name, i);
+			if (r_type_arg_is_vararg (type, argument)) {
+				function->function.variadic = true;
+				free (type);
+				continue;
+			}
+			RTypeDecl *param = type? r_type_decl_parse (type, NULL): NULL;
+			free (type);
+			if (!param || param->name) {
+				r_type_decl_free (param);
+				ok = false;
+				break;
+			}
+			param->name = argument? strdup (argument): NULL;
+			if ((argument && !param->name) || !r_list_append (function->function.parameters, param)) {
+				r_type_decl_free (param);
+				ok = false;
+				break;
+			}
+		}
+		free (node->base.name);
+		free (node);
+		*slot = node = function;
+		if (!ok) {
+			return false;
+		}
+	}
+	if (node->kind == R_TYPE_DECL_FUNCTION) {
+		RListIter *iter;
+		RTypeDecl *param;
+		r_list_foreach (node->function.parameters, iter, param) {
+			if (!type_expand_function_refs (db, &param->type, depth + 1)) {
+				return false;
+			}
+		}
+	}
+	return !node->child || type_expand_function_refs (db, &node->child, depth + 1);
+}
+
+static char *type_c_declaration(Sdb *db, const char *type, const char *name, int count) {
+	RTypeDecl *decl = r_type_decl_parse (type, NULL);
+	if (!decl || decl->name || !type_expand_function_refs (db, &decl->type, 0)) {
+		r_type_decl_free (decl);
+		R_LOG_ERROR ("Cannot render type declaration: %s", type);
+		return NULL;
+	}
+	decl->name = name? strdup (name): NULL;
+	if (name && !decl->name) {
+		r_type_decl_free (decl);
+		return NULL;
+	}
+	if (count > 0) {
+		RTypeDeclNode *array = R_NEW0 (RTypeDeclNode);
+		array->kind = R_TYPE_DECL_ARRAY;
+		array->array.count = r_str_newf ("%d", count);
+		array->child = decl->type;
+		decl->type = array;
+		if (!array->array.count) {
+			r_type_decl_free (decl);
+			return NULL;
+		}
+	}
+	char *text = r_type_decl_render (decl, true);
+	r_type_decl_free (decl);
+	return text;
+}
+
 // Rename to char *RAnal.type_to_c() {}
 static void print_struct_union_in_c_format(RCore *core, Sdb *TDB, SdbForeachCallback filter, const char *arg, bool multiline) {
 	char *name = NULL;
@@ -890,7 +985,6 @@ static void print_struct_union_in_c_format(RCore *core, Sdb *TDB, SdbForeachCall
 		}
 		r_strbuf_appendf (sb, "%s %s {%s", sdbkv_value (kv), name, multiline? "\n": "");
 		const bool is_struct = !strcmp (sdbkv_value (kv), "struct");
-		const int ptr_size = R_MAX (1, (int)core->anal->config->bits / 8);
 		ut64 run = 0;
 		char *p, *var = r_str_newf ("%s.%s", sdbkv_value (kv), name);
 		for (n = 0; (p = sdb_array_get (TDB, var, n, NULL)); n++) {
@@ -900,28 +994,25 @@ static void print_struct_union_in_c_format(RCore *core, Sdb *TDB, SdbForeachCall
 				int arrnum = 0;
 				char *val = r_type_get_member (TDB, var2, &moff, &arrnum);
 				if (val) {
+					RTypeLayout layout;
+					bool measured = r_type_get_layout (TDB, val, &layout);
 					if (is_struct) {
-						// function-pointer members store a func alias as their type; the parser lays them out as pointers
-						const char *tv = sdb_const_get (TDB, val, 0);
-						const bool is_fptr = tv && !strcmp (tv, "func");
-						const int av = is_fptr? ptr_size: r_anal_cparse_typealign (val, ptr_size);
 						ut64 natural = run;
-						if (av > 1 && (natural % av)) {
-							natural += av - (natural % av);
+						if (measured && natural % layout.align) {
+							natural += layout.align - natural % layout.align;
 						}
-						// pad only gaps that natural alignment cannot reproduce on re-parse
-						if (moff > run && moff != natural && !(moff % av)) {
-							if (multiline) {
-								r_strbuf_appendf (sb, "  uint8_t pad_0x%" PFMT64x "[%" PFMT64u "]; // gap\n", run, moff - run);
-							} else {
-								r_strbuf_appendf (sb, "%suint8_t pad_0x%" PFMT64x "[%" PFMT64u "];", space, run, moff - run);
-								space = " ";
-							}
+						if (moff > run && (!measured || (moff != natural && !(moff % layout.align)))) {
+							r_strbuf_appendf (sb, "%suint8_t pad_0x%" PFMT64x "[%" PFMT64u "];%s", multiline? "  ": space, run, moff - run, multiline? " // gap\n": "");
+							space = " ";
 						}
-						const ut64 type_bytes = is_fptr? ptr_size: r_anal_type_bitsize (core->anal, val) / 8;
-						const int count = arrnum > 0? arrnum: 1;
-						const ut64 mb = type_bytes? type_bytes * count: r_anal_cparse_typesize (val, count, ptr_size);
-						run = R_MAX (run, moff + mb); // monotonic: overlapping members never force a pad
+						ut64 bytes = 0;
+						ut64 end = moff;
+						if (measured && (r_mul_overflow (layout.bits / 8, (ut64)(arrnum > 0? arrnum: 1), &bytes)
+								|| r_add_overflow (moff, bytes, &end))) {
+							R_LOG_ERROR ("Member extent overflows: %s", var2);
+							end = moff;
+						}
+						run = R_MAX (run, end);
 					}
 					// Check for metadata attributes for this field
 					RStrBuf *attrs_sb = r_strbuf_new ("");
@@ -944,23 +1035,12 @@ static void print_struct_union_in_c_format(RCore *core, Sdb *TDB, SdbForeachCall
 					free (attr_prefix);
 					ls_free (all_keys);
 					char *attrs_str = r_strbuf_drain (attrs_sb);
-					if (multiline) {
-						r_strbuf_appendf (sb, "  %s", val);
-						if (p && p[0] != '\0') {
-							r_strbuf_appendf (sb, "%s%s", strstr (val, " *")? "": " ", p);
-							if (arrnum) {
-								r_strbuf_appendf (sb, "[%d]", arrnum);
-							}
-						}
-						r_strbuf_appendf (sb, ";%s\n", attrs_str? attrs_str: "");
-					} else {
-						r_strbuf_appendf (sb, "%s%s %s", space, val, p);
-						if (arrnum) {
-							r_strbuf_appendf (sb, "[%d]", arrnum);
-						}
-						r_strbuf_appendf (sb, ";%s", attrs_str? attrs_str: "");
+					char *declaration = type_c_declaration (TDB, val, p, arrnum);
+					if (declaration) {
+						r_strbuf_appendf (sb, "%s%s;%s%s", multiline? "  ": space, declaration, attrs_str? attrs_str: "", multiline? "\n": "");
 						space = " ";
 					}
+					free (declaration);
 					free (attrs_str);
 					free (val);
 				}
@@ -1177,6 +1257,7 @@ static void print_struct_union_with_offsets(RCore *core, Sdb *TDB, SdbForeachCal
 			r_list_free (type_xrefs);
 		}
 		r_strbuf_appendf (sb, "%s0x%08x%s %s %s%s%s {\n", color_addr, 0, color_reset, sdbkv_value (kv), color_name, name, color_reset);
+		ut64 known_end = r_anal_type_bitsize (core->anal, name) / 8;
 		char *p, *var = r_str_newf ("%s.%s", sdbkv_value (kv), name);
 		for (n = 0; (p = sdb_array_get (TDB, var, n, NULL)); n++) {
 			char *var2 = r_str_newf ("%s.%s", var, p);
@@ -1185,13 +1266,21 @@ static void print_struct_union_with_offsets(RCore *core, Sdb *TDB, SdbForeachCal
 				int arrnum = 0;
 				char *val = r_type_get_member (TDB, var2, &moff, &arrnum);
 				if (val) {
-					r_strbuf_appendf (sb, "%s0x%08"PFMT64x"%s   %s%s%s", color_addr, moff, color_reset, color_type, val, color_reset);
-					if (p && p[0] != '\0') {
-						r_strbuf_appendf (sb, "%s%s%s%s", strstr (val, " *")? "": " ", color_name, p, color_reset);
-						if (arrnum) {
-							r_strbuf_appendf (sb, "[%d]", arrnum);
-						}
+					char *declaration = type_c_declaration (TDB, val, p, arrnum);
+					if (declaration) {
+						r_strbuf_appendf (sb, "%s0x%08" PFMT64x "%s   %s%s%s", color_addr, moff, color_reset, color_type, declaration, color_reset);
 					}
+					free (declaration);
+					RTypeLayout layout;
+					ut64 bytes = 0;
+					ut64 end = moff;
+					if (r_type_get_layout (TDB, val, &layout) && (r_mul_overflow (layout.bits / 8, (ut64)(arrnum > 0? arrnum: 1), &bytes)
+							|| r_add_overflow (moff, bytes, &end))) {
+						R_LOG_ERROR ("Member extent overflows: %s", var2);
+						end = moff;
+					}
+					// Preserve known offsets without inventing widths for incomplete members.
+					known_end = R_MAX (known_end, end);
 					if (show_xrefs) {
 						RList *field_xrefs = collect_field_xrefs (core, name, p, moff);
 						append_xrefs_to_strbuf (core, sb, field_xrefs, use_color);
@@ -1205,7 +1294,7 @@ static void print_struct_union_with_offsets(RCore *core, Sdb *TDB, SdbForeachCal
 			free (p);
 		}
 		free (var);
-		r_strbuf_appendf (sb, "%s0x%08"PFMT64x"%s };\n", color_addr, r_anal_type_bitsize (core->anal, name) / 8, color_reset);
+		r_strbuf_appendf (sb, "%s0x%08"PFMT64x"%s };\n", color_addr, known_end, color_reset);
 		if (match) {
 			break;
 		}
@@ -1450,14 +1539,10 @@ static void print_func_with_offsets(RCore *core, Sdb *TDB, const char *arg) {
 		int max_cc_args = cc ? r_anal_cc_max_arg (core->anal, cc) : 0;
 		ut32 current_offset = 0;
 		for (i = 0; i < args; i++) {
-			const char *value = sdb_const_getf (TDB, NULL, "func.%s.arg.%d", name, i);
-			char *type = value? strdup (value): NULL;
+			char *type = r_type_func_args_type (TDB, name, i);
+			const char *argname = r_type_func_args_name (TDB, name, i);
 			if (!type) {
 				continue;
-			}
-			char *argname = strchr (type, ',');
-			if (argname) {
-				*argname++ = 0;
 			}
 
 			const char *arg_loc = NULL;
@@ -1685,40 +1770,14 @@ static bool printkey_cb(void *user, const char *k, const char *v) {
 
 // maybe dupe?. should return char *instead of print for reusability
 static void printFunctionTypeC(RCore *core, const char *input) {
-	Sdb *TDB = core->anal->sdb_types;
-	r_strf_buffer (256);
-	char *res = sdb_querys (TDB, NULL, -1, r_strf ("func.%s.args", input));
 	const char *name = r_str_trim_head_ro (input);
-	int i, args = sdb_num_getf (TDB, NULL, "func.%s.args", name);
-	const char *ret = sdb_const_getf (TDB, NULL, "func.%s.ret", name);
-	if (!ret) {
-		ret = "void";
+	char *reference = r_str_newf ("func.%s", name);
+	char *declaration = type_c_declaration (core->anal->sdb_types, reference, name, 0);
+	if (declaration) {
+		r_cons_printf (core->cons, "%s;\n", declaration);
 	}
-	if (!ret || !name) {
-		// missing function name specified
-		return;
-	}
-
-	r_cons_printf (core->cons, "%s %s (", ret, name);
-	for (i = 0; i < args; i++) {
-		const char *value = sdb_const_getf (TDB, NULL, "func.%s.arg.%d", name, i);
-		char *type = value? strdup (value): NULL;
-		if (!type) {
-			continue;
-		}
-		char *argname = strchr (type, ',');
-		if (argname) {
-			*argname++ = 0;
-		}
-		if (r_type_arg_is_vararg (type, argname)) {
-			r_cons_printf (core->cons, "%s...", (i == 0)? "": ", ");
-		} else {
-			r_cons_printf (core->cons, "%s%s %s", (i == 0)? "": ", ", type, argname);
-		}
-		free (type);
-	}
-	r_cons_printf (core->cons, ");\n");
-	free (res);
+	free (declaration);
+	free (reference);
 }
 
 typedef struct {
@@ -1760,13 +1819,9 @@ static void printFunctionTypeJson(TypePrintCtx *ctx, const char *input) {
 	pj_ka (pj, "args");
 	ut32 current_offset = 0;
 	for (i = 0; i < args; i++) {
-		const char *value = sdb_const_getf (tdb, NULL, "func.%s.arg.%d", name, i);
-		char *type = value? strdup (value): NULL;
+		char *type = r_type_func_args_type (tdb, name, i);
+		const char *argname = r_type_func_args_name (tdb, name, i);
 		if (type) {
-			char *argname = strchr (type, ',');
-			if (argname) {
-				*argname++ = 0;
-			}
 			const char *arg_loc = NULL;
 			if (cc && i < max_cc_args) {
 				arg_loc = r_anal_cc_argloc (core->anal, cc, i, 0, args);
@@ -3265,7 +3320,11 @@ static int cmd_type(void *data, const char *input) {
 						}
 						const char *res = sdb_const_getf (TDB, NULL, "typedef.%s", name);
 						if (res) {
-							r_cons_printf (core->cons, "%s %s %s;\n", sdbkv_value (kv), res, name);
+							char *declaration = type_c_declaration (TDB, res, name, 0);
+							if (declaration) {
+								r_cons_printf (core->cons, "typedef %s;\n", declaration);
+							}
+							free (declaration);
 						}
 						if (match) {
 							break;

@@ -35,6 +35,7 @@ typedef struct r_anal_priv_t {
 	Sdb *types_index;
 	char *types_subsystem;
 	int types_loaded_bits;
+	char types_loaded_arch[sizeof (((RArchConfig *)0)->arch)];
 	char *dir_prefix;
 	// moves on every change to sdb_cc: the sdb hook set in r_anal_new sees
 	// each key write, and r_anal_cc_reset covers sdb_reset, which calls no hook

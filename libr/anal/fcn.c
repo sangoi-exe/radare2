@@ -3071,18 +3071,18 @@ static void function_param_free(RAnalFunctionParam *param) {
 	free (param);
 }
 
-static char *function_param_string(const RAnalFunctionParam *param) {
+static RTypeDecl *function_param_decl(const RAnalFunctionParam *param) {
 	R_RETURN_VAL_IF_FAIL (param && param->type, NULL);
-	if (r_type_arg_is_vararg (param->type, param->name)) {
-		return strdup ("...");
+	RTypeDecl *decl = r_type_decl_parse (param->type, NULL);
+	if (decl && R_STR_ISNOTEMPTY (param->name)) {
+		free (decl->name);
+		decl->name = strdup (param->name);
+		if (!decl->name) {
+			r_type_decl_free (decl);
+			return NULL;
+		}
 	}
-	if (R_STR_ISEMPTY (param->name)) {
-		return strdup (param->type);
-	}
-	if (r_str_endswith (param->type, "*")) {
-		return r_str_newf ("%s%s", param->type, param->name);
-	}
-	return r_str_newf ("%s %s", param->type, param->name);
+	return decl;
 }
 
 static const RAnalFunctionParam *function_signature_default_param(const RAnalFunctionParam *param, RAnalFunctionParam *tmp, size_t idx, char **default_name) {
@@ -3100,28 +3100,24 @@ static const RAnalFunctionParam *function_signature_default_param(const RAnalFun
 	return tmp;
 }
 
-static bool function_signature_append_arg(RStrBuf *args, const RAnalFunctionParam *param, bool first) {
-	char *arg = function_param_string (param);
-	if (!arg) {
-		return false;
-	}
-	const bool ok = r_strbuf_appendf (args, "%s%s", first? "": ", ", arg);
-	free (arg);
-	return ok;
-}
-
 static char *function_signature_string(const char *name, const char *ret_type, RList *params, bool sanitize_name, bool fill_defaults) {
 	RListIter *iter;
 	RAnalFunctionParam *param;
-	RStrBuf args;
 	char *sane = NULL;
 	char *signature = NULL;
 	size_t i = 0;
-	bool first = true;
 	bool ok = true;
 
 	R_RETURN_VAL_IF_FAIL (name, NULL);
-	r_strbuf_init (&args);
+	RTypeDecl *decl = r_type_decl_parse (r_str_get_fail (ret_type, "void"), NULL);
+	if (!decl) {
+		return NULL;
+	}
+	RTypeDeclNode *function = R_NEW0 (RTypeDeclNode);
+	function->kind = R_TYPE_DECL_FUNCTION;
+	function->child = decl->type;
+	function->function.parameters = r_list_newf ((RListFree)r_type_decl_free);
+	decl->type = function;
 	if (params) {
 		r_list_foreach (params, iter, param) {
 			RAnalFunctionParam tmp = {0};
@@ -3129,12 +3125,22 @@ static char *function_signature_string(const char *name, const char *ret_type, R
 			const RAnalFunctionParam *current = fill_defaults
 				? function_signature_default_param (param, &tmp, i, &default_name)
 				: param;
-			ok = current && function_signature_append_arg (&args, current, first);
+			if (!current) {
+				ok = false;
+			} else if (r_type_arg_is_vararg (current->type, current->name)) {
+				function->function.variadic = true;
+				ok = !iter->n;
+			} else {
+				RTypeDecl *arg = function_param_decl (current);
+				ok = arg && r_list_append (function->function.parameters, arg);
+				if (!ok) {
+					r_type_decl_free (arg);
+				}
+			}
 			free (default_name);
 			if (!ok) {
 				break;
 			}
-			first = false;
 			i++;
 		}
 	}
@@ -3145,10 +3151,17 @@ static char *function_signature_string(const char *name, const char *ret_type, R
 		}
 	}
 	if (ok) {
-		signature = r_str_newf ("%s %s (%s);", r_str_get_fail (ret_type, "void"), r_str_get_fail (sane, name), r_strbuf_get (&args));
+		free (decl->name);
+		// Keep the signature API's space before the outer argument list.
+		decl->name = r_str_newf ("%s ", r_str_get_fail (sane, name));
+		char *text = decl->name? r_type_decl_render (decl, true): NULL;
+		if (text) {
+			signature = r_str_newf ("%s;", text);
+		}
+		free (text);
 	}
 	free (sane);
-	r_strbuf_fini (&args);
+	r_type_decl_free (decl);
 	return signature;
 }
 
@@ -3384,7 +3397,35 @@ R_API int r_anal_str_to_fcn(RAnal *a, RAnalFunction *f, const char *sig) {
 	R_RETURN_VAL_IF_FAIL (a && f && sig, false);
 	int ret = false;
 	char *error_msg = NULL;
-	char *out = r_anal_cparse (a, sig, &error_msg);
+	char *text = strdup (sig);
+	if (!text) {
+		return false;
+	}
+	size_t length = strlen (text);
+	while (length && (isspace ((ut8)text[length - 1]) || text[length - 1] == ';')) {
+		text[--length] = 0;
+	}
+	RTypeDecl *decl = r_type_decl_parse (text, NULL);
+	free (text);
+	char *normalized = NULL;
+	if (decl && !decl->name && decl->type->kind == R_TYPE_DECL_FUNCTION
+			&& decl->type->child->kind == R_TYPE_DECL_BASE
+			&& !decl->type->child->qualifiers && !strchr (decl->type->child->base.name, ' ')) {
+		// afs permits a bare function name and defaults its return type to void.
+		RTypeDeclNode *result = decl->type->child;
+		decl->name = result->base.name;
+		result->base.name = strdup ("void");
+		text = result->base.name? r_type_decl_render (decl, true): NULL;
+		normalized = text? r_str_newf ("%s;", text): NULL;
+		free (text);
+		if (!normalized) {
+			r_type_decl_free (decl);
+			return false;
+		}
+	}
+	r_type_decl_free (decl);
+	char *out = r_anal_cparse (a, normalized? normalized: sig, &error_msg);
+	free (normalized);
 	if (out) {
 		r_anal_save_parsed_type (a, out);
 		RAnalFunctionSignature *signature = r_anal_function_get_signature (f);

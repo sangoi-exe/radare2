@@ -40,6 +40,9 @@ static bool same_declaration(const RTypeDecl *a, const RTypeDecl *b) {
 				}
 			}
 			break;
+		case R_TYPE_DECL_LVALUE_REFERENCE:
+		case R_TYPE_DECL_RVALUE_REFERENCE:
+			break;
 		}
 	}
 	return !an && !bn;
@@ -216,7 +219,7 @@ static bool test_type_decl_utility_qualifiers(void) {
 }
 
 static bool test_type_decl_dotted_names(void) {
-	const char *names[] = { "foo.bar", "fcn.00401000" };
+	const char *names[] = { "foo.bar", "fcn.00401000", "sym..crc32_init" };
 	size_t i;
 	for (i = 0; i < R_ARRAY_SIZE (names); i++) {
 		char *input = r_str_newf ("int %s(int x)", names[i]);
@@ -244,6 +247,43 @@ static bool test_type_decl_dotted_names(void) {
 	mu_end;
 }
 
+static bool test_type_decl_opaque_base(void) {
+	RTypeDecl *decl = r_type_decl_parse ("pair<int, char> p", NULL);
+	mu_assert_notnull (decl, "parse an established opaque comma-bearing base name");
+	mu_assert_streq (decl->name, "p", "opaque base does not consume the declaration name");
+	mu_assert_eq (decl->type->kind, R_TYPE_DECL_BASE, "opaque spelling is one unresolved leaf");
+	mu_assert_streq (decl->type->base.name, "pair<int, char>", "preserve the opaque name and embedded comma verbatim");
+	char *text = r_type_decl_render (decl, true);
+	mu_assert_streq (text, "pair<int, char> p", "render the opaque base without interpreting its contents");
+	RTypeDecl *again = r_type_decl_parse (text, NULL);
+	mu_assert_notnull (again, "reparse the rendered opaque base");
+	mu_assert_true (same_declaration (decl, again), "opaque leaf survives rendering");
+	free (text);
+	r_type_decl_free (again);
+	r_type_decl_free (decl);
+	mu_end;
+}
+
+static bool test_type_decl_reference_syntax(void) {
+	const char *inputs[] = { "Object &ref", "Object &&ref" };
+	const RTypeDeclKind kinds[] = { R_TYPE_DECL_LVALUE_REFERENCE, R_TYPE_DECL_RVALUE_REFERENCE };
+	size_t i;
+	for (i = 0; i < R_ARRAY_SIZE (inputs); i++) {
+		RTypeDecl *decl = r_type_decl_parse (inputs[i], NULL);
+		mu_assert_notnull (decl, "preserve established reference spelling at the shared syntax boundary");
+		mu_assert_eq (decl->type->kind, kinds[i], "reference syntax is distinct, not a pointer node");
+		char *text = r_type_decl_render (decl, true);
+		mu_assert_streq (text, inputs[i], "render the reference spelling without ABI inference");
+		RTypeDecl *again = r_type_decl_parse (text, NULL);
+		mu_assert_notnull (again, "reparse the reference spelling");
+		mu_assert_true (same_declaration (decl, again), "reference layer survives reparse");
+		r_type_decl_free (again);
+		free (text);
+		r_type_decl_free (decl);
+	}
+	mu_end;
+}
+
 int all_tests(void) {
 	mu_run_test (test_type_decl_mixed_pointers);
 	mu_run_test (test_type_decl_array_precedence);
@@ -252,6 +292,8 @@ int all_tests(void) {
 	mu_run_test (test_type_decl_reject_malformed);
 	mu_run_test (test_type_decl_utility_qualifiers);
 	mu_run_test (test_type_decl_dotted_names);
+	mu_run_test (test_type_decl_opaque_base);
+	mu_run_test (test_type_decl_reference_syntax);
 	return tests_passed != tests_run;
 }
 

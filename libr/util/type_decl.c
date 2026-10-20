@@ -28,6 +28,8 @@ static void decl_node_free(RTypeDeclNode *node) {
 			r_list_free (node->function.parameters);
 			break;
 		case R_TYPE_DECL_POINTER:
+		case R_TYPE_DECL_LVALUE_REFERENCE:
+		case R_TYPE_DECL_RVALUE_REFERENCE:
 			break;
 		}
 		free (node);
@@ -90,22 +92,31 @@ static unsigned int decl_qualifier(DeclParser *parser) {
 	return 0;
 }
 
-static char *decl_identifier(DeclParser *parser) {
+static char *decl_identifier(DeclParser *parser, bool base) {
 	decl_skip_space (parser);
 	const char *start = parser->cursor;
 	if (!decl_ident_start (*start)) {
 		return NULL;
 	}
-	do {
+	parser->cursor++;
+	while (decl_ident_char (*parser->cursor) || *parser->cursor == '.') {
 		parser->cursor++;
-		while (decl_ident_char (*parser->cursor)) {
+	}
+	if (base && *parser->cursor == '<') {
+		unsigned int depth = 0;
+		do {
+			if (*parser->cursor == '<') {
+				depth++;
+			} else if (*parser->cursor == '>') {
+				depth--;
+			}
 			parser->cursor++;
+		} while (*parser->cursor && depth);
+		if (depth) {
+			decl_error (parser, "Unclosed opaque base name");
+			return NULL;
 		}
-		if (*parser->cursor != '.' || !decl_ident_char (parser->cursor[1])) {
-			break;
-		}
-		parser->cursor++;
-	} while (true);
+	}
 	char *word = r_str_ndup (start, parser->cursor - start);
 	if (!word) {
 		decl_error (parser, "Cannot allocate identifier");
@@ -152,7 +163,7 @@ static RTypeDeclNode *decl_base(DeclParser *parser) {
 			decl_error (parser, "Expected a base type before a pointer qualifier");
 			break;
 		}
-		char *word = decl_identifier (parser);
+		char *word = decl_identifier (parser, true);
 		if (!word) {
 			decl_error (parser, "Expected a base type");
 			break;
@@ -161,7 +172,7 @@ static RTypeDeclNode *decl_base(DeclParser *parser) {
 		bool ok = r_strbuf_append (&name, word);
 		free (word);
 		if (tagged) {
-			word = decl_identifier (parser);
+			word = decl_identifier (parser, true);
 			ok = ok && word && r_strbuf_append (&name, " ") && r_strbuf_append (&name, word);
 			free (word);
 		}
@@ -280,7 +291,8 @@ static bool decl_declarator(DeclParser *parser, DeclChain *chain, char **name) {
 			kind = R_TYPE_POINTER_FAR;
 		}
 		decl_skip_space (parser);
-		if (*parser->cursor != '*') {
+		bool reference = *parser->cursor == '&' && kind == R_TYPE_POINTER_DEFAULT;
+		if (*parser->cursor != '*' && !reference) {
 			if (kind != R_TYPE_POINTER_DEFAULT) {
 				decl_error (parser, "Expected * after pointer qualifier");
 			}
@@ -290,9 +302,18 @@ static bool decl_declarator(DeclParser *parser, DeclChain *chain, char **name) {
 		RTypeDeclNode *node = R_NEW0 (RTypeDeclNode);
 		node->kind = R_TYPE_DECL_POINTER;
 		node->pointer.kind = kind;
-		unsigned int qualifier;
-		while ((qualifier = decl_qualifier (parser))) {
-			node->qualifiers |= qualifier;
+		if (reference) {
+			node->kind = R_TYPE_DECL_LVALUE_REFERENCE;
+			if (*parser->cursor == '&') {
+				node->kind = R_TYPE_DECL_RVALUE_REFERENCE;
+				parser->cursor++;
+			}
+			decl_skip_space (parser);
+		} else {
+			unsigned int qualifier;
+			while ((qualifier = decl_qualifier (parser))) {
+				node->qualifiers |= qualifier;
+			}
 		}
 		node->child = pointers.head;
 		if (!pointers.head) {
@@ -304,7 +325,7 @@ static bool decl_declarator(DeclParser *parser, DeclChain *chain, char **name) {
 		DeclParser lookahead = *parser;
 		lookahead.cursor++;
 		decl_skip_space (&lookahead);
-		bool grouped = *lookahead.cursor == '*' || *lookahead.cursor == '(' || *lookahead.cursor == '['
+		bool grouped = *lookahead.cursor == '*' || *lookahead.cursor == '&' || *lookahead.cursor == '(' || *lookahead.cursor == '['
 			|| decl_word (&lookahead, "near") || decl_word (&lookahead, "far");
 		if (grouped) {
 			parser->cursor++;
@@ -317,7 +338,7 @@ static bool decl_declarator(DeclParser *parser, DeclChain *chain, char **name) {
 			}
 		}
 	} else if (!parser->error && decl_ident_start (*parser->cursor)) {
-		*name = decl_identifier (parser);
+		*name = decl_identifier (parser, false);
 	}
 	decl_skip_space (parser);
 	while (!parser->error) {
@@ -407,7 +428,8 @@ R_API R_OWNED char *r_type_decl_render(const RTypeDecl *decl, bool include_name)
 	RTypeDeclKind previous = R_TYPE_DECL_BASE;
 	const RTypeDeclNode *node;
 	for (node = decl->type; node && ok; node = node->child) {
-		if (node->kind == R_TYPE_DECL_BASE || node->kind == R_TYPE_DECL_POINTER) {
+		if (node->kind == R_TYPE_DECL_BASE || node->kind == R_TYPE_DECL_POINTER
+				|| node->kind == R_TYPE_DECL_LVALUE_REFERENCE || node->kind == R_TYPE_DECL_RVALUE_REFERENCE) {
 			RStrBuf prefix;
 			r_strbuf_init (&prefix);
 			if (node->kind == R_TYPE_DECL_BASE) {
@@ -417,20 +439,27 @@ R_API R_OWNED char *r_type_decl_render(const RTypeDecl *decl, bool include_name)
 					ok = r_strbuf_append (&prefix, " ");
 				}
 			} else {
-				if (node->pointer.kind == R_TYPE_POINTER_NEAR) {
+				if (node->kind == R_TYPE_DECL_POINTER && node->pointer.kind == R_TYPE_POINTER_NEAR) {
 					ok = r_strbuf_append (&prefix, "near ");
-				} else if (node->pointer.kind == R_TYPE_POINTER_FAR) {
+				} else if (node->kind == R_TYPE_DECL_POINTER && node->pointer.kind == R_TYPE_POINTER_FAR) {
 					ok = r_strbuf_append (&prefix, "far ");
 				}
-				ok = ok && r_strbuf_append (&prefix, "*");
-				if (ok && (node->qualifiers || (previous == R_TYPE_DECL_POINTER && r_strbuf_length (&out)))) {
+				const char *symbol = "*";
+				if (node->kind == R_TYPE_DECL_LVALUE_REFERENCE) {
+					symbol = "&";
+				} else if (node->kind == R_TYPE_DECL_RVALUE_REFERENCE) {
+					symbol = "&&";
+				}
+				ok = ok && r_strbuf_append (&prefix, symbol);
+				bool previous_prefix = previous == R_TYPE_DECL_POINTER || previous == R_TYPE_DECL_LVALUE_REFERENCE || previous == R_TYPE_DECL_RVALUE_REFERENCE;
+				if (ok && (node->qualifiers || (previous_prefix && r_strbuf_length (&out)))) {
 					ok = r_strbuf_append (&prefix, " ") && decl_render_qualifiers (&prefix, node->qualifiers);
 				}
 			}
 			ok = ok && r_strbuf_prepend (&out, r_strbuf_get (&prefix));
 			r_strbuf_fini (&prefix);
 		} else {
-			if (previous == R_TYPE_DECL_POINTER) {
+			if (previous == R_TYPE_DECL_POINTER || previous == R_TYPE_DECL_LVALUE_REFERENCE || previous == R_TYPE_DECL_RVALUE_REFERENCE) {
 				ok = r_strbuf_prepend (&out, "(") && r_strbuf_append (&out, ")");
 			}
 			if (node->kind == R_TYPE_DECL_ARRAY) {

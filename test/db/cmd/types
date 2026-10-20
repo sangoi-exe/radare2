@@ -8,6 +8,48 @@ EXPECT=<<EOF
 EOF
 RUN
 
+NAME=x86 Win16 target dimensions do not redefine other 16-bit instruction modes
+FILE=--
+ARGS=-a x86 -b 16
+CMDS=<<EOF
+tss int
+tss short
+tss long
+tss float
+tss double
+tss long double
+tss long long
+tss void *
+tss void near *
+tss void far *
+tss uint16_t
+tss uint64_t
+tss long double[2]
+'td struct Wide {long double values[2];};
+tss Wide
+e asm.arch=arm
+e asm.bits=16
+tss int
+EOF
+EXPECT=<<EOF
+2
+2
+4
+4
+8
+10
+8
+2
+2
+4
+2
+8
+20
+20
+4
+EOF
+RUN
+
 NAME=td union
 FILE=malloc://32
 CMDS=<<EOF
@@ -243,7 +285,7 @@ e io.cache=false
 e io.cache.read=false
 wc-*
 aa
--e types.plugin=tcc
+e types.plugin=
 s sym.Java_com_app_ndh_NDHActivity_print
 to bins/headers/jni.h
 td struct NULL { }
@@ -450,6 +492,8 @@ NAME=td struct
 FILE=-
 CMDS=<<EOF
 t-*
+tk int=type
+tk type.int.size=32
 'td struct test_struct{int x;int y;};
 ts~?test_struct
 EOF
@@ -554,6 +598,7 @@ CMDS=<<EOF
 to bins/other/test.h
 t~char,double,float,int,long,short,size,uid,void # basic universal types
 ts~addr,date,dox,name
+tt~addr_t,date_t,dox_t,name_t
 t addr
 EOF
 EXPECT=<<EOF
@@ -579,14 +624,14 @@ unsigned int
 unsigned short
 void *
 addr
-addr_t
 date
-date_t
 dox
-dox_t
 name
+addr_t
+date_t
+dox_t
 name_t
-'pf [127]z[40]zi street city zip
+'pf [127]z[40]z[1].i street city zip
 EOF
 RUN
 
@@ -778,7 +823,7 @@ afv~arg
 afv~arg
 EOF
 EXPECT=<<EOF
-int main (int argc, char **argv, char **envp);
+int main (int argc, char * *argv, char * *envp);
 tn main
 afc amd64
 afvr rdi argc int
@@ -1340,6 +1385,12 @@ NAME=tcd test
 FILE=-
 CMDS=<<EOF
 t-*
+tk int=type
+tk type.int.size=32
+tk char=type
+tk type.char.size=8
+tk float=type
+tk type.float.size=32
 'td typedef char FILE_NAME;
 'td union x{int x; int y; int z;}
 'td enum Foo {COW=1,BAR=2};
@@ -2152,8 +2203,8 @@ afs
 EOF
 EXPECT=<<EOF
 void fcn.004e2420 (int64_t arg1, int64_t arg2, int64_t arg3, int64_t arg4, int64_t arg5, int64_t arg6, int64_t arg_8h);
-void no_type (int a, char **b);
-char type (int a, char **b);
+void no_type (int a, char * *b);
+char type (int a, char * *b);
 EOF
 RUN
 
@@ -2187,7 +2238,7 @@ char foo.bar (int a, ...);
 --
 size_t sym.imp.strlen (const char *s);
 --
-int main (int argc, char **argv, char **envp);
+int main (int argc, char * *argv, char * *envp);
 {
   "name": "main",
   "noreturn": false,
@@ -2212,7 +2263,7 @@ int main (int argc, char **argv, char **envp);
     }
   ]
 }
-char * sym.imp.strcpy (char *dest, const char *src);
+char *sym.imp.strcpy (char *dest, const char *src);
 {
   "name": "sym.imp.strcpy",
   "noreturn": false,
@@ -2322,6 +2373,7 @@ EOF
 EXPECT=<<EOF
 'pf.foo 0dc a b
 'tk foo=union
+'tk type.foo.size=32
 'tk union.foo=a,b
 'tk union.foo.a=int,0,0
 'tk union.foo.b=char,0,0
@@ -2872,6 +2924,7 @@ struct.PadStr=pad,str1
 struct.PadStr.pad=char,0,6
 struct.PadStr.pad.@.visibility=hidden
 struct.PadStr.str1=char,6,11
+type.PadStr.size=136
 EXPECT
 RUN
 
@@ -3354,7 +3407,7 @@ ts outer
 EOF
 EXPECT=<<EOF
 12
-'pf ?[4].d (pair<int, char>)p x
+'pf ?d (pair<int, char>)p x
 EOF
 RUN
 
@@ -4595,7 +4648,7 @@ afv
 EOF
 EXPECT=<<EOF
 arg int64_t arg1 @ rdi
-var char ** s @ rbp-0x20
+var char * * s @ rbp-0x20
 EOF
 RUN
 
@@ -5323,7 +5376,7 @@ NAME=td keeps the pointer with the type in function pointer members
 FILE=-
 CMDS=<<EOF
 'td struct S { int (*cb)(int *n, char *s); };
-tk~func.S
+tk~^func.S
 EOF
 EXPECT=<<EOF
 func.S.cb=n,s
@@ -5358,14 +5411,16 @@ FILE=-
 ARGS=-b 64
 CMDS=<<EOF
 'td struct A2 { float (*m)(void); void *x; };
-tk~func.A2
-tss A2.m
+tk~^func.A2
+tss func.A2.m
+tss func.A2.m *
 tss A2
 EOF
 EXPECT=<<EOF
 func.A2.m.args=0
 func.A2.m.cc=cdecl
 func.A2.m.ret=float
+0
 8
 16
 EOF
@@ -5436,13 +5491,13 @@ func.once.args=1
 func.once.cc=cdecl
 func.once.ret=void
 func.apply=fn,seed
-func.apply.arg.0=int (*)(),fn
+func.apply.arg.0=int (*)(int, int),fn
 func.apply.arg.1=int,seed
 func.apply.args=2
 func.apply.cc=cdecl
 func.apply.ret=int
 func.qual=q
-func.qual.arg.0=void (*)(int),q
+func.qual.arg.0=void (* const )(int),q
 func.qual.args=1
 func.qual.cc=cdecl
 func.qual.ret=void
@@ -5453,11 +5508,11 @@ NAME=td keeps a nested function pointer argument in one slot
 FILE=-
 CMDS=<<EOF
 'td struct N { int (*cb)(int (*inner)(int, int), char c); };
-tk~func.N
+tk~^func.N
 EOF
 EXPECT=<<EOF
 func.N.cb=inner,c
-func.N.cb.arg.0=int (*)(),inner
+func.N.cb.arg.0=int (*)(int, int),inner
 func.N.cb.arg.1=char,c
 func.N.cb.args=2
 func.N.cb.cc=cdecl
@@ -5498,7 +5553,7 @@ EXPECT=<<EOF
 _vptr_Bird
 int (**)(),2,0
 struct Bird {
-  int (**)() _vptr_Bird;
+  int (* *_vptr_Bird)();
 };
 EOF
 RUN
@@ -5634,21 +5689,21 @@ tfc g_shell_parse_argv
 tfc g_file_get_contents
 EOF
 EXPECT=<<EOF
-int g_strcmp0 (const char * str1, const char * str2);
-gboolean g_str_equal (gconstpointer v1, gconstpointer v2);
-gchar * g_strdup (const gchar * str);
-gchar ** g_strsplit (const gchar * string, const gchar * delimiter, gint max_tokens);
-gchar * g_strdup_printf (const gchar * format, ...);
-gchar * g_strdup_vprintf (const gchar * format, va_list args);
-gchar * g_strconcat (const gchar * string1, ...);
-GString * g_string_new (const gchar * init);
-void g_string_append_printf (GString * string, const gchar * format, ...);
-gboolean g_utf8_validate (const gchar * str, gssize max_len, const gchar ** end);
-gpointer g_malloc_n (gsize n_blocks, gsize n_block_bytes);
-gpointer g_memdup (gconstpointer mem, guint byte_size);
-gpointer g_memdup2 (gconstpointer mem, gsize byte_size);
-gboolean g_shell_parse_argv (const gchar * command_line, gint * argcp, gchar *** argvp, GError ** error);
-gboolean g_file_get_contents (const gchar * filename, gchar ** contents, gsize * length, GError ** error);
+int g_strcmp0(const char *str1, const char *str2);
+gboolean g_str_equal(gconstpointer v1, gconstpointer v2);
+gchar *g_strdup(const gchar *str);
+gchar * *g_strsplit(const gchar *string, const gchar *delimiter, gint max_tokens);
+gchar *g_strdup_printf(const gchar *format, ...);
+gchar *g_strdup_vprintf(const gchar *format, va_list args);
+gchar *g_strconcat(const gchar *string1, ...);
+GString *g_string_new(const gchar *init);
+void g_string_append_printf(GString *string, const gchar *format, ...);
+gboolean g_utf8_validate(const gchar *str, gssize max_len, const gchar * *end);
+gpointer g_malloc_n(gsize n_blocks, gsize n_block_bytes);
+gpointer g_memdup(gconstpointer mem, guint byte_size);
+gpointer g_memdup2(gconstpointer mem, gsize byte_size);
+gboolean g_shell_parse_argv(const gchar *command_line, gint *argcp, gchar * * *argvp, GError * *error);
+gboolean g_file_get_contents(const gchar *filename, gchar * *contents, gsize *length, GError * *error);
 EOF
 RUN
 
@@ -5770,9 +5825,9 @@ afsq @ sym.imp.g_file_new_for_path
 EOF
 EXPECT=<<EOF
 int sym.imp.g_strcmp0 (const char *str1, const char *str2);
-gchar * sym.imp.g_strdup (const gchar *str);
+gchar *sym.imp.g_strdup (const gchar *str);
 gpointer sym.imp.g_object_get_data (GObject *object, const gchar *key);
-GFile * sym.imp.g_file_new_for_path (const char *path);
+GFile *sym.imp.g_file_new_for_path (const char *path);
 EOF
 RUN
 
@@ -5786,10 +5841,10 @@ tfc g_variant_dict_lookup
 tfc g_ptr_array_sort
 EOF
 EXPECT=<<EOF
-GHashTable * g_hash_table_new_full (GHashFunc hash_func, GEqualFunc key_equal_func, GDestroyNotify key_destroy_func, GDestroyNotify value_destroy_func);
-gboolean g_option_context_parse (GOptionContext * context, gint * argc, gchar *** argv, GError ** error);
-gboolean g_variant_dict_lookup (GVariantDict * dict, const gchar * key, const gchar * format_string, ...);
-void g_ptr_array_sort (GPtrArray * array, GCompareFunc compare_func);
+GHashTable *g_hash_table_new_full(GHashFunc hash_func, GEqualFunc key_equal_func, GDestroyNotify key_destroy_func, GDestroyNotify value_destroy_func);
+gboolean g_option_context_parse(GOptionContext *context, gint *argc, gchar * * *argv, GError * *error);
+gboolean g_variant_dict_lookup(GVariantDict *dict, const gchar *key, const gchar *format_string, ...);
+void g_ptr_array_sort(GPtrArray *array, GCompareFunc compare_func);
 EOF
 RUN
 
@@ -5806,11 +5861,11 @@ tt GClosureNotify
 tt GDestroyNotify
 EOF
 EXPECT=<<EOF
-gpointer g_object_get_data (GObject * object, const gchar * key);
-void g_object_set_data_full (GObject * object, const gchar * key, gpointer data, GDestroyNotify destroy);
-gpointer g_object_ref (gpointer object);
-gulong g_signal_connect_data (gpointer instance, const gchar * detailed_signal, GCallback c_handler, gpointer data, GClosureNotify destroy_data, GConnectFlags connect_flags);
-gpointer g_object_new (GType object_type, const gchar * first_property_name, ...);
+gpointer g_object_get_data(GObject *object, const gchar *key);
+void g_object_set_data_full(GObject *object, const gchar *key, gpointer data, GDestroyNotify destroy);
+gpointer g_object_ref(gpointer object);
+gulong g_signal_connect_data(gpointer instance, const gchar *detailed_signal, GCallback c_handler, gpointer data, GClosureNotify destroy_data, GConnectFlags connect_flags);
+gpointer g_object_new(GType object_type, const gchar *first_property_name, ...);
 void (*)(gpointer, GClosure *)
 void (*)(gpointer)
 EOF
@@ -5829,11 +5884,11 @@ tss GBusType
 tss GConnectFlags
 EOF
 EXPECT=<<EOF
-gboolean g_file_copy (GFile * source, GFile * destination, GFileCopyFlags flags, GCancellable * cancellable, GFileProgressCallback progress_callback, gpointer progress_callback_data, GError ** error);
-GVariant * g_dbus_proxy_call_sync (GDBusProxy * proxy, const gchar * method_name, GVariant * parameters, GDBusCallFlags flags, gint timeout_msec, GCancellable * cancellable, GError ** error);
-GSubprocess * g_subprocess_new (GSubprocessFlags flags, GError ** error, const gchar * argv0, ...);
-GInputStream * g_unix_input_stream_new (gint fd, gboolean close_fd);
-char * g_desktop_app_info_get_string (GDesktopAppInfo * info, const char * key);
+gboolean g_file_copy(GFile *source, GFile *destination, GFileCopyFlags flags, GCancellable *cancellable, GFileProgressCallback progress_callback, gpointer progress_callback_data, GError * *error);
+GVariant *g_dbus_proxy_call_sync(GDBusProxy *proxy, const gchar *method_name, GVariant *parameters, GDBusCallFlags flags, gint timeout_msec, GCancellable *cancellable, GError * *error);
+GSubprocess *g_subprocess_new(GSubprocessFlags flags, GError * *error, const gchar *argv0, ...);
+GInputStream *g_unix_input_stream_new(gint fd, gboolean close_fd);
+char *g_desktop_app_info_get_string(GDesktopAppInfo *info, const char *key);
 4
 4
 EOF
@@ -5907,10 +5962,13 @@ CMDS=<<EOF_CMDS
 t-*
 'tk bool=type
 'tk type.bool=b
+'tk type.bool.size=8
 'tk int=type
 'tk type.int=d
+'tk type.int.size=32
 'tk char *=type
 'tk type.char *=z
+'tk type.char *.size=64
 'tk Mode=enum
 'tk enum.Mode=Zero
 'tk enum.Mode.Zero=0

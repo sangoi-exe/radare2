@@ -159,11 +159,11 @@ R_API void r_anal_types_prepare(RAnal *anal) {
 	const char *os = anal->config->os;
 	const bool merge = !priv->types_loaded_bits && !sdb_isempty (anal->sdb_types);
 
-	if (!priv->types_dirty && priv->types_loaded_bits == bits) {
-		return;
-	}
 	if (!arch) {
 		arch = "";
+	}
+	if (!priv->types_dirty && priv->types_loaded_bits == bits && !strcmp (priv->types_loaded_arch, arch)) {
+		return;
 	}
 	if (!os) {
 		os = "";
@@ -182,6 +182,7 @@ R_API void r_anal_types_prepare(RAnal *anal) {
 	load_types_from (anal, "types-%s-%s-%d", arch, os, bits);
 	priv->types_dirty = false;
 	priv->types_loaded_bits = bits;
+	r_str_ncpy (priv->types_loaded_arch, arch, sizeof (priv->types_loaded_arch));
 	r_anal_types_bump_dirty_epoch (anal);
 }
 
@@ -210,12 +211,11 @@ R_API void r_anal_types_reload(RAnal *anal, const char *dir_prefix, const char *
 	}
 	const char *arch = anal->config->arch;
 	const int bits = anal->config->bits;
-	// Check if types need to be reloaded due to bits change
-	if (!priv->types_dirty && priv->types_loaded_bits == bits) {
-		return;
-	}
 	if (!arch) {
 		arch = "";
+	}
+	if (!priv->types_dirty && priv->types_loaded_bits == bits && !strcmp (priv->types_loaded_arch, arch)) {
+		return;
 	}
 	if (!os) {
 		os = anal->config->os;
@@ -235,6 +235,7 @@ R_API void r_anal_types_reload(RAnal *anal, const char *dir_prefix, const char *
 	load_types_from (anal, "types-%s-%s-%d", arch, os, bits);
 	priv->types_dirty = false;
 	priv->types_loaded_bits = bits;
+	r_str_ncpy (priv->types_loaded_arch, arch, sizeof (priv->types_loaded_arch));
 	r_anal_types_bump_dirty_epoch (anal);
 }
 
@@ -252,35 +253,9 @@ R_API void r_anal_types_load_sdb(RAnal *anal, const char *name) {
 	r_anal_types_bump_dirty_epoch (anal);
 }
 
-// Measure pointer elements using the current target word size.
 R_API ut64 r_anal_type_bitsize(RAnal *anal, const char *type) {
-	R_RETURN_VAL_IF_FAIL (anal && anal->config && type, 0);
-	// resolve first: "typedef char *string" is a pointer with no star in its name
-	char *resolved = r_type_resolve_typedef (anal->sdb_types, type);
-	const char *effective = resolved? resolved: type;
-	char *array_element = NULL;
-	const char *array = strchr (effective, '[');
-	if (array && !strchr (effective, '*')) {
-		char *base = r_str_ndup (effective, array - effective);
-		if (base) {
-			r_str_trim (base);
-			array_element = r_type_resolve_typedef (anal->sdb_types, base);
-			free (base);
-		}
-		if (array_element) {
-			effective = array_element;
-		}
-	}
-	ut64 bits = r_type_get_bitsize (anal->sdb_types, type);
-	if (bits && strchr (effective, '*')) {
-		const ut64 pointer_bits = r_type_get_bitsize (anal->sdb_types, "void *");
-		if (r_mul_overflow (bits / pointer_bits, (ut64)anal->config->bits, &bits)) {
-			bits = 0;
-		}
-	}
-	free (array_element);
-	free (resolved);
-	return bits;
+	R_RETURN_VAL_IF_FAIL (anal && type, 0);
+	return r_type_get_bitsize (anal->sdb_types, type);
 }
 
 R_API void r_anal_remove_parsed_type(RAnal *anal, const char *name) {

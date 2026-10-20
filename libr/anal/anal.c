@@ -365,7 +365,6 @@ R_API char *r_anal_mnemonics(RAnal *anal, int id, bool json) {
 
 R_API bool r_anal_use(RAnal *anal, const char *name) {
 	R_RETURN_VAL_IF_FAIL (anal, false);
-	char *old_arch = anal->config && *anal->config->arch? strdup (anal->config->arch): NULL;
 	if (anal->arch) {
 		bool res = r_arch_use (anal->arch, anal->config, name);
 		if (res) {
@@ -374,15 +373,10 @@ R_API bool r_anal_use(RAnal *anal, const char *name) {
 			r_arch_config_use (anal->config, new_arch);
 	//		anal->cur = NULL;
 			r_anal_set_reg_profile (anal, NULL);
-			if (!old_arch || !new_arch || strcmp (old_arch, new_arch)) {
-				R_ANAL_PRIV (anal)->types_dirty = true;
-				r_anal_types_prepare (anal);
-			}
-			free (old_arch);
+			r_anal_types_prepare (anal);
 			return true;
 		}
 	}
-	free (old_arch);
 	// R_LOG_DEBUG ("no plugin found");
 	return false;
 }
