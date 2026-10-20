@@ -136,6 +136,7 @@ static bool load_omf_lnames(OMF_record *record, const ut8 *buf, ut64 buf_size) {
 		ct_name++;
 		tmp_size += cb + 1;
 	}
+	record->type = OMF_LNAMES;
 	return true;
 }
 
@@ -144,7 +145,7 @@ static bool load_omf_segdef(OMF_record *record, const ut8 *buf, ut64 buf_size) {
 		R_LOG_ERROR ("Invalid Segdef record (bad size)");
 		return false;
 	}
-	int off_add = (buf[3] & 0xe) ? 0 : 3;
+	int off_add = (buf[3] & 0xe0) ? 0 : 3;
 	OMF_segment *ret = R_NEW0 (OMF_segment);
 
 	if (record->type == OMF_SEGDEF32) {
@@ -292,7 +293,7 @@ static bool load_omf_data(const ut8 *buf, int buf_size, OMF_record *record, ut64
 		return false;
 	}
 	ut16 seg_idx = omf_get_idx (buf + 3, buf_size - 3);
-	if (seg_idx & 0xff00) {
+	if (buf[3] & 0x80) {
 		if ((!(record->type & 1) && record->size < 5) || (record->size < 7)) {
 			R_LOG_ERROR ("Invalid Ledata record (bad size)");
 			return false;
@@ -318,7 +319,7 @@ static bool load_omf_data(const ut8 *buf, int buf_size, OMF_record *record, ut64
 }
 
 static bool load_omf_content(OMF_record *record, const ut8 *buf, ut64 global_ct, ut64 buf_size) {
-	if (record->type == OMF_LNAMES) {
+	if (record->type == OMF_LNAMES || record->type == OMF_LLNAMES) {
 		return load_omf_lnames (record, buf, buf_size);
 	}
 	if (record->type == OMF_SEGDEF || record->type == OMF_SEGDEF32) {

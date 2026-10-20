@@ -411,10 +411,16 @@ bool r_bin_omf_load_provenance(r_bin_omf_obj *obj, const ut8 *buf) {
 	bool groups_complete = true;
 	bool easy = false;
 	size_t modules = 0;
+	bool module_ended = false;
 	OMF_record_handler *record;
 	for (record = obj->records; record; record = record->next) {
 		if (record->type == OMF_THEADR || record->type == OMF_LHEADR) {
-			modules++;
+			if (!modules || module_ended) {
+				modules++;
+			}
+			module_ended = false;
+		} else if (record->type == OMF_MODEND || record->type == OMF_MODEND32) {
+			module_ended = true;
 		}
 		if (modules > 1) {
 			external_indices = false;

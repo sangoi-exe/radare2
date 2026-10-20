@@ -937,8 +937,114 @@ static bool test_tasm_flag_contract_preservation(void) {
 	mu_end;
 }
 
+static bool tasm_check_current_callee(ut64 physical, const ut8 *patch, int length) {
+	int scenario;
+	for (scenario = 0; scenario < 2; scenario++) {
+		RCore *core = tasm_original ();
+		mu_assert_notnull (core, "fresh exact original for known-callee current qualification");
+		BorlandProfileContext ctx;
+		mu_assert_true (tasm_context (core, &ctx), "original known-callee identity");
+		ut64 address = physical - 0x800;
+		if (!scenario) {
+			mu_assert_true (core->anal->iob.overlay_write_at (core->io, address, patch, length), "balanced register-changing current callee overlay");
+			ut8 current[13];
+			mu_assert_true (r_io_read_at (core->io, address, current, length), "current callee overlay read");
+			mu_assert_eq (memcmp (current, patch, length), 0, "current callee really differs from original");
+		} else {
+			r_anal_hint_set_bits (core->anal, address, 32);
+			r_anal_hint_set_bits (core->anal, address + 1, 16);
+		}
+		mu_assert_true (tasm_context (core, &ctx), "original-file identity alone still qualifies changed current context");
+		r_meta_set_string (core->anal, R_META_TYPE_COMMENT, 0xf606, "manual parent annotation");
+		mu_assert_true (borland_tasm31_profile (core->anal) > 0, "unrelated original functions still qualify");
+		mu_assert_null (r_anal_get_function_at (core->anal, 0xf606), "changed known callee must not install dependent F606 preservation contract");
+		mu_assert_null (r_anal_get_function_at (core->anal, 0xf687), "changed known callee must not install F687 contract");
+		mu_assert_streq (r_meta_get_string (core->anal, R_META_TYPE_COMMENT, 0xf606), "manual parent annotation", "refused dependency leaves parent annotation intact");
+		mu_assert_true (tasm_check_function (core, 0x9461, 0x9490, "tasm31_push_sign_extension_cf", 17), "unrelated call-free contract retained");
+		if (physical == 0xfe87) {
+			mu_assert_true (tasm_check_function (core, 0x1084b, 0x10858, "tasm31_conditional_store_leaf", 4), "unchanged leaf still independently qualifies");
+		} else {
+			mu_assert_null (r_anal_get_function_at (core->anal, 0x1004b), "changed leaf itself refuses");
+		}
+		r_core_free (core);
+	}
+	return true;
+}
+
+static bool test_tasm_leaf_current_dependency(void) {
+	if (!getenv ("R2_TEST_TASM31")) {
+		mu_end;
+	}
+	// MOV BX,1234h; RETF changes BX without disturbing the caller's far frame.
+	const ut8 patch[] = { 0xbb, 0x34, 0x12, 0xcb, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90 };
+	mu_assert_true (tasm_check_current_callee (0x1084b, patch, sizeof (patch)), "current leaf qualifies both dependent contracts");
+	mu_end;
+}
+
+static bool test_tasm_predicate_current_dependency(void) {
+	if (!getenv ("R2_TEST_TASM31")) {
+		mu_end;
+	}
+	// INC BX; XOR AX,AX; RET changes BX before F606's conditional register saves.
+	const ut8 patch[] = { 0x43, 0x31, 0xc0, 0xc3 };
+	mu_assert_true (tasm_check_current_callee (0xfe87, patch, sizeof (patch)), "current predicate qualifies the dependent F606 contract");
+	mu_end;
+}
+
+static bool test_tasm_callee_metadata_independence(void) {
+	if (!getenv ("R2_TEST_TASM31")) {
+		mu_end;
+	}
+	const BorlandProfileRange callees[] = { { 0x1084b, 13 }, { 0xfe87, 0x33 } };
+	size_t i;
+	int scenario;
+	for (i = 0; i < R_ARRAY_SIZE (callees); i++) {
+		for (scenario = 0; scenario < 2; scenario++) {
+			RCore *core = tasm_original ();
+			mu_assert_notnull (core, "fresh original for independent callee metadata");
+			BorlandProfileContext ctx;
+			mu_assert_true (tasm_context (core, &ctx), "original metadata-control identity");
+			r_anal_types_prepare (core->anal);
+			ut64 address = callees[i].physical - 0x800;
+			if (!scenario) {
+				mu_assert_true (profile_function (&ctx, callees[i].physical, callees[i].size, "manual_callee", 0, NULL), "independent callee function");
+				RAnalFunctionSignature signature = { .ret_type = "uint32_t", .params = r_list_new () };
+				mu_assert_true (r_anal_function_set_signature (core->anal, r_anal_get_function_at (core->anal, address), &signature), "independent callee signature");
+				r_list_free (signature.params);
+			} else {
+				mu_assert_true (r_anal_types_set_link (core->anal, "uint16_t", address), "independent callee data link");
+			}
+			r_meta_set_string (core->anal, R_META_TYPE_COMMENT, address, "manual callee annotation");
+			mu_assert_true (borland_tasm31_profile (core->anal) > 0, "manual callee metadata does not invalidate current bytes");
+			mu_assert_true (tasm_check_function (core, 0xfe06, 0xfe45, "tasm31_padding_gate_zf", 27), "unchanged known bytes still qualify parent preservation contract");
+			if (!i) {
+				mu_assert_true (tasm_check_function (core, 0xfe87, 0xfeba, "tasm31_current_state_predicate_zf", 16), "manual leaf metadata does not gate predicate contract");
+			}
+			mu_assert_streq (r_meta_get_string (core->anal, R_META_TYPE_COMMENT, address), "manual callee annotation", "refused callee metadata remains untouched");
+			if (!scenario) {
+				RAnalFunction *callee = r_anal_get_function_at (core->anal, address);
+				mu_assert_notnull (callee, "manual callee retained");
+				mu_assert_streq (callee->name, "manual_callee", "manual callee name retained");
+				RAnalFunctionSignature *signature = r_anal_function_get_signature (callee);
+				mu_assert_notnull (signature, "manual callee signature retained");
+				mu_assert_streq (signature->ret_type, "uint32_t", "manual callee result retained");
+				r_anal_function_signature_free (signature);
+			} else {
+				char *linked = r_type_link_at (core->anal->sdb_types, address);
+				mu_assert_streq (linked, "uint16_t", "manual callee data link retained");
+				free (linked);
+			}
+			r_core_free (core);
+		}
+	}
+	mu_end;
+}
+
 static bool all_tests(void) {
 	mu_run_test (test_tasm_complete_owner);
+	mu_run_test (test_tasm_leaf_current_dependency);
+	mu_run_test (test_tasm_predicate_current_dependency);
+	mu_run_test (test_tasm_callee_metadata_independence);
 	mu_run_test (test_tasm_flag_contract_preservation);
 	mu_run_test (test_tasm_function_preservation);
 	mu_run_test (test_tasm_data_reference_preservation);

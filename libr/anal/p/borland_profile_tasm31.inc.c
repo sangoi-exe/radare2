@@ -400,6 +400,19 @@ static void tasm31_facts(BorlandProfileContext *ctx, ut64 accepted) {
 static bool tasm31_function(BorlandProfileContext *ctx, size_t index) {
 	const ut64 start = tasm31_functions[index].start;
 	const ut64 size = tasm31_functions[index].end - start;
+	// These preservation contracts require current callee code, not callee metadata acceptance.
+	if (start == 0xfe87 || start == 0xfe06) {
+		ut8 leaf[0xd];
+		if (!profile_current (ctx, 0x1084b, sizeof (leaf), profile_mapped (ctx, 0x1084b, sizeof (leaf), true), leaf)) {
+			return false;
+		}
+	}
+	if (start == 0xfe06) {
+		ut8 predicate[0x33];
+		if (!profile_current (ctx, 0xfe87, sizeof (predicate), profile_mapped (ctx, 0xfe87, sizeof (predicate), true), predicate)) {
+			return false;
+		}
+	}
 	RAnalFunctionParam params[4] = {0};
 	const char *ret, *cc, *effects;
 	int count;
