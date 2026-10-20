@@ -592,6 +592,63 @@ bool test_r_anal_str_to_fcn_defaults_omitted_return_type(void) {
 	mu_end;
 }
 
+bool test_r_anal_function_signature_parse_requires_a_named_function(void) {
+	const char *inputs[] = { "uint16_t far *(near *returns_table(void))[3]", "foo.bar();;" };
+	const char *names[] = { "returns_table", "foo.bar" };
+	size_t i;
+	for (i = 0; i < R_ARRAY_SIZE (inputs); i++) {
+		char *error = NULL;
+		RTypeDecl *decl = r_anal_function_signature_parse (inputs[i], &error);
+		mu_assert_notnull (decl, "prepare a named normalized signature");
+		mu_assert_null (error, "valid named signature has no diagnostic");
+		mu_assert_streq (decl->name, names[i], "normalization exposes the actual function name");
+		mu_assert_eq (decl->type->kind, R_TYPE_DECL_FUNCTION, "prepared signature starts at its function");
+		r_type_decl_free (decl);
+	}
+	const char *invalid[] = { "int (*)(int)", "int object", "int malformed(" };
+	for (i = 0; i < R_ARRAY_SIZE (invalid); i++) {
+		char *error = NULL;
+		RTypeDecl *decl = r_anal_function_signature_parse (invalid[i], &error);
+		mu_assert_null (decl, "signature preparation does not invent a function name");
+		mu_assert_notnull (error, "invalid named signature reports its failure");
+		free (error);
+	}
+	mu_end;
+}
+
+bool test_r_core_afs_preserves_compound_return_name_and_flags(void) {
+	RCore *core = r_core_new ();
+	r_config_set (core->config, "asm.arch", "x86");
+	r_config_set_i (core->config, "asm.bits", 16);
+	RAnalFunction *fcn = r_anal_create_function (core->anal, "original", 0, R_ANAL_FCN_TYPE_FCN, NULL);
+	RAnalBlock *block = r_anal_create_block (core->anal, 0, 1);
+	r_anal_function_add_block (fcn, block);
+	r_unref (block);
+	mu_assert_notnull (r_flag_set_inspace (core->flags, R_FLAGS_FS_FUNCTIONS, "original", 0, 1), "seed function-owned flag");
+	RFlagItem *symbol = r_flag_set_inspace (core->flags, R_FLAGS_FS_SYMBOLS, "sym.original", 0, 1);
+	mu_assert_notnull (symbol, "seed independent symbol flag");
+	mu_assert_eq (r_core_cmd0 (core, "afs uint16_t far *(near *returns_table(void))[3]"), 0, "apply manual compound signature");
+	mu_assert_streq (fcn->name, "returns_table", "manual afs uses the function's declarator name");
+	RFlagItem *flag = r_flag_get (core->flags, "returns_table");
+	mu_assert_notnull (flag, "manual afs renames the function-owned flag");
+	mu_assert_streq (flag->space->name, R_FLAGS_FS_FUNCTIONS, "renamed flag stays in functions space");
+	mu_assert_null (r_flag_get (core->flags, "original"), "old function-owned flag is removed");
+	mu_assert_ptreq (r_flag_get (core->flags, "sym.original"), symbol, "manual afs preserves independent symbol flags");
+	RAnalFunctionSignature *signature = r_anal_function_get_signature (fcn);
+	mu_assert_notnull (signature, "read manual compound signature");
+	mu_assert_streq (signature->ret_type, "uint16_t far *(near *)[3]", "manual afs preserves the return graph");
+	mu_assert_streq (signature->signature, "uint16_t far *(near *returns_table ())[3];", "render the named compound declaration");
+	r_anal_function_signature_free (signature);
+	ut64 function_epoch = r_anal_function_dirty_epoch (fcn);
+	ut64 types_epoch = r_anal_types_dirty_epoch (core->anal);
+	r_core_cmd0 (core, "afs int (*)(int)");
+	mu_assert_streq (fcn->name, "returns_table", "unnamed declaration cannot rename the function");
+	mu_assert_eq (r_anal_function_dirty_epoch (fcn), function_epoch, "refused unnamed declaration leaves function unchanged");
+	mu_assert_eq (r_anal_types_dirty_epoch (core->anal), types_epoch, "refused unnamed declaration leaves types unchanged");
+	r_core_free (core);
+	mu_end;
+}
+
 bool test_r_anal_function_get_signature_string_resolves_import_flag_prototype(void) {
 	RCore *core = r_core_new ();
 	mu_assert_notnull (core, "Couldn't create new RCore");
@@ -1125,6 +1182,8 @@ int all_tests(void) {
 	mu_run_test (test_r_anal_function_signature_preserves_declarator_shapes);
 	mu_run_test (test_r_anal_function_set_signature_rejects_invalid_declarators);
 	mu_run_test (test_r_anal_str_to_fcn_defaults_omitted_return_type);
+	mu_run_test (test_r_anal_function_signature_parse_requires_a_named_function);
+	mu_run_test (test_r_core_afs_preserves_compound_return_name_and_flags);
 	mu_run_test (test_r_anal_function_get_signature_string_resolves_import_flag_prototype);
 	mu_run_test (test_r_anal_function_get_signature_uses_basename_for_dbg_prefixed_function);
 	mu_run_test (test_r_anal_function_get_signature_string_falls_back_to_vars);

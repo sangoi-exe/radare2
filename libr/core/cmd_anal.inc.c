@@ -6857,24 +6857,19 @@ static int cmd_af(RCore *core, const char *input) {
 			if (input[2] == ' ') {
 				const char *arg = r_str_trim_head_ro (input + 2);
 				if (R_STR_ISNOTEMPTY (arg)) {
-					// parse function signature here
-					char *fcnstr = r_str_newf ("%s;", arg), *fcnstr_copy = strdup (fcnstr);
-					char *save_ptr = NULL;
-					char *fcnname_aux = r_str_tok_r (fcnstr_copy, "(", &save_ptr);
-					r_str_trim_tail (fcnname_aux);
-					const char *ls = r_str_lchr (fcnname_aux, ' ');
-					char *fcnname = strdup (ls? ls: fcnname_aux);
-					if (fcnname) {
-						// TODO: move this into r_anal_str_to_fcn()
-						if (strcmp (f->name, fcnname)) {
-							(void)__setFunctionName (core, addr, fcnname, false);
+					char *error = NULL;
+					RTypeDecl *decl = r_anal_function_signature_parse (arg, &error);
+					if (decl) {
+						if (strcmp (f->name, decl->name)) {
+							(void)__setFunctionName (core, addr, decl->name, false);
 							f = r_anal_get_fcn_in (core->anal, addr, -1);
 						}
-						r_anal_str_to_fcn (core->anal, f, fcnstr);
+						r_anal_str_to_fcn (core->anal, f, arg);
+					} else if (error) {
+						R_LOG_ERROR ("%s", error);
 					}
-					free (fcnname);
-					free (fcnstr_copy);
-					free (fcnstr);
+					r_type_decl_free (decl);
+					free (error);
 					break;
 				}
 			}

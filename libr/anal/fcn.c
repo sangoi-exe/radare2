@@ -3392,39 +3392,60 @@ R_API bool r_anal_function_set_signature(RAnal *anal, RAnalFunction *fcn, const 
 	return ok;
 }
 
-/* set function signature from string */
-R_API int r_anal_str_to_fcn(RAnal *a, RAnalFunction *f, const char *sig) {
-	R_RETURN_VAL_IF_FAIL (a && f && sig, false);
-	int ret = false;
-	char *error_msg = NULL;
+R_API R_OWNED RTypeDecl *r_anal_function_signature_parse(const char *sig, char **error) {
+	R_RETURN_VAL_IF_FAIL (sig, NULL);
+	if (error) {
+		*error = NULL;
+	}
 	char *text = strdup (sig);
 	if (!text) {
-		return false;
+		return NULL;
 	}
 	size_t length = strlen (text);
 	while (length && (isspace ((ut8)text[length - 1]) || text[length - 1] == ';')) {
 		text[--length] = 0;
 	}
-	RTypeDecl *decl = r_type_decl_parse (text, NULL);
+	RTypeDecl *decl = r_type_decl_parse (text, error);
 	free (text);
-	char *normalized = NULL;
-	if (decl && !decl->name && decl->type->kind == R_TYPE_DECL_FUNCTION
+	if (!decl) {
+		return NULL;
+	}
+	if (!decl->name && decl->type->kind == R_TYPE_DECL_FUNCTION
 			&& decl->type->child->kind == R_TYPE_DECL_BASE
 			&& !decl->type->child->qualifiers && !strchr (decl->type->child->base.name, ' ')) {
 		// afs permits a bare function name and defaults its return type to void.
 		RTypeDeclNode *result = decl->type->child;
 		decl->name = result->base.name;
 		result->base.name = strdup ("void");
-		text = result->base.name? r_type_decl_render (decl, true): NULL;
-		normalized = text? r_str_newf ("%s;", text): NULL;
-		free (text);
-		if (!normalized) {
+		if (!result->base.name) {
 			r_type_decl_free (decl);
-			return false;
+			return NULL;
 		}
 	}
+	if (!decl->name || decl->type->kind != R_TYPE_DECL_FUNCTION) {
+		if (error) {
+			*error = strdup ("Expected a named function signature");
+		}
+		r_type_decl_free (decl);
+		return NULL;
+	}
+	return decl;
+}
+
+/* set function signature from string */
+R_API int r_anal_str_to_fcn(RAnal *a, RAnalFunction *f, const char *sig) {
+	R_RETURN_VAL_IF_FAIL (a && f && sig, false);
+	int ret = false;
+	char *error_msg = NULL;
+	RTypeDecl *decl = r_anal_function_signature_parse (sig, NULL);
+	char *text = decl? r_type_decl_render (decl, true): NULL;
+	char *normalized = text? r_str_newf ("%s;", text): NULL;
+	free (text);
+	char *out = NULL;
+	if (!decl || normalized) {
+		out = r_anal_cparse (a, normalized? normalized: sig, &error_msg);
+	}
 	r_type_decl_free (decl);
-	char *out = r_anal_cparse (a, normalized? normalized: sig, &error_msg);
 	free (normalized);
 	if (out) {
 		r_anal_save_parsed_type (a, out);
