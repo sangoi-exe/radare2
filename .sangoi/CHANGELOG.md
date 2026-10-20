@@ -1,5 +1,9 @@
 # Workspace changelog
 
+## 2026-10-20
+
+- Added source-bound OMF external/group/FIXUPP provenance and explicit NE enumeration/resolution/application statuses. Added exact-image TASM3.1 CF/ZF register-state contracts with a qualified supporting far leaf, the matching native-engine pin, a structured read-only MCP source-record query and expanded existing agent usage/startup guidance. Private host units, native/bridge checks, full MCP tests and original-input production observations pass; formal local Code review and final delivery bookkeeping remain pending. The ordinary checkout still lacks its optional ZIP dependency, and fresh network acquisition/publication are not claimed.
+
 ## 2026-10-18
 
 - Earlier checkpoints implemented the user-selected native-baseline remediation: effective-state snapshot/restore qualification, failed-union lookup refusal, session-owned remote routing and pre-load raw mapping. The first paired Gate returned `DO_NOT_PROCEED` for B1. Bridge `a718a85` closed the exact two-union witness with types 65/65, but its `Remediation delta review` returned `DO_NOT_PROCEED` for B1-R: an inner union drained its deferred pointee before an enclosing by-value union completed. Those negative outcomes remain historical facts for their candidates. A production `aaa` observation confirmed strict snapshot refusal after an ESIL stack map invalidated the loader baseline; no qualification change was selected.
