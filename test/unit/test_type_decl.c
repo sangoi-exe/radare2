@@ -215,6 +215,35 @@ static bool test_type_decl_utility_qualifiers(void) {
 	mu_end;
 }
 
+static bool test_type_decl_dotted_names(void) {
+	const char *names[] = { "foo.bar", "fcn.00401000" };
+	size_t i;
+	for (i = 0; i < R_ARRAY_SIZE (names); i++) {
+		char *input = r_str_newf ("int %s(int x)", names[i]);
+		char *error = NULL;
+		RTypeDecl *decl = r_type_decl_parse (input, &error);
+		mu_assert_null (error, "accept an established dotted analysis name");
+		mu_assert_notnull (decl, "parse a dotted function declaration");
+		mu_assert_streq (decl->name, names[i], "retain the complete dotted function name");
+		mu_assert_eq (decl->type->kind, R_TYPE_DECL_FUNCTION, "retain the function type");
+		RTypeDecl *param = r_list_first (decl->type->function.parameters);
+		mu_assert_notnull (param, "retain the function parameter");
+		mu_assert_streq (param->name, "x", "retain the parameter name");
+		char *text = r_type_decl_render (decl, true);
+		mu_assert_streq (text, input, "render the complete dotted function name");
+		RTypeDecl *again = r_type_decl_parse (text, &error);
+		mu_assert_null (error, "reparse a rendered dotted analysis name");
+		mu_assert_notnull (again, "rendered dotted function is parseable");
+		mu_assert_true (same_declaration (decl, again), "dotted declaration retains its structure on reparse");
+		r_type_decl_free (again);
+		free (text);
+		r_type_decl_free (decl);
+		free (error);
+		free (input);
+	}
+	mu_end;
+}
+
 int all_tests(void) {
 	mu_run_test (test_type_decl_mixed_pointers);
 	mu_run_test (test_type_decl_array_precedence);
@@ -222,6 +251,7 @@ int all_tests(void) {
 	mu_run_test (test_type_decl_roundtrip);
 	mu_run_test (test_type_decl_reject_malformed);
 	mu_run_test (test_type_decl_utility_qualifiers);
+	mu_run_test (test_type_decl_dotted_names);
 	return tests_passed != tests_run;
 }
 

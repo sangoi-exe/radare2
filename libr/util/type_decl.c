@@ -90,7 +90,7 @@ static unsigned int decl_qualifier(DeclParser *parser) {
 	return 0;
 }
 
-static char *decl_identifier(DeclParser *parser, bool base) {
+static char *decl_identifier(DeclParser *parser) {
 	decl_skip_space (parser);
 	const char *start = parser->cursor;
 	if (!decl_ident_start (*start)) {
@@ -101,7 +101,7 @@ static char *decl_identifier(DeclParser *parser, bool base) {
 		while (decl_ident_char (*parser->cursor)) {
 			parser->cursor++;
 		}
-		if (!base || *parser->cursor != '.' || !decl_ident_start (parser->cursor[1])) {
+		if (*parser->cursor != '.' || !decl_ident_char (parser->cursor[1])) {
 			break;
 		}
 		parser->cursor++;
@@ -152,7 +152,7 @@ static RTypeDeclNode *decl_base(DeclParser *parser) {
 			decl_error (parser, "Expected a base type before a pointer qualifier");
 			break;
 		}
-		char *word = decl_identifier (parser, true);
+		char *word = decl_identifier (parser);
 		if (!word) {
 			decl_error (parser, "Expected a base type");
 			break;
@@ -161,7 +161,7 @@ static RTypeDeclNode *decl_base(DeclParser *parser) {
 		bool ok = r_strbuf_append (&name, word);
 		free (word);
 		if (tagged) {
-			word = decl_identifier (parser, true);
+			word = decl_identifier (parser);
 			ok = ok && word && r_strbuf_append (&name, " ") && r_strbuf_append (&name, word);
 			free (word);
 		}
@@ -317,7 +317,7 @@ static bool decl_declarator(DeclParser *parser, DeclChain *chain, char **name) {
 			}
 		}
 	} else if (!parser->error && decl_ident_start (*parser->cursor)) {
-		*name = decl_identifier (parser, false);
+		*name = decl_identifier (parser);
 	}
 	decl_skip_space (parser);
 	while (!parser->error) {
