@@ -396,6 +396,68 @@ static void tasm31_facts(BorlandProfileContext *ctx, ut64 accepted) {
 	}
 }
 
+// Finite retained-state analysis contracts, not historical C prototypes or a universal TASM ABI.
+static bool tasm31_function(BorlandProfileContext *ctx, size_t index) {
+	const ut64 start = tasm31_functions[index].start;
+	const ut64 size = tasm31_functions[index].end - start;
+	RAnalFunctionParam params[4] = {0};
+	const char *ret, *cc, *effects;
+	int count;
+	switch (start) {
+	case 0x9461:
+		ret = "Tasm31SignExtensionState5";
+		cc = "tasm31_sign_extension_state_16near";
+		params[0] = (RAnalFunctionParam){ "entry_ax", "uint16_t" };
+		params[1] = (RAnalFunctionParam){ "entry_dx", "uint16_t" };
+		params[2] = (RAnalFunctionParam){ "entry_ds", "uint16_t" };
+		params[3] = (RAnalFunctionParam){ "entry_es", "uint16_t" };
+		count = 4;
+		effects = TASM31_MARKER "Analysis CF/AX/DX tuple retains path-dependent CBW/CWD and early-return entry values. BX/CX/BP/SI/DI/DS/ES/SS/CS/DF untouched locally; no calls or memory writes. Other arithmetic flags clobbered. Valid selected memory and intact near-return stack required; purge0. CALL7675/JB7678 consumes CF but does not prove AH/DX dead before opaque descendants.";
+		break;
+	case 0xfe87:
+		ret = "Tasm31CurrentState2";
+		cc = "tasm31_current_state_16near";
+		params[0] = (RAnalFunctionParam){ "entry_al", "uint8_t" };
+		params[1] = (RAnalFunctionParam){ "entry_ds", "uint16_t" };
+		count = 2;
+		effects = TASM31_MARKER "Analysis ZF/AL tuple retains direct-return AL and explicit ALFF paths. AH and other GPR/segment registers plus DF untouched through qualified074B leaf; arithmetic flags otherwise clobbered. Optional leaf writes4598, so no memory-purity claim. FRESH70AF read determines returned ZF; valid memory/intact near/far frames and noninterfering storage required; purge0.";
+		break;
+	case 0x1084b:
+		ret = "void";
+		cc = "tasm31_conditional_store_16far";
+		params[0] = (RAnalFunctionParam){ "entry_ds", "uint16_t" };
+		count = 1;
+		effects = TASM31_MARKER "Qualified074B far leaf analysis contract: currentDS selects43C3:80 test and optional4598=1 store; no GPR/segment write apart from ordinary RETF frame restoration. AX/BX/CX/DX/BP/SI/DI/DS/ES/SS/CS/DF retained; far-return delta4, purge0. TEST arithmetic flags clobbered, not a returned predicate; no result or purity claim. Valid selected memory, intact far frame and noninterfering storage required.";
+		break;
+	case 0xfe06:
+		ret = "Tasm31PaddingState5";
+		cc = "tasm31_padding_state_16near";
+		params[0] = (RAnalFunctionParam){ "entry_ds", "uint16_t" };
+		params[1] = (RAnalFunctionParam){ "entry_es", "uint16_t" };
+		count = 2;
+		effects = TASM31_MARKER "Analysis ZF/currentDS/currentES tuple retains consumed flag and then-current selectors, not preserved selectors. BX/CX/DX restored on work path and untouched through qualified predicate. Unsaved AH/SI/BP/DI/DF/segment effects of six opaque descendants remain unknown; AL/arithmetic flags clobbered, no purity or blanket kill. Caller464A saves AX/464E restores AX without changing ZF; continuation4651 reads currentDS and4661 saves currentES. Ordinary balanced noninterfering stack/normal returns required; purge0.";
+		break;
+	default:
+		return profile_function (ctx, start, size, tasm31_functions[index].name, 0, tasm31_functions[index].comment);
+	}
+	if (!borland_type (ctx->anal, ret)) {
+		return false;
+	}
+	RList *list = r_list_new ();
+	int i;
+	for (i = 0; i < count; i++) {
+		r_list_append (list, &params[i]);
+	}
+	RAnalFunctionSignature signature = { .ret_type = (char *)ret, .callconv = (char *)cc, .params = list };
+	const BorlandProfileRange range = { start, size };
+	bool applied = profile_function_ranges_contract (ctx, &range, 1, tasm31_functions[index].name, 0, tasm31_functions[index].comment, &signature);
+	r_list_free (list);
+	if (applied) {
+		borland_comment (ctx->anal, profile_mapped (ctx, start, size, true), effects);
+	}
+	return applied;
+}
+
 static int borland_tasm31_profile(RAnal *anal) {
 	BorlandProfileContext ctx;
 	if (borland_eligible (anal) < 0 || !profile_identity (anal, &ctx, "mz", 129266, "80534cd6a1e2c2b4376ae3f21954c6dbfa77a6998d5e0bf8b8bee6153f3174ea")) {
@@ -416,7 +478,7 @@ static int borland_tasm31_profile(RAnal *anal) {
 	int count = 0;
 	size_t i;
 	for (i = 0; i < R_ARRAY_SIZE (tasm31_functions); i++) {
-		bool applied = profile_function (&ctx, tasm31_functions[i].start, tasm31_functions[i].end - tasm31_functions[i].start, tasm31_functions[i].name, 0, tasm31_functions[i].comment);
+		bool applied = tasm31_function (&ctx, i);
 		if (applied) {
 			accepted |= 1ULL << i;
 			count++;

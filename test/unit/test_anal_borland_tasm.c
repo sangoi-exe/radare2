@@ -93,6 +93,9 @@ static const struct { ut64 start; ut64 end; const char *name; int instructions; 
 };
 
 static const struct { const char *name; int size; int count; HelperMember members[20]; } expected_records[] = {
+	{ "Tasm31SignExtensionState5", 5, 3, { { "reject_cf", "bool", 0 }, { "ax", "uint16_t", 1 }, { "dx", "uint16_t", 3 } } },
+	{ "Tasm31CurrentState2", 2, 2, { { "zero_zf", "bool", 0 }, { "al", "uint8_t", 1 } } },
+	{ "Tasm31PaddingState5", 5, 3, { { "zero_zf", "bool", 0 }, { "ds", "uint16_t", 1 }, { "es", "uint16_t", 3 } } },
 	{ "tasm31_Expression40Partial", 40, 20, {
 		{ "tag", "uint8_t", 0 },
 		{ "subtype", "uint8_t", 1 },
@@ -284,6 +287,19 @@ static const struct { ut64 source; ut64 target; } expected_relations[] = {
 	{ 0x4dec, 0x167d2 }, { 0x4e05, 0x167d2 }, { 0x4ee4, 0x167d2 },
 	{ 0xfe96, 0x1084b }, { 0xfeb1, 0x1084b }, { 0x11ce0, 0x175ef },
 };
+static const struct {
+	ut64 start;
+	const char *ret;
+	const char *cc;
+	int count;
+	HelperParam params[4];
+} expected_contracts[] = {
+	{ 0x9461, "Tasm31SignExtensionState5", "tasm31_sign_extension_state_16near", 4, { { "entry_ax", "uint16_t" }, { "entry_dx", "uint16_t" }, { "entry_ds", "uint16_t" }, { "entry_es", "uint16_t" } } },
+	{ 0xfe87, "Tasm31CurrentState2", "tasm31_current_state_16near", 2, { { "entry_al", "uint8_t" }, { "entry_ds", "uint16_t" } } },
+	{ 0xfe06, "Tasm31PaddingState5", "tasm31_padding_state_16near", 2, { { "entry_ds", "uint16_t" }, { "entry_es", "uint16_t" } } },
+	{ 0x1084b, "void", "tasm31_conditional_store_16far", 1, { { "entry_ds", "uint16_t" } } },
+};
+
 static bool tasm_check_function(RCore *core, ut64 start, ut64 end, const char *name, int instructions) {
 	RAnalFunction *fcn = r_anal_get_function_at (core->anal, start - 0x800);
 	mu_assert_notnull (fcn, "each source-established complete function");
@@ -292,7 +308,29 @@ static bool tasm_check_function(RCore *core, ut64 start, ut64 end, const char *n
 	mu_assert_eq (fcn->meta.stack_pop, 0, "source-established zero argument cleanup, not a flat signature");
 	mu_assert_eq (r_anal_function_realsize (fcn), end - start, "complete exclusive extent");
 	RAnalFunctionSignature *signature = r_anal_function_get_signature (fcn);
-	mu_assert_true (!signature || (!signature->ret_type && r_list_empty (signature->params)), "no invented C return or parameter ABI");
+	size_t contract;
+	for (contract = 0; contract < R_ARRAY_SIZE (expected_contracts); contract++) {
+		if (expected_contracts[contract].start == start) {
+			break;
+		}
+	}
+	if (contract == R_ARRAY_SIZE (expected_contracts)) {
+		mu_assert_true (!signature || (!signature->ret_type && r_list_empty (signature->params)), "no unqualified C return or parameter ABI");
+	} else {
+		mu_assert_notnull (signature, "qualified retained-state analysis signature");
+		mu_assert_notnull (signature->ret_type, "qualified signature must contain its explicit return type");
+		mu_assert_streq (signature->ret_type, expected_contracts[contract].ret, "finite flag/current-register tuple");
+		mu_assert_streq (signature->callconv, expected_contracts[contract].cc, "named native convention, not generic group conversion");
+		mu_assert_streq (fcn->callconv, expected_contracts[contract].cc, "function convention propagated");
+		mu_assert_eq (r_list_length (signature->params), expected_contracts[contract].count, "explicit qualified inputs only");
+		mu_assert_false (signature->noreturn, "normal qualified return");
+		int param;
+		for (param = 0; param < expected_contracts[contract].count; param++) {
+			RAnalFunctionParam *value = r_list_get_n (signature->params, param);
+			mu_assert_streq (value->name, expected_contracts[contract].params[param].name, "entry-state input name");
+			mu_assert_streq (value->type, expected_contracts[contract].params[param].type, "native register-width input");
+		}
+	}
 	r_anal_function_signature_free (signature);
 	ut64 cursor = start - 0x800;
 	int count = 0;
@@ -848,8 +886,60 @@ static bool test_tasm_registered_reference_and_current_refusal(void) {
 	mu_end;
 }
 
+static bool test_tasm_flag_contract_preservation(void) {
+	if (!getenv ("R2_TEST_TASM31")) {
+		mu_end;
+	}
+	size_t contract;
+	int scenario;
+	for (contract = 0; contract < R_ARRAY_SIZE (expected_contracts); contract++) {
+		for (scenario = !strcmp (expected_contracts[contract].ret, "void")? 1: 0; scenario < 3; scenario++) {
+			RCore *core = tasm_original ();
+			mu_assert_notnull (core, "exact original for contract preservation");
+			r_anal_types_prepare (core->anal);
+			ut64 address = expected_contracts[contract].start - 0x800;
+			if (scenario == 0) {
+				const HelperMember independent[] = { { "manual_field", "uint8_t", 0 } };
+				mu_assert_true (borland_record (core->anal, expected_contracts[contract].ret, 8, independent, 1), "independent same-name return layout");
+			} else {
+				mu_assert_eq (borland_tasm31_profile (core->anal), 44, "initial qualified contract application");
+				RAnalFunction *fcn = r_anal_get_function_at (core->anal, address);
+				mu_assert_notnull (fcn, "qualified helper exists");
+				if (scenario == 1) {
+					RAnalFunctionSignature signature = { .ret_type = "uint32_t", .params = r_list_new () };
+					mu_assert_true (r_anal_function_set_signature (core->anal, fcn, &signature), "independent user return contract");
+					r_list_free (signature.params);
+				} else {
+					mu_assert_true (r_anal_types_set_link (core->anal, "uint16_t", address), "independent data link at helper entry");
+				}
+			}
+			r_meta_set_string (core->anal, R_META_TYPE_COMMENT, address, "manual contract annotation");
+			mu_assert_eq (borland_tasm31_profile (core->anal), 43, "only conflicting qualified helper refuses");
+			mu_assert_streq (r_meta_get_string (core->anal, R_META_TYPE_COMMENT, address), "manual contract annotation", "no dependent contract annotation on refusal");
+			if (scenario == 0) {
+				mu_assert_null (r_anal_get_function_at (core->anal, address), "conflicting result type stops function/signature creation");
+				RAnalBaseType *type = r_anal_get_base_type (core->anal, expected_contracts[contract].ret);
+				mu_assert_eq (type->size, 8, "manual return type retained");
+				mu_assert_streq (RVecAnalTypeMember_at (&type->struct_data.members, 0)->name, "manual_field", "manual field retained");
+				r_anal_base_type_free (type);
+			} else if (scenario == 1) {
+				RAnalFunctionSignature *signature = r_anal_function_get_signature (r_anal_get_function_at (core->anal, address));
+				mu_assert_streq (signature->ret_type, "uint32_t", "manual signature retained");
+				r_anal_function_signature_free (signature);
+			} else {
+				char *linked = r_type_link_at (core->anal->sdb_types, address);
+				mu_assert_streq (linked, "uint16_t", "manual data link retained");
+				free (linked);
+			}
+			r_core_free (core);
+		}
+	}
+	mu_end;
+}
+
 static bool all_tests(void) {
 	mu_run_test (test_tasm_complete_owner);
+	mu_run_test (test_tasm_flag_contract_preservation);
 	mu_run_test (test_tasm_function_preservation);
 	mu_run_test (test_tasm_data_reference_preservation);
 	mu_run_test (test_tasm_type_dependencies);

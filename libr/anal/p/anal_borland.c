@@ -207,6 +207,21 @@ static bool borland_type(RAnal *anal, const char *name) {
 		return borland_type (anal, "bool") && borland_type (anal, "uint16_t")
 			&& borland_record (anal, name, 56, members, R_ARRAY_SIZE (members));
 	}
+	if (!strcmp (name, "Tasm31SignExtensionState5")) {
+		const HelperMember members[] = { { "reject_cf", "bool", 0 }, { "ax", "uint16_t", 1 }, { "dx", "uint16_t", 3 } };
+		return borland_type (anal, "bool") && borland_type (anal, "uint16_t")
+			&& borland_record (anal, name, 40, members, R_ARRAY_SIZE (members));
+	}
+	if (!strcmp (name, "Tasm31CurrentState2")) {
+		const HelperMember members[] = { { "zero_zf", "bool", 0 }, { "al", "uint8_t", 1 } };
+		return borland_type (anal, "bool") && borland_type (anal, "uint8_t")
+			&& borland_record (anal, name, 16, members, R_ARRAY_SIZE (members));
+	}
+	if (!strcmp (name, "Tasm31PaddingState5")) {
+		const HelperMember members[] = { { "zero_zf", "bool", 0 }, { "ds", "uint16_t", 1 }, { "es", "uint16_t", 3 } };
+		return borland_type (anal, "bool") && borland_type (anal, "uint16_t")
+			&& borland_record (anal, name, 40, members, R_ARRAY_SIZE (members));
+	}
 	if (!strcmp (name, "FarPointerCompareAnalysisState9")) {
 		const HelperMember members[] = { { "equal_zf", "bool", 0 }, { "ax", "uint16_t", 1 }, { "dx", "uint16_t", 3 }, { "bx", "uint16_t", 5 }, { "cx", "uint16_t", 7 } };
 		return borland_type (anal, "bool")
