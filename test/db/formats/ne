@@ -170,6 +170,10 @@ FILE=bins/ne/anim8.exe
 ARGS=-e bin.relocs.apply=true
 CMDS=<<EOF
 ik info/ne.relocs.count
+ik info/ne.relocs.status
+ik info/ne.reloc.1.0.resolution
+ik info/ne.reloc.1.0.application_status
+ik info/ne.reloc.1.0.target_address_domain
 ik info/ne.reloc.1.0.paddr
 ik info/ne.reloc.1.0.type
 ik info/ne.reloc.1.0.flags
@@ -187,6 +191,10 @@ p8 4 @0x10001
 EOF
 EXPECT=<<EOF
 718
+complete
+resolved
+complete
+synthetic_import
 0x5ef0
 0x3
 0x1

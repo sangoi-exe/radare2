@@ -32,6 +32,8 @@ if get_option('enable_tests')
     'big',
     'bin',
     'bin_demangle',
+    'bin_ne',
+    'bin_omf',
     'bin_trycatch',
     'bitmap',
     'bitset',

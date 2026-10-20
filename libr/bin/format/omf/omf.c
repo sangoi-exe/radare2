@@ -1,4 +1,5 @@
 #include "omf.h"
+#include "omf_relocs.h"
 
 static bool is_valid_omf_type(ut8 type) {
 	const ut8 types[] = {
@@ -347,10 +348,12 @@ static OMF_record_handler *load_record_omf(const ut8 *buf, ut64 global_ct, ut64 
 		return NULL;
 	}
 	OMF_record_handler *new = R_NEW0 (OMF_record_handler);
+	new->paddr = global_ct;
+	new->type = *buf;
 	OMF_record *rec = (OMF_record *)new;
 	rec->type = *buf;
 	rec->size = r_read_le16 (buf + 1);
-	if (rec->size > buf_size - 3 || buf_size < 4) {
+	if (!rec->size || rec->size > buf_size - 3 || buf_size < 4) {
 		R_LOG_ERROR ("Invalid record (too short)");
 		R_FREE (new);
 		return NULL;
@@ -611,17 +614,23 @@ void r_bin_free_all_omf_obj(r_bin_omf_obj *obj) {
 		if (obj->names) {
 			free_all_omf_names (obj);
 		}
+		sdb_free (obj->kv);
 		free (obj);
 	}
 }
 
 r_bin_omf_obj *r_bin_internal_omf_load(const ut8 *buf, ut64 size) {
 	r_bin_omf_obj *ret = R_NEW0 (r_bin_omf_obj);
+	ret->kv = sdb_new0 ();
 	if (!load_all_omf_records (ret, buf, size)) {
 		r_bin_free_all_omf_obj (ret);
 		return NULL;
 	}
 	if (!get_omf_infos (ret)) {
+		r_bin_free_all_omf_obj (ret);
+		return NULL;
+	}
+	if (!r_bin_omf_load_provenance (ret, buf)) {
 		r_bin_free_all_omf_obj (ret);
 		return NULL;
 	}

@@ -128,6 +128,7 @@ r_bin_sources = [
   'format/objc/mach064_classes.c',
   'format/objc/mach0_classes.c',
   'format/omf/omf.c',
+  'format/omf/omf_relocs.c',
   'format/p9/p9bin.c',
   'format/pe/pe.c',
   'format/pe/pe64.c',

@@ -514,9 +514,13 @@ static void ne_reloc_record(r_bin_ne_obj_t *bin, const char *key, const NE_image
 	sdb_num_set (bin->kv, r_strf ("%s.target_word1", key), rel->func_ord, 0);
 	sdb_num_set (bin->kv, r_strf ("%s.additive", key), !!(rel->flags & ADDITIVE), 0);
 	sdb_num_set (bin->kv, r_strf ("%s.application_count", key), 0, 0);
+	sdb_set (bin->kv, r_strf ("%s.resolution", key), "unresolved", 0);
+	sdb_set (bin->kv, r_strf ("%s.application_status", key), "not_enumerated", 0);
+	sdb_set (bin->kv, r_strf ("%s.record_address_domain", key), "file", 0);
+	sdb_set (bin->kv, r_strf ("%s.source_address_domain", key), "segment_offset", 0);
 }
 
-static void ne_reloc_application(r_bin_ne_obj_t *bin, const char *record_key, size_t index, const RBinReloc *reloc, ut64 target) {
+static bool ne_reloc_application(r_bin_ne_obj_t *bin, const char *record_key, size_t index, const RBinReloc *reloc, ut64 target) {
 	r_strf_buffer (128);
 	r_strf_var (key, 96, "%s.application.%zu", record_key, index);
 	sdb_num_set (bin->kv, r_strf ("%s.paddr", key), reloc->paddr, 0);
@@ -525,17 +529,24 @@ static void ne_reloc_application(r_bin_ne_obj_t *bin, const char *record_key, si
 	int width = reloc->type / 8;
 	sdb_num_set (bin->kv, r_strf ("%s.width", key), width, 0);
 	ut8 original[6];
-	if (r_buf_read_at (bin->buf, reloc->paddr, original, width) == width) {
+	bool complete = r_buf_read_at (bin->buf, reloc->paddr, original, width) == width;
+	if (complete) {
 		char hex[13];
 		r_hex_bin2str (original, width, hex);
 		sdb_set (bin->kv, r_strf ("%s.original", key), hex, 0);
 	}
 	sdb_num_set (bin->kv, r_strf ("%s.application_count", record_key), index + 1, 0);
+	return complete;
 }
 
 static void ne_load_relocs(r_bin_ne_obj_t *bin) {
 	r_strf_buffer (128);
 	size_t record_count = 0;
+	bool complete = sdb_num_get (bin->kv, "ne.relocs.declared_segment_count", NULL) == bin->ne_header->SegCount;
+	if (!complete) {
+		sdb_set (bin->kv, "ne.relocs.reason", "truncated_segment_table", 0);
+	}
+	sdb_num_set (bin->kv, "ne.relocs.segment_count", bin->ne_header->SegCount, 0);
 	sdb_num_set (bin->kv, "ne.relocs.count", 0, 0);
 	ut64 bufsz = r_buf_size (bin->buf);
 	HtUU *imports_by_key = ht_uu_new0 ();
@@ -550,23 +561,43 @@ static void ne_load_relocs(r_bin_ne_obj_t *bin) {
 	size_t index;
 	for (index = 0; index < bin->ne_header->SegCount; index++) {
 		NE_image_segment_entry *seg = &bin->segment_entries[index];
+		r_strf_var (table_key, 64, "ne.reloc.%zu", index + 1);
+		sdb_num_set (bin->kv, r_strf ("%s.observed_count", table_key), 0, 0);
+		sdb_set (bin->kv, r_strf ("%s.status", table_key), "complete", 0);
 		if (!(seg->flags & RELOCINFO)) {
 			sdb_num_set (bin->kv, r_strf ("ne.reloc.%zu.count", index + 1), 0, 0);
 			continue;
 		}
 		if (!seg->offset) {
+			complete = false;
+			sdb_set (bin->kv, r_strf ("%s.status", table_key), "incomplete", 0);
+			sdb_set (bin->kv, r_strf ("%s.reason", table_key), "missing_segment_data", 0);
 			continue;
 		}
 		ut64 paddr = (ut64)seg->offset * bin->alignment;
 		ut32 size = seg->length? seg->length: 0x10000;
 		ut64 off = paddr + size;
 		if (off > bufsz || bufsz - off < 2) {
+			complete = false;
+			sdb_set (bin->kv, r_strf ("%s.status", table_key), "incomplete", 0);
+			sdb_set (bin->kv, r_strf ("%s.reason", table_key), "truncated_table", 0);
 			R_LOG_WARN ("Truncated NE relocation table for segment %zu", index + 1);
 			continue;
 		}
-		ut16 count = r_buf_read_le16_at (bin->buf, off);
+		ut8 count_bytes[2];
+		if (r_buf_read_at (bin->buf, off, count_bytes, sizeof (count_bytes)) != sizeof (count_bytes)) {
+			complete = false;
+			sdb_set (bin->kv, r_strf ("%s.status", table_key), "incomplete", 0);
+			sdb_set (bin->kv, r_strf ("%s.reason", table_key), "short_table_read", 0);
+			continue;
+		}
+		ut16 count = r_read_le16 (count_bytes);
+		sdb_num_set (bin->kv, r_strf ("%s.declared_count", table_key), count, 0);
 		off += 2;
 		if (count > (bufsz - off) / sizeof (NE_image_reloc_item)) {
+			complete = false;
+			sdb_set (bin->kv, r_strf ("%s.status", table_key), "incomplete", 0);
+			sdb_set (bin->kv, r_strf ("%s.reason", table_key), "truncated_records", 0);
 			R_LOG_WARN ("Truncated NE relocation records for segment %zu", index + 1);
 			continue;
 		}
@@ -576,11 +607,15 @@ static void ne_load_relocs(r_bin_ne_obj_t *bin) {
 			NE_image_reloc_item rel = {0};
 			if (r_buf_fread_at (bin->buf, off, (ut8 *)&rel, "2c3s", 1) != sizeof (rel)) {
 				sdb_unset (bin->kv, r_strf ("ne.reloc.%zu.count", index + 1), 0);
+				complete = false;
+				sdb_set (bin->kv, r_strf ("%s.status", table_key), "incomplete", 0);
+				sdb_set (bin->kv, r_strf ("%s.reason", table_key), "short_record_read", 0);
 				break;
 			}
 			r_strf_var (record_key, 64, "ne.reloc.%zu.%d", index + 1, i);
 			ne_reloc_record (bin, record_key, &rel, off, index + 1, i);
 			record_count++;
+			sdb_num_set (bin->kv, r_strf ("%s.observed_count", table_key), i + 1, 0);
 			sdb_num_set (bin->kv, r_strf ("ne.reloc.%zu.count", index + 1), i + 1, 0);
 			RBinReloc reloc = {0};
 			reloc.ntype = rel.type;
@@ -600,6 +635,8 @@ static void ne_load_relocs(r_bin_ne_obj_t *bin) {
 				reloc.type = R_BIN_RELOC_48;
 				break;
 			default:
+				sdb_set (bin->kv, r_strf ("%s.resolution", record_key), "unsupported", 0);
+				sdb_set (bin->kv, r_strf ("%s.reason", record_key), "unsupported_type", 0);
 				R_LOG_WARN ("Unsupported NE relocation type %u at 0x%" PFMT64x, rel.type, off);
 				continue;
 			}
@@ -626,12 +663,17 @@ static void ne_load_relocs(r_bin_ne_obj_t *bin) {
 				break;
 			case OSFIXUP:
 				// OS instruction fixups are not address relocations.
+				sdb_set (bin->kv, r_strf ("%s.resolution", record_key), "unsupported", 0);
+				sdb_set (bin->kv, r_strf ("%s.reason", record_key), "os_fixup", 0);
 				continue;
 			}
 			if (target == UT64_MAX || ((rel.flags & 3) != INTERNAL_REF && !reloc.import)) {
+				sdb_set (bin->kv, r_strf ("%s.reason", record_key), "unresolved_target", 0);
 				R_LOG_WARN ("Unresolved NE relocation target at 0x%" PFMT64x, off);
 				continue;
 			}
+			sdb_set (bin->kv, r_strf ("%s.resolution", record_key), "resolved", 0);
+			sdb_set (bin->kv, r_strf ("%s.target_address_domain", record_key), reloc.import? "synthetic_import": "segment_offset", 0);
 			sdb_num_set (bin->kv, r_strf ("%s.target_vaddr", record_key), target, 0);
 			if (reloc.import) {
 				sdb_set (bin->kv, r_strf ("%s.import_name", record_key), r_bin_name_tostring (reloc.import->name), 0);
@@ -643,34 +685,59 @@ static void ne_load_relocs(r_bin_ne_obj_t *bin) {
 			size_t application_count = 0;
 			ut32 source = rel.offset;
 			RBitset *visited = r_bitset_new ();
-			while (source < size && r_bitset_set (visited, source)) {
+			const char *reason = NULL;
+			while (true) {
 				ut32 width = reloc.type / 8;
-				if (width > size - source || paddr + source > bufsz || width > bufsz - paddr - source) {
+				if (source >= size || width > size - source || paddr + source > bufsz || width > bufsz - paddr - source) {
+					reason = "source_out_of_bounds";
+					break;
+				}
+				if (r_bitset_test (visited, source)) {
+					reason = "source_cycle";
+					break;
+				}
+				if (!r_bitset_set (visited, source)) {
+					reason = "allocation_failed";
 					break;
 				}
 				reloc.paddr = paddr + source;
 				reloc.vaddr = ((ut64)(index + 1) << 16) | source;
 				RBinReloc *copy = RVecRBinReloc_emplace_back (bin->relocs);
 				if (!copy) {
+					reason = "allocation_failed";
 					break;
 				}
 				*copy = reloc;
-				ne_reloc_application (bin, record_key, application_count++, &reloc, target);
+				bool original_read = ne_reloc_application (bin, record_key, application_count++, &reloc, target);
 				if (reloc.import) {
 					copy->import = r_bin_import_clone (reloc.import);
 				}
-				if (reloc.additive || size - source < 2 || bufsz - paddr - source < 2) {
+				if (!original_read) {
+					reason = "short_source_read";
 					break;
 				}
-				source = r_buf_read_le16_at (bin->buf, reloc.paddr);
+				if (reloc.additive) {
+					break;
+				}
+				ut8 next[2];
+				if (size - source < sizeof (next) || bufsz - paddr - source < sizeof (next) || r_buf_read_at (bin->buf, reloc.paddr, next, sizeof (next)) != sizeof (next)) {
+					reason = "truncated_chain";
+					break;
+				}
+				source = r_read_le16 (next);
 				if (source == UT16_MAX) {
 					break;
 				}
+			}
+			sdb_set (bin->kv, r_strf ("%s.application_status", record_key), reason? "incomplete": "complete", 0);
+			if (reason) {
+				sdb_set (bin->kv, r_strf ("%s.reason", record_key), reason, 0);
 			}
 			r_bitset_free (visited);
 		}
 	}
 	sdb_num_set (bin->kv, "ne.relocs.count", record_count, 0);
+	sdb_set (bin->kv, "ne.relocs.status", complete? "complete": "incomplete", 0);
 	ht_uu_free (imports_by_key);
 }
 
@@ -733,6 +800,7 @@ void __init(RBuffer *buf, r_bin_ne_obj_t *bin) {
 			bin->ne_header->ModRefs = left / sizeof (ut16);
 		}
 	}
+	sdb_num_set (bin->kv, "ne.relocs.declared_segment_count", bin->ne_header->SegCount, 0);
 	bin->alignment = 1 << bin->ne_header->FileAlnSzShftCnt;
 	if (!bin->alignment) {
 		bin->alignment = 1 << 9;
@@ -754,7 +822,10 @@ void __init(RBuffer *buf, r_bin_ne_obj_t *bin) {
 	if (!bin->segment_entries) {
 		return;
 	}
-	r_buf_fread_at (buf, offset, (ut8 *)bin->segment_entries, "4s", bin->ne_header->SegCount);
+	if (r_buf_fread_at (buf, offset, (ut8 *)bin->segment_entries, "4s", bin->ne_header->SegCount) != bin->ne_header->SegCount * sizeof (NE_image_segment_entry)) {
+		sdb_set (bin->kv, "ne.relocs.reason", "short_segment_table_read", 0);
+		return;
+	}
 	bin->entry_table = calloc (1, R_MAX (1, bin->ne_header->EntryTableLength));
 	if (!bin->entry_table) {
 		R_FREE (bin->segment_entries);
@@ -783,6 +854,7 @@ void r_bin_ne_free(r_bin_ne_obj_t *bin) {
 r_bin_ne_obj_t *r_bin_ne_new_buf(RBuffer *buf, bool verbose) {
 	r_bin_ne_obj_t *bin = R_NEW0 (r_bin_ne_obj_t);
 	bin->kv = sdb_new0 ();
+	sdb_set (bin->kv, "ne.relocs.status", "incomplete", 0);
 	RVecNEEntry_init (&bin->entries);
 	RVecRBinImport_init (&bin->imports);
 	__init (buf, bin);

@@ -9,6 +9,8 @@
 
 typedef struct OMF_record_handler {
 	OMF_record record;
+	ut64 paddr;
+	ut8 type;
 	struct OMF_record_handler *next;
 } OMF_record_handler;
 
@@ -43,6 +45,7 @@ typedef struct {
 
 typedef struct {
 	ut8 bits;
+	Sdb *kv;
 	char **names;
 	ut32 nb_name;
 	OMF_segment **sections;

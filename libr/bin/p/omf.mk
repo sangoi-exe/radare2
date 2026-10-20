@@ -1,5 +1,6 @@
 OBJ_OMF=bin_omf.o \
-	../format/omf/omf.o
+	../format/omf/omf.o \
+	../format/omf/omf_relocs.o
 
 STATIC_OBJ+=${OBJ_OMF}
 TARGET_OMF=bin_omf.${EXT_SO}

@@ -3,6 +3,31 @@
 #include <r_bin.h>
 #include "omf/omf.h"
 
+static Sdb *get_sdb(RBinFile *bf) {
+	r_bin_omf_obj *obj = bf && bf->bo? bf->bo->bin_obj: NULL;
+	return obj? obj->kv: NULL;
+}
+
+static bool imports_vec(RBinFile *bf) {
+	r_bin_omf_obj *obj = bf->bo->bin_obj;
+	r_strf_buffer (128);
+	size_t count = sdb_num_get (obj->kv, "omf.externals.count", NULL);
+	size_t i;
+	for (i = 1; i <= count; i++) {
+		const char *name = sdb_const_get (obj->kv, r_strf ("omf.external.%zu.name", i), NULL);
+		RBinImport *import = RVecRBinImport_emplace_back (&bf->bo->imports_vec);
+		if (!import) {
+			return false;
+		}
+		import->name = r_bin_name_new (name);
+		if (sdb_const_get (obj->kv, r_strf ("omf.external.%zu.index", i), NULL)) {
+			import->ordinal = sdb_num_get (obj->kv, r_strf ("omf.external.%zu.index", i), NULL);
+		}
+		import->bind = sdb_num_get (obj->kv, r_strf ("omf.external.%zu.local", i), NULL)? "LOCAL": "GLOBAL";
+	}
+	return true;
+}
+
 static bool load(RBinFile *bf, RBuffer *b, ut64 loadaddr) {
 	R_RETURN_VAL_IF_FAIL (bf && b, false);
 	ut64 size;
@@ -165,6 +190,8 @@ RBinPlugin r_bin_plugin_omf = {
 		.license = "LGPL-3.0-only",
 	},
 	.weak_guess = true,
+	.get_sdb = &get_sdb,
+	.imports_vec = &imports_vec,
 	.load = &load,
 	.destroy = &destroy,
 	.check = &check,
