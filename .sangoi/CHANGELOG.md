@@ -2,7 +2,7 @@
 
 ## 2026-10-20
 
-- Implemented candidate OMF external/group/FIXUPP provenance, explicit NE statuses, exact-image TASM3.1 CF/ZF contracts, the matching native-engine pin, a read-only MCP query and expanded existing agent startup guidance. Qualified private host/native/bridge/MCP checks and original-input observations pass, but the cumulative local Code Gate returned `DO_NOT_PROCEED` for five verified source defects: source-header module counting, shared LLNAMES indexing, inherited SEGDEF/LEDATA decoder seams and dependent TASM current-callee qualification. The plan is on hold for the user's correction decision, including affected existing mapping changes; no correction or residual risk was accepted. The ordinary checkout's optional ZIP dependency, specialized execution gaps and fresh acquisition/publication remain unverified or excluded as recorded in the task log.
+- Implemented native OMF external/group/FIXUPP provenance, explicit NE statuses, exact-image TASM3.1 CF/ZF contracts, the matching native-engine pin, a read-only MCP query and existing agent startup guidance. The first cumulative Code Gate returned `DO_NOT_PROCEED` for five source defects. The user-selected canonical corrections now pass failing-before/passing-after OMF/TASM regressions, combined host units, the newly linked full MCP suite and actual native provenance/decompiler observations; documentation clarifies readiness and status evidence. Affected incorrect mappings are corrected without compatibility or migration. Final Remediation delta review remains pending; no defect was accepted as residual risk. Private optional-build exclusions and the disclosed specialized/runtime/acquisition/publication limits remain in the task log.
 
 ## 2026-10-18
 
