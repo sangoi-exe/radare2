@@ -2,7 +2,7 @@
 
 ## 2026-10-20
 
-- Implemented native OMF external/group/FIXUPP provenance, explicit NE statuses, exact-image TASM3.1 CF/ZF contracts, the matching native-engine pin, a read-only MCP query and existing agent startup guidance. The first cumulative Code Gate returned `DO_NOT_PROCEED` for five source defects. The user-selected canonical corrections now pass failing-before/passing-after OMF/TASM regressions, combined host units, the newly linked full MCP suite and actual native provenance/decompiler observations; documentation clarifies readiness and status evidence. Affected incorrect mappings are corrected without compatibility or migration. Final Remediation delta review remains pending; no defect was accepted as residual risk. Private optional-build exclusions and the disclosed specialized/runtime/acquisition/publication limits remain in the task log.
+- Completed native OMF external/group/FIXUPP provenance, explicit NE statuses, exact-image TASM3.1 CF/ZF contracts, the matching native-engine pin, a read-only MCP query and existing agent startup guidance. After the first Gate rejected five source defects, the user-selected canonical corrections pass failing-before/passing-after regressions, combined host units, the newly linked full MCP suite and actual native observations. Final `Remediation delta review` returned `PROCEED`, closing F1–F4/P2. Three actual Claude quota failures were narrowly dispensed under the resident procedure; no Claude semantic approval is claimed. Incorrect affected mappings are corrected without compatibility/migration. Private build exclusions and remaining proof/deferred-observation limits are recorded; no installation or publication occurred.
 
 ## 2026-10-18
 
