@@ -93,6 +93,7 @@ if get_option('enable_tests')
     'thread',
     'tree',
     'trie',
+    'type_decl',
     'uleb128',
     'unum',
     'util',

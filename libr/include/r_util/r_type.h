@@ -23,6 +23,63 @@ typedef enum {
 	R_TYPE_CLASS = 6
 } RTypeKind;
 
+typedef enum {
+	R_TYPE_DECL_BASE,
+	R_TYPE_DECL_POINTER,
+	R_TYPE_DECL_ARRAY,
+	R_TYPE_DECL_FUNCTION
+} RTypeDeclKind;
+
+typedef enum {
+	R_TYPE_POINTER_DEFAULT,
+	R_TYPE_POINTER_NEAR,
+	R_TYPE_POINTER_FAR
+} RTypePointerKind;
+
+typedef enum {
+	R_TYPE_DECL_CONST = 1,
+	R_TYPE_DECL_VOLATILE = 2,
+	R_TYPE_DECL_RESTRICT = 4,
+	R_TYPE_DECL_ATOMIC = 8
+} RTypeDeclQualifier;
+
+typedef struct r_type_decl_node_t {
+	RTypeDeclKind kind;
+	unsigned int qualifiers; // RTypeDeclQualifier flags on base and pointer nodes
+	struct r_type_decl_node_t * R_OWNED child; // pointee, array element or function return type; NULL on bases
+	union {
+		struct {
+			char * R_OWNED name; // unresolved type name, including a struct/union/enum prefix if present
+		} base;
+		struct {
+			RTypePointerKind kind;
+		} pointer;
+		struct {
+			char * R_OWNED count; // unevaluated bound; empty for an unsized array
+		} array;
+		struct {
+			RList * R_OWNED parameters; // owned RTypeDecl entries, without parameter adjustment
+			bool variadic;
+			bool prototype; // distinguishes (void) from () when parameters is empty
+		} function;
+	};
+} RTypeDeclNode;
+
+typedef struct r_type_decl_t {
+	char * R_OWNED name; // NULL for an abstract declaration
+	RTypeDeclNode * R_OWNED type; // outermost layer first, ending in a base node
+} RTypeDecl;
+
+// Parse one named or abstract declaration, not a header, definition or storage-class specifier.
+// near/far precede their associated star; qualifiers after a star qualify that pointer.
+// atomic and _Atomic are accepted qualifier spellings; rendering uses _Atomic, not _Atomic(type).
+// No name resolution, parameter decay, calling-convention selection or ABI sizing is performed.
+// The result owns all nodes, strings and parameters; error receives an owned diagnostic or NULL.
+R_API R_OWNED RTypeDecl *r_type_decl_parse(const char * R_NONNULL text, char ** R_NULLABLE error);
+// Render canonical syntax without a semicolon; include_name affects only the top-level name.
+R_API R_OWNED char *r_type_decl_render(const RTypeDecl * R_NONNULL decl, bool include_name);
+R_API void r_type_decl_free(RTypeDecl * R_NULLABLE decl);
+
 R_API bool r_type_set(Sdb *TDB, ut64 at, const char *field, ut64 val);
 R_API void r_type_del(Sdb *TDB, const char *name);
 R_API RTypeKind r_type_kind(Sdb *TDB, const char *name);
