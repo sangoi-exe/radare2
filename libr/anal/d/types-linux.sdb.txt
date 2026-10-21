@@ -161,6 +161,7 @@ func.waitid.ret=int
 __stack_chk_fail=func
 func.__stack_chk_fail.args=0
 func.__stack_chk_fail.noreturn=true
+func.__stack_chk_fail.prototype=fixed
 func.__stack_chk_fail.ret=void
 
 off64_t=typedef
