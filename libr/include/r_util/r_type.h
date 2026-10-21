@@ -119,9 +119,11 @@ R_API bool r_type_array_bound_from_db(Sdb * R_NULLABLE db, const char * R_NONNUL
 typedef struct r_type_layout_t {
 	ut64 bits;
 	ut64 align; // bytes, before aggregate/field packing overrides
+	bool incomplete_array; // effective unsized array, including typedefs; bits is zero
 } RTypeLayout;
 
 // Measure object types against the selected type database; functions, syntactic references and unknown types fail.
+// Unsized arrays retain element alignment and incomplete_array; arrays of incomplete elements fail.
 R_API bool r_type_decl_layout(Sdb * R_NONNULL TDB, const RTypeDeclNode * R_NONNULL type, RTypeLayout * R_NONNULL layout);
 R_API bool r_type_get_layout(Sdb * R_NONNULL TDB, const char * R_NONNULL type, RTypeLayout * R_NONNULL layout);
 

@@ -3270,6 +3270,7 @@ R_API void r_anal_function_signature_free(RAnalFunctionSignature *signature) {
 		free (signature->ret_type);
 		free (signature->callconv);
 		r_list_free (signature->params);
+		free (signature->type_name);
 		free (signature);
 	}
 }
@@ -3337,7 +3338,11 @@ R_API RAnalFunctionSignature *r_anal_function_get_signature(RAnalFunction *funct
 		}
 	}
 	signature->noreturn = function_signature_is_noreturn (anal->sdb_types, type_name, function->is_noreturn);
-	free (type_name);
+	if (r_type_func_prototype_exist (anal->sdb_types, type_name)) {
+		signature->type_name = type_name;
+	} else {
+		free (type_name);
+	}
 	return signature;
 
 beach:

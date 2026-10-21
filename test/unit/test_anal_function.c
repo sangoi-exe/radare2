@@ -294,6 +294,7 @@ bool test_r_anal_function_get_signature(void) {
 	RAnalFunctionSignature *signature = r_anal_function_get_signature (f);
 	mu_assert_notnull (signature, "typed signature must be readable");
 	mu_assert_streq (f->name, "sigread", "typed function name");
+	mu_assert_nullable_streq (signature->type_name, typed_name, "snapshot identifies the selected canonical record");
 	mu_assert_streq (signature->ret_type, "int", "typed return type");
 	mu_assert_streq (signature->callconv, "amd64", "typed callconv");
 	mu_assert_eq ((int)r_list_length (signature->params), 2, "typed param count");
@@ -328,6 +329,7 @@ bool test_r_anal_function_get_signature_prefers_exact_type_link(void) {
 
 	RAnalFunctionSignature *signature = r_anal_function_get_signature (f);
 	mu_assert_notnull (signature, "exact linked signature must be readable");
+	mu_assert_nullable_streq (signature->type_name, "linked_signature", "snapshot identifies the address-selected record");
 	mu_assert_streq (signature->ret_type, "char", "exact link must take precedence over function name");
 	mu_assert_eq ((int)r_list_length (signature->params), 1, "exact linked signature param count");
 	r_anal_function_signature_free (signature);
@@ -348,12 +350,14 @@ bool test_r_anal_function_get_signature_prefers_exact_type_link(void) {
 	mu_assert_true (r_anal_function_rename (f, "renamed_signature"), "function rename must succeed");
 	signature = r_anal_function_get_signature (f);
 	mu_assert_notnull (signature, "exact linked signature must survive function rename");
+	mu_assert_nullable_streq (signature->type_name, "linked_signature", "the selected record identity survives function rename");
 	mu_assert_streq (signature->ret_type, "short", "renaming must not change exact linked signature");
 	r_anal_function_signature_free (signature);
 
 	mu_assert_true (r_type_unlink (anal->sdb_types, f->addr), "exact function type link must be removed");
 	signature = r_anal_function_get_signature (f);
 	mu_assert_notnull (signature, "name-based signature must remain available after unlink");
+	mu_assert_nullable_streq (signature->type_name, "renamed_signature", "unlink exposes the name-selected record identity");
 	mu_assert_streq (signature->ret_type, "void", "unlink must restore name-based lookup");
 	r_anal_function_signature_free (signature);
 
@@ -412,6 +416,7 @@ bool test_r_anal_function_set_signature_uses_canonical_type_name(void) {
 
 	signature = r_anal_function_get_signature (f);
 	mu_assert_notnull (signature, "typed signature read");
+	mu_assert_nullable_streq (signature->type_name, "scanf", "snapshot identifies the fuzzy-selected canonical record");
 	mu_assert_streq (signature->ret_type, "int", "typed apply return type");
 	mu_assert_streq (signature->callconv, "amd64", "typed apply callconv");
 	mu_assert_eq ((int)r_list_length (signature->params), 2, "typed apply context param count");
@@ -677,6 +682,7 @@ bool test_r_anal_function_signature_prototype_roundtrip(void) {
 	mu_assert_eq (unavailable_count, 99, "unavailable count remains unavailable");
 	RAnalFunctionSignature *partial = r_anal_function_get_signature (fcn);
 	mu_assert_notnull (partial, "read available knowledge from a partial signature");
+	mu_assert_null (partial->type_name, "parameter-list metadata alone does not invent a function record");
 	mu_assert_eq (partial->prototype, R_TYPE_FUNC_PROTOTYPE_FIXED, "missing count does not erase known specificity");
 	mu_assert_streq (partial->signature, "void roundtrip ();", "the C projection cannot invent fixed-empty inputs from an unavailable count");
 	r_anal_function_signature_free (partial);
@@ -1153,6 +1159,7 @@ bool test_r_core_afs_updates_effective_binding(void) {
 		bool destination_preserved = !cases[i].destination || (destination && !strcmp (destination, "long"));
 		char *private_type = r_type_link_at (core->anal->sdb_types, fcn->addr);
 		bool isolated = private_type && strcmp (private_type, cases[i].source);
+		bool selected_identity = signature && signature->type_name && private_type && !strcmp (signature->type_name, private_type);
 		ut64 types_epoch = r_anal_types_dirty_epoch (core->anal);
 		r_core_cmd0 (core, cases[i].input);
 		char *repeated_type = r_type_link_at (core->anal->sdb_types, fcn->addr);
@@ -1167,6 +1174,7 @@ bool test_r_core_afs_updates_effective_binding(void) {
 		mu_assert_true (identity_updated, "afs at a contained address renames the owning function and flag, not its symbol");
 		mu_assert_true (contract_updated, "afs applies the admitted result to the selected effective contract");
 		mu_assert_true (isolated, "a command edit selects its own ordinary function record through the addressed link");
+		mu_assert_true (selected_identity, "the signature snapshot identifies the isolated return and parameter record");
 		mu_assert_true (other_unchanged, "explicit and name-derived shared lookup cannot change the other function");
 		mu_assert_true (source_unchanged, "command rename and application preserve the shared source type");
 		mu_assert_true (links_preserved, "other explicit address and DWARF links keep their source owner");
@@ -1337,6 +1345,7 @@ bool test_r_anal_function_get_signature_uses_basename_for_dbg_prefixed_function(
 
 	RAnalFunctionSignature *signature = r_anal_function_get_signature (f);
 	mu_assert_notnull (signature, "dbg-prefixed function must resolve canonical basename signature");
+	mu_assert_nullable_streq (signature->type_name, "alloc_and_copy", "snapshot identifies the basename-selected record");
 	mu_assert_streq (signature->ret_type, "char *", "dbg-prefixed return type");
 	mu_assert_eq ((int)r_list_length (signature->params), 2, "dbg-prefixed param count");
 	RAnalFunctionParam *arg0 = r_list_get_n (signature->params, 0);
@@ -1506,11 +1515,15 @@ bool test_r_anal_function_get_signature_falls_back_to_valid_callconv(void) {
 	RAnalFunctionSignature *signature = r_anal_function_get_signature (f);
 	mu_assert_notnull (signature, "typed signature must be readable");
 	mu_assert_streq (signature->callconv, "amd64", "absent source convention follows the active analysis configuration");
+	mu_assert_notnull (signature->type_name, "an absent convention does not erase record identity");
+	mu_assert_null (sdb_const_getf (anal->sdb_types, NULL, "func.%s.cc", signature->type_name), "record identity preserves the distinction between absent source and effective convention");
 	r_anal_function_signature_free (signature);
 	sdb_set (anal->sdb_types, "func.sigcc.cc", "cdecl", 0);
 	signature = r_anal_function_get_signature (f);
 	mu_assert_notnull (signature, "typed signature with an unavailable stored convention remains readable");
 	mu_assert_streq (signature->callconv, "amd64", "an unavailable persisted convention retains the existing valid-live fallback");
+	mu_assert_notnull (signature->type_name, "a native-only convention does not erase record identity");
+	mu_assert_streq (sdb_const_getf (anal->sdb_types, NULL, "func.%s.cc", signature->type_name), "cdecl", "the selected record independently exposes its explicit unavailable convention");
 	r_anal_function_signature_free (signature);
 	r_anal_free (anal);
 	mu_end;
@@ -1563,6 +1576,7 @@ bool test_r_anal_function_get_signature_reports_origin_and_only_reads(void) {
 	RAnalFunctionSignature *signature = r_anal_function_get_signature (f);
 	mu_assert_notnull (signature, "name-based signature must be readable");
 	mu_assert_eq (signature->origin, R_ANAL_FUNCTION_SIGNATURE_ORIGIN_NAME, "a prototype found by name");
+	mu_assert_nullable_streq (signature->type_name, "by_name", "name origin identifies its actual record");
 	r_anal_function_signature_free (signature);
 
 	mu_assert_true (r_type_set_link (anal->sdb_types, "by_link", f->addr), "link a prototype to the address");
@@ -1571,6 +1585,7 @@ bool test_r_anal_function_get_signature_reports_origin_and_only_reads(void) {
 	signature = r_anal_function_get_signature (f);
 	mu_assert_notnull (signature, "address-linked signature must be readable");
 	mu_assert_eq (signature->origin, R_ANAL_FUNCTION_SIGNATURE_ORIGIN_ADDRESS, "a prototype linked to the address");
+	mu_assert_nullable_streq (signature->type_name, "by_link", "address origin identifies its actual record");
 	mu_assert_streq (signature->ret_type, "char", "the linked prototype wins");
 	r_anal_function_signature_free (signature);
 	signature = r_anal_function_get_signature (f);
@@ -1587,9 +1602,24 @@ bool test_r_anal_function_get_signature_reports_origin_and_only_reads(void) {
 	signature = r_anal_function_get_signature (vars);
 	mu_assert_notnull (signature, "variable-built signature must be readable");
 	mu_assert_eq (signature->origin, R_ANAL_FUNCTION_SIGNATURE_ORIGIN_VARIABLES, "no prototype; built from variables");
+	mu_assert_null (signature->type_name, "variable-only presentation has no invented record identity");
 	r_anal_function_signature_free (signature);
 
+	mu_assert_true (r_type_set_link (anal->sdb_types, "by_link", vars->addr), "bind the variable-bearing function to a real record");
+	sdb_unset (anal->sdb_types, "func.by_link.args", 0);
+	sdb_unset (anal->sdb_types, "func.by_link.prototype", 0);
+	signature = r_anal_function_get_signature (vars);
+	mu_assert_notnull (signature, "a selected record with unavailable formal-list knowledge remains readable");
+	mu_assert_eq (signature->origin, R_ANAL_FUNCTION_SIGNATURE_ORIGIN_VARIABLES, "unavailable formal count retains variable fallback");
+	mu_assert_eq (signature->prototype, R_TYPE_FUNC_PROTOTYPE_UNKNOWN, "record identity does not invent parameter-list knowledge");
+	mu_assert_nullable_streq (signature->type_name, "by_link", "variable fallback does not erase an actual selected record");
+	mu_assert_streq (signature->ret_type, "char", "the selected record still supplies the return type");
+	mu_assert_eq (r_list_length (signature->params), 1, "variable fallback still supplies the parameter");
+	RAnalFunctionParam *param = r_list_first (signature->params);
+	mu_assert_streq (param->type, "int32_t", "the parameter remains inferred from the function's variable");
 	r_anal_free (anal);
+	mu_assert_nullable_streq (signature->type_name, "by_link", "snapshot owns its record identity beyond the analysis database lifetime");
+	r_anal_function_signature_free (signature);
 	mu_end;
 }
 

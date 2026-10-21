@@ -15,25 +15,21 @@ static void kvc_sync_types(KVCParser *kvc) {
 	kvc->synced = r_strbuf_length (kvc->sb);
 }
 
-static bool kvc_type_layout(KVCParser *kvc, const char *name, int *size, int *align) {
+static bool kvc_type_layout(KVCParser *kvc, const RTypeDecl *decl, RTypeLayout *layout) {
 	kvc_sync_types (kvc);
-	RTypeLayout layout;
-	if (!r_type_get_layout (kvc->types, name, &layout) || layout.bits % 8 || layout.bits / 8 > INT_MAX || layout.align > INT_MAX) {
+	if (!r_type_decl_layout (kvc->types, decl->type, layout) || layout->bits % 8 || layout->bits / 8 > INT_MAX || layout->align > INT_MAX) {
+		char *type = r_type_decl_render (decl, false);
+		char *message = r_str_newf ("Cannot measure member type: %s", r_str_get (type));
+		kvc_error (kvc, message? message: "Cannot measure member type");
+		free (message);
+		free (type);
 		return false;
 	}
-	*size = layout.bits / 8;
-	*align = layout.align;
 	return true;
 }
 
-static int kvc_layout_member(KVCParser *kvc, RAnalBaseType *bt, const char *type, int count, int *off, int *align) {
-	int size, av;
-	if (!kvc_type_layout (kvc, type, &size, &av) || count < 0 || (count && size > INT_MAX / count)) {
-		char *message = r_str_newf ("Cannot measure member type: %s", type);
-		kvc_error (kvc, message? message: "Cannot measure member type");
-		free (message);
-		return 0;
-	}
+static int kvc_layout_member(KVCParser *kvc, RAnalBaseType *bt, const RTypeLayout *layout, int *off, int *align) {
+	int av = layout->align;
 	const char *aligned = kvc_attr (kvc, "aligned");
 	if (aligned) {
 		int explicit_align = atoi (aligned);
@@ -52,7 +48,7 @@ static int kvc_layout_member(KVCParser *kvc, RAnalBaseType *bt, const char *type
 		end += av - end % av;
 	}
 	member_off = end;
-	end += (ut64)size * count;
+	end += layout->bits / 8;
 	if (end > INT_MAX) {
 		kvc_error (kvc, "Aggregate size exceeds parser limit");
 		return 0;

@@ -1508,6 +1508,62 @@ static bool test_anal_cparse_incomplete_member(void) {
 	mu_end;
 }
 
+static bool test_anal_cparse_flexible_array_members(void) {
+	RAnal *anal = r_anal_new ();
+	anal->config->bits = 64;
+	r_anal_types_reload (anal, R2_PREFIX, NULL, NULL);
+	char *error = NULL;
+	mu_assert_true (r_anal_import_c_decls (anal, "typedef uint8_t Tail[];typedef Tail Alias;", &error), "seed effective incomplete array aliases");
+	const char *headers[] = {
+		"struct Broken {uint8_t tail[];uint16_t after;};",
+		"struct Broken {uint16_t prefix;uint8_t tail[];uint16_t after;};",
+		"union Broken {uint8_t tail[];uint16_t word;};",
+		"struct Broken {uint8_t tail[];};",
+		"struct Broken {Alias tail;uint16_t after;};",
+		"struct Broken {uint16_t prefix;Alias tail;uint16_t after;};",
+		"union Broken {uint16_t word;Alias tail;};",
+		"struct Broken {Alias tail;};",
+		"struct Broken {uint16_t prefix;uint8_t tail[2][];};",
+		"struct Broken {uint16_t prefix;Alias tail[2];};",
+		"typedef uint8_t Nested[2][];struct Broken {uint16_t prefix;Nested tail;};"
+	};
+	size_t i;
+	for (i = 0; i < R_ARRAY_SIZE (headers); i++) {
+		mu_assert_false (r_anal_import_c_decls (anal, headers[i], &error), "invalid effective incomplete members refuse at C admission");
+		mu_assert_notnull (error, "invalid flexible members report a diagnostic");
+		free (error);
+		error = NULL;
+		mu_assert_null (tag_value (anal, "Broken"), "failed admission cannot publish a completed aggregate");
+	}
+	mu_assert_true (r_anal_import_c_decls (anal, "struct Broken;", &error), "seed a forward identity before a failed completion");
+	mu_assert_false (r_anal_import_c_decls (anal, headers[0], &error), "invalid completion still refuses");
+	free (error);
+	error = NULL;
+	mu_assert_streq (tag_value (anal, "Broken"), "struct", "failed completion preserves the forward identity");
+	mu_assert_null (tag_value (anal, "struct.Broken"), "failed completion cannot publish member offsets");
+	mu_assert_null (tag_value (anal, "type.Broken.size"), "failed completion cannot publish a misleading extent");
+	mu_assert_true (r_anal_import_c_decls (anal,
+		"struct Direct {uint16_t prefix;uint8_t tail[];};"
+		"struct Aliased {uint16_t prefix;Alias tail;};"
+		"typedef uint8_t LocalTail[];struct Local {uint16_t prefix;LocalTail tail;};"
+		"struct Rows {uint16_t prefix;uint8_t tail[][2];};"
+		"struct Pointer {uint8_t (*tail)[];};"
+		"typedef struct {char *hello;int world[];} Bar;", &error), "valid direct, effective, nested and anonymous flexible tails remain admitted");
+	mu_assert_null (error, "valid flexible declarations have no parser error");
+	mu_assert_streq (tag_value (anal, "struct.Direct.tail"), "uint8_t [],2,0", "direct flexible tail keeps its unsized declaration and prefix offset");
+	mu_assert_streq (tag_value (anal, "struct.Aliased.tail"), "Alias,2,0", "effective flexible tail keeps its alias identity");
+	const char *complete[] = { "struct Direct", "struct Aliased", "struct Local", "struct Rows", "struct Pointer", "Bar" };
+	const ut64 bits[] = { 16, 16, 16, 16, 64, 64 };
+	for (i = 0; i < R_ARRAY_SIZE (complete); i++) {
+		RTypeLayout layout;
+		mu_assert_true (r_type_get_layout (anal->sdb_types, complete[i], &layout), "valid aggregates retain measurable prefixes");
+		mu_assert_eq (layout.bits, bits[i], "flexible tail does not invent an element or erase the prefix");
+		mu_assert_false (layout.incomplete_array, "an aggregate with a flexible tail is not itself an incomplete array");
+	}
+	r_anal_free (anal);
+	mu_end;
+}
+
 static bool test_anal_cparse_definition_alias(void) {
 	RAnal *anal = r_anal_new ();
 	anal->config->bits = 64;
@@ -1671,6 +1727,24 @@ static bool test_anal_type_bitsize_arrays(void) {
 	RTypeLayout unsized;
 	mu_assert_true (r_type_get_layout (types, "word[]", &unsized), "an unsized bound retains its separate layout representation");
 	mu_assert_eq (unsized.bits, 0, "an unsized array is not one element or a positive bound");
+	mu_assert_eq (unsized.align, 2, "an unsized array retains its element alignment");
+	mu_assert_true (unsized.incomplete_array, "layout distinguishes effective incompleteness from a complete object");
+	sdb_set (types, "Tail", "typedef", 0);
+	sdb_set (types, "typedef.Tail", "word[]", 0);
+	sdb_set (types, "TailAlias", "typedef", 0);
+	sdb_set (types, "typedef.TailAlias", "Tail", 0);
+	mu_assert_true (r_type_get_layout (types, "TailAlias", &unsized), "incomplete arrays measure through alias chains");
+	mu_assert_true (unsized.incomplete_array, "aliases retain effective array incompleteness");
+	mu_assert_eq (unsized.bits, 0, "aliases do not invent an incomplete array extent");
+	mu_assert_true (r_type_get_layout (types, "word[][2]", &unsized), "only the outer dimension may be incomplete");
+	mu_assert_true (unsized.incomplete_array, "an incomplete outer array remains distinguishable");
+	mu_assert_false (r_type_get_layout (types, "word[2][]", &unsized), "an array cannot have incomplete array elements");
+	mu_assert_false (r_type_get_layout (types, "TailAlias[2]", &unsized), "an alias cannot hide incomplete array elements");
+	mu_assert_true (r_type_get_layout (types, "word (*)[]", &unsized), "pointer layout does not require a complete pointee array");
+	mu_assert_eq (unsized.bits, 64, "pointer-to-incomplete-array uses the target pointer width");
+	mu_assert_false (unsized.incomplete_array, "a pointer is complete regardless of its pointee");
+	mu_assert_true (r_type_get_layout (types, "TailAlias *", &unsized), "pointer layout also preserves incomplete typedef pointees");
+	mu_assert_false (unsized.incomplete_array, "a pointer to an incomplete alias is not incomplete");
 	char *format = r_type_format (types, "char[]");
 	mu_assert_null (format, "formatting cannot invent an element count for an unsized array");
 	sdb_set (types, "Recursive", "typedef", 0);
@@ -1917,6 +1991,7 @@ int all_tests(void) {
 	mu_run_test (test_anal_cparse_tagged_member_does_not_resolve_typedef);
 	mu_run_test (test_anal_type_format_tagged_identity);
 	mu_run_test (test_anal_cparse_incomplete_member);
+	mu_run_test (test_anal_cparse_flexible_array_members);
 	mu_run_test (test_anal_get_base_type_union);
 	mu_run_test (test_anal_save_base_type_union);
 	mu_run_test (test_anal_get_base_type_enum);

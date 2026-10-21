@@ -6585,3 +6585,59 @@ int Parent.Child(void);
 int Parent.Child(void);
 EOF_EXPECT
 RUN
+
+NAME=td keeps complete prefixes for effective flexible tails and incomplete-array pointers
+FILE=-
+ARGS=-a x86 -b 64
+CMDS=<<EOF_CMDS
+'td typedef uint8_t Tail[];typedef Tail Alias;struct Direct {uint16_t prefix;uint8_t tail[];};struct Aliased {uint16_t prefix;Alias tail;};struct Rows {uint16_t prefix;uint8_t tail[][2];};struct Pointer {uint8_t (*tail)[];};typedef struct {char *hello;int world[];} Bar;
+tk tags/struct.Direct.tail
+tk tags/struct.Aliased.tail
+tk tags/type.Direct.size
+tk tags/type.Aliased.size
+tk tags/type.Rows.size
+tk tags/type.Pointer.size
+tk type.Bar.size
+EOF_CMDS
+EXPECT=<<EOF_EXPECT
+uint8_t [],2,0
+Alias,2,0
+16
+16
+16
+64
+64
+EOF_EXPECT
+RUN
+
+NAME=td refuses misplaced direct and effective flexible members without publishing aggregates
+FILE=-
+ARGS=-a x86 -b 64
+CMDS=<<EOF_CMDS
+'td typedef uint8_t Tail[];typedef Tail Alias;
+'td struct Bad {uint16_t prefix;uint8_t tail[];uint16_t after;};
+'td union BadUnion {uint8_t tail[];uint16_t word;};
+'td struct OnlyTail {uint8_t tail[];};
+'td struct AliasBad {uint16_t prefix;Alias tail;uint16_t after;};
+'td union AliasUnion {uint16_t word;Alias tail;};
+'td struct AliasOnly {Alias tail;};
+tk tags/Bad
+tk tags/BadUnion
+tk tags/OnlyTail
+tk tags/AliasBad
+tk tags/AliasUnion
+tk tags/AliasOnly
+tk Alias
+EOF_CMDS
+EXPECT=<<EOF_EXPECT
+typedef
+EOF_EXPECT
+EXPECT_ERR=<<EOF_EXPECT_ERR
+ERROR: at line 1: Flexible array member must be last
+ERROR: at line 1: Flexible array member requires a preceding named member in a struct
+ERROR: at line 1: Flexible array member requires a preceding named member in a struct
+ERROR: at line 1: Flexible array member must be last
+ERROR: at line 1: Flexible array member requires a preceding named member in a struct
+ERROR: at line 1: Flexible array member requires a preceding named member in a struct
+EOF_EXPECT_ERR
+RUN

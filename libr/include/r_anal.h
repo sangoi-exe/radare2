@@ -287,6 +287,7 @@ typedef struct r_anal_function_signature_t {
 	bool noreturn;
 	RAnalFunctionSignatureOrigin origin;
 	RTypeFunctionPrototype prototype; // parameter-list knowledge, not count or lookup origin
+	R_OWNED char *type_name; // selected function-type record key, or NULL without a record
 } RAnalFunctionSignature;
 
 typedef struct r_anal_diff_t {

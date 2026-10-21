@@ -847,6 +847,7 @@ static bool parse_struct_body(KVCParser *kvc, const char *type, const char *sn, 
 	free ((void *)aligned_attr);
 	apply_attributes (kvc, type, sn, space);
 	int off = 0;
+	bool flexible_tail = false;
 	while (true) {
 		parse_attributes (kvc);
 		if (kvc->error) {
@@ -855,6 +856,10 @@ static bool parse_struct_body(KVCParser *kvc, const char *type, const char *sn, 
 		skip_spaces (kvc);
 		if (kvc_peek (kvc, 0) == '}') {
 			kvc_getch (kvc);
+			break;
+		}
+		if (flexible_tail) {
+			kvc_error (kvc, "Flexible array member must be last");
 			break;
 		}
 		const char *start = kvc->s.a;
@@ -883,6 +888,19 @@ static bool parse_struct_body(KVCParser *kvc, const char *type, const char *sn, 
 		}
 		kvc_getch (kvc);
 		parse_trailing_attributes (kvc);
+		RTypeLayout layout;
+		if (kvc->error || !kvc_type_layout (kvc, decl, &layout)) {
+			r_type_decl_free (decl);
+			break;
+		}
+		if (layout.incomplete_array) {
+			if (is_union || RVecAnalTypeMember_empty (r_anal_base_type_members (bt))) {
+				kvc_error (kvc, "Flexible array member requires a preceding named member in a struct");
+				r_type_decl_free (decl);
+				break;
+			}
+			flexible_tail = true;
+		}
 		int count = 0;
 		RTypeDeclNode *outer = decl->type;
 		if (outer->kind == R_TYPE_DECL_ARRAY && *outer->array.count) {
@@ -905,7 +923,7 @@ static bool parse_struct_body(KVCParser *kvc, const char *type, const char *sn, 
 			kvc_error (kvc, "Cannot serialize aggregate member");
 			break;
 		}
-		int member_off = kvc_layout_member (kvc, bt, member_type, count? count: 1, &off, &align);
+		int member_off = kvc_layout_member (kvc, bt, &layout, &off, &align);
 		kvc_basetype_add_member (bt, decl->name, member_type, member_off, count);
 		if (is_typedef && !is_union) {
 			r_strbuf_appendf (kvc->sb, "%s.%s.%s.meta=0\n", tag_key, sn, decl->name);

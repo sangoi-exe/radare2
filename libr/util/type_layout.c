@@ -113,7 +113,7 @@ static bool type_layout_base(Sdb *types, Sdb *db, const char *name, RTypeLayout 
 		RTypeDecl *decl = target? r_type_decl_parse (target, R_TYPE_DECL_CONTEXT_ABSTRACT, types, NULL): NULL;
 		bool ok = decl && !decl->name && type_layout_node (types, decl->type, layout, chain, depth + 1);
 		ut64 recorded = sdb_num_getf (db, NULL, "type.%s.size", name);
-		if (ok && recorded && decl->type->kind == R_TYPE_DECL_BASE) {
+		if (ok && !layout->incomplete_array && recorded && decl->type->kind == R_TYPE_DECL_BASE) {
 			layout->bits = recorded;
 		}
 		r_type_decl_free (decl);
@@ -153,7 +153,7 @@ static bool type_layout_node(Sdb *db, const RTypeDeclNode *node, RTypeLayout *la
 	}
 	if (node->kind == R_TYPE_DECL_ARRAY) {
 		chain[depth] = (RTypeIdentity){ 0 };
-		if (!type_layout_node (db, node->child, layout, chain, depth + 1)) {
+		if (!type_layout_node (db, node->child, layout, chain, depth + 1) || layout->incomplete_array) {
 			return false;
 		}
 		ut64 count;
@@ -162,6 +162,7 @@ static bool type_layout_node(Sdb *db, const RTypeDeclNode *node, RTypeLayout *la
 		}
 		if (!count) {
 			layout->bits = 0;
+			layout->incomplete_array = true;
 			return true;
 		}
 		return !r_mul_overflow (layout->bits, count, &layout->bits);
