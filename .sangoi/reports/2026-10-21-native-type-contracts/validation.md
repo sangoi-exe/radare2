@@ -1,8 +1,23 @@
 # Native type-contract validation
 
-This report records the current remediation candidate and observed coverage. It is not a whole-decompiler correctness claim or rebuild-ready game source. The current [local Remediation delta review](review.md) closes the previous seven defects but returns DO_NOT_PROCEED for the new dormant-binding isolation failure, SIGNATURE-F4. Passing results below do not close that reproduced case. The original executables were opened for analysis without execution, write mode or saved-project mutation.
+This report records the native type-contract qualification and the subsequent focused SIGNATURE-F4 correction. It is not a whole-decompiler correctness claim or rebuild-ready game source. The preceding [local review](review.md) found the dormant-binding failure despite the broader passes; the user selected its correction, whose new review remains pending. The original executables were opened for analysis without execution, write mode or saved-project mutation.
 
-## Candidate and runtime
+## Focused SIGNATURE-F4 correction
+
+Host runtime `4b8fc8f5f67b9571117e721d2fac5f74dd2f45cb` changes only prospective-name selection in `libr/anal/fcn.c` and its direct function/Core regression test. Peer `link`/`fcnlink` references reserve a name even when the referenced type is absent. Deletion, SHARED updates, standalone `afn`, public APIs and ABI157 remain unchanged. The source/test bytes match the fresh canonical Make build at `/home/lucas/.cache/codex/radare2/native-type-contract-2026-10-21/r-f4-dormant-lzUGvC/`; `install/` is its private SDK.
+
+| Surface | Current observed result | Evidence under that directory |
+| --- | --- | --- |
+| Baseline | Both old-runtime CLI witnesses reproduce activation; qualified unit run has43 retained passes and the new dormant-binding failure | `baseline/`, `baseline-unit-qualified.log` |
+| Host function/Core units | 44/44, including both binding variants and all43 retained controls | `unit.log`, canonical build/install logs |
+| Exact CLI witnesses | Both exit0 with empty stderr; peer remains void/unknown and its binding stays intact | `current/` |
+| Primary host CLI | 54/54 | `integration/host-primary.json` |
+| Bridge type files | One complete94/94 run using the unchanged bridge/plugin languages with the new ABI157 SDK; no compositional-count claim is needed for this run | `integration/bridge-types.json`, `bridge-linkage.log` |
+| Native MCP signatures | 54 requests across five sessions: retained22, valid-link eight, valid-fcnlink eight, dormant-link eight, dormant-fcnlink eight; unique response IDs, no notification responses and all processes exit0 | `mcp/proof/results.json`, complete requests/streams/status/linkage |
+
+The MCP source is unchanged at `51df6714dc5b40822ab421ac685caa4d3da2a0ae` and was rebuilt against the corrected SDK. The bridge/engine source and processor inputs are unchanged at the versions below; the existing plugin was dynamically linked to the new private host libraries for the current94-case run. The new unit's initial `afb+` fixture setup was invalid in the unit harness and was corrected to canonical Analysis blocks with mapped real return bytes before applying the runtime fix. No production failure was hidden by that setup correction. Other earlier host units, native preparation/algorithm tests and original-game captures below remain retained evidence of their named inputs; they were not all rerun for this private selector change.
+
+## Broader remediation baseline and runtime
 
 | Component | Committed runtime input |
 | --- | --- |
@@ -15,7 +30,7 @@ Later host commits containing only these records do not change the tested runtim
 
 The private runtime is `/home/lucas/.cache/codex/radare2/native-type-contract-2026-10-21/remediation-runtime-t4sm1del/`. `install/` contains the host SDK, `bridge/build/libcore_r2ghidra.so` is the plugin, `bridge/languages/` selects matching DATA/x86/AARCH64/PowerPC specifications, and `mcp/source/src/r2mcp` is the server. Linkage logs show the private host libraries without sanitizer libraries. Builds used canonical host Make and bridge Meson targets, not isolated copied production fragments. QJS and ZIP were excluded from this private host build, as in the earlier qualified SDKs. The host archive began at `e73b35b4`; all16 changed runtime/test files were compared byte-for-byte with the committed `f1d71fc9` candidate. `host-base.txt` retains the archive base, while `host-ref.txt` records the validated equivalent runtime commit. The initial candidate and its evidence remain in `final-runtime-2p16mosx/` and Git history.
 
-## Executed proof
+## Broader baseline proof
 
 | Surface | Observed result | Evidence under the private runtime |
 | --- | --- | --- |

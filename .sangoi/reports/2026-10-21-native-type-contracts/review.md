@@ -1,6 +1,6 @@
 # Local Code Gate: DO_NOT_PROCEED
 
-The current Remediation delta review closes the previous seven defects but returns DO_NOT_PROCEED for new SIGNATURE-F4. Its complete disposition appears in the final section below. The earlier review is retained as historical evidence, not as a claim that its seven findings remain uncorrected.
+The latest completed Remediation delta review closes the previous seven defects but returns DO_NOT_PROCEED for SIGNATURE-F4. The user subsequently selected the focused F4 correction; its implementation and proof are recorded in the final section, with the new review pending. Earlier verdicts remain historical evidence, not claims that their findings are still uncorrected in later candidates.
 
 ## Initial Task change-set review
 
@@ -97,3 +97,13 @@ Two fresh native Claude calls, TYPES and SIGNATURE, actually failed with exit1/H
 All required Senior source and integration coverage is complete, and no semantic disagreement remains among those assessments. No new proof matrix is required. Previously disclosed F_SCOPY rendering, sanitizer, alternate Make, full TypeCode restoration, all-processor, global activation, remote pin and persistence/whole-game limits remain unchanged. Root synthesis and actual error envelopes are in the task cache's `remediation-code-gate/` directory.
 
 The registered transition returns the material correction to the current user and keeps lifecycle Remediation review. The canonical plan is on hold. This disposition and its documentation are bookkeeping only; no correction, new Gate or source mutation is authorized by them.
+
+## Selected SIGNATURE-F4 correction — awaiting review
+
+The current user confirmed the proposed bounded correction in message `msg_01a15efc-a298-7dd1-8d71-1577497f4199` at `2026-10-21T12:02:57.433-03:00` (`America/Sao_Paulo`). The canonical plan resumed active Remediation review without changing Scope or epoch. This is remediation selection, not an override or approval of the preceding candidate.
+
+Host runtime `4b8fc8f5f67b9571117e721d2fac5f74dd2f45cb` changes only `libr/anal/fcn.c` and `test/unit/test_anal_function.c`. Literal peer `link`/`fcnlink` targets now reserve a prospective name before the existing name probe. The current suffix path, deletion, SHARED setter, standalone `afn`, public API and ABI157 remain unchanged. Both exact witnesses retain the peer's unknown/void signature and binding while applying the addressed edit. The new unit fails on the qualified previous runtime and passes with all43 retained controls in the corrected44-test run.
+
+Root's current proof adds primary CLI54/54, a full unchanged-bridge type run94/94 with corrected-host linkage, and54 actual MCP requests across retained/normal-sharing/dormant-sharing sessions. Evidence is `/home/lucas/.cache/codex/radare2/native-type-contract-2026-10-21/r-f4-dormant-lzUGvC/`. No original executable, saved analysis, global installation or remote was changed.
+
+The new Gate uses the resident's proportional single-Senior procedure: this is a small cohesive private selector correction, one direct test boundary and factual documentary followers, with no new architecture/API/state or independent source owner. The previously completed broad partitions are unchanged. This is a new committed-candidate review, not a downgrade of the old crossed Gate or reuse of its Claude quota dispensation. Formal closure remains pending.
