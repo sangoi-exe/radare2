@@ -1,5 +1,9 @@
 # Workspace changelog
 
+## 2026-10-21
+
+- Implemented the confirmed native C type-contract corrections and ABI157 propagation: canonical target-width array expressions, contextual declaration admission, incomplete aggregates and flexible tails, recursive aliases, parameter-list specificity, safe attributes, removal of declared-type substitution, and direct typed MCP signature application. Matching private validation passes184 host units,54 focused CLI controls,91 bridge controls,51 native controls,ten preparation controls,XML/reuse and50 actual MCP requests. Original-backed C/XML is retained; the unresolved F_SCOPY printed byte-width limitation and separate baseline sanitizer observations remain explicit. The local Code Gate is pending; no global installation or push is claimed.
+
 ## 2026-10-20
 
 - Completed target-sized Win16 declarations, explicit near/far layers, native prototype serialization and contextual compound-return printing. User-selected remediation closes the first Gate's seven findings. The final `PROCEED_AFTER_FIXES` review identified one mechanically determined shipped-data follower batch; its22 source/oracle mappings, actual strtol regression and stale status correction are now verified. Final host311/311 cases and35 actual MCP responses pass; retained bridge74 plus2 Real Mode and native40/preparation8/XML/reuse cover their unchanged qualified inputs. Earlier host units10/29/28 remain recorded for R1. Three actual Claude quota failures received narrow contribution-specific dispensations without inventing agreement. The task is complete locally, without global installation or push. Full XPS linkage, the separate OMF defects and byte-identical game reconstruction remain outside the completed result; the task log records proof limits and deferred observations.

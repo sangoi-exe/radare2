@@ -1,0 +1,6 @@
+0x00011157: CALL 0x110e8
+    (unique,0x40700,2) = COPY 0x115a
+    SP = INT_SUB SP, 0x2
+    (unique,0x40a00,4) = CALLOTHER 0x0, SS, SP
+    STORE 0x591c2747d1a0, (unique,0x40a00,4) = (unique,0x40700,2)
+    CALL dword_ptr(0x000110e8)

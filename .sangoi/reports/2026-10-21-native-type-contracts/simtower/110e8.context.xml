@@ -1,0 +1,258 @@
+
+<save_state loadersymbols="false">
+  <typegrp>
+    <type name="FarAddress16" id="0xd0611de0b9d443e1" size="4" metatype="struct" alignment="2">
+      <field name="offset" offset="0">
+        <typeref name="uint16_t" id="0xe03cc574cf9d5ff9"/>
+      </field>
+      <field name="selector" offset="2">
+        <typeref name="uint16_t" id="0xe03cc574cf9d5ff9"/>
+      </field>
+    </type>
+  </typegrp>
+  <db>
+    <scope name="radare2-internal" id="0x0">
+      <rangelist/>
+      <symbollist>
+        <mapsym>
+          <function id="0x1" name="qualified_borland_fmovmem.000110e8" size="89">
+            <addr space="ram" offset="0x110e8"/>
+            <localdb main="stack" lock="false">
+              <scope name="qualified_borland_fmovmem.000110e8" id="0x1">
+                <parent id="0x0"/>
+                <rangelist>
+                  <range space="stack" first="0x4" last="0x7"/>
+                  <range space="stack" first="0x8" last="0xb"/>
+                  <range space="stack" first="0xc" last="0xd"/>
+                  <range space="stack" first="0xd8f0" last="0xfff7"/>
+                  <range space="stack" first="0xfffe" last="0xffff"/>
+                </rangelist>
+                <symbollist>
+                  <mapsym>
+                    <symbol name="byte_count" id="0x4000010000000005" namelock="true" typelock="true" cat="0" index="0x2">
+                      <typeref name="uint16_t" id="0xe03cc574cf9d5ff9"/>
+                    </symbol>
+                    <addr space="stack" offset="0xc"/>
+                    <rangelist/>
+                  </mapsym>
+                  <mapsym>
+                    <symbol name="destination" id="0x4000010000000004" namelock="true" typelock="true" cat="0" index="0x1">
+                      <typeref name="FarAddress16" id="0xd0611de0b9d443e1"/>
+                    </symbol>
+                    <addr space="stack" offset="0x8"/>
+                    <rangelist/>
+                  </mapsym>
+                  <mapsym>
+                    <symbol name="iVar5" id="0x400001000000000e" cat="-1">
+                      <typeref name="int" id="0xc00000fe2e3c3bdf"/>
+                    </symbol>
+                    <addr space="register" offset="0x0"/>
+                    <rangelist>
+                      <range space="ram" first="0x11106" last="0x11106"/>
+                    </rangelist>
+                  </mapsym>
+                  <mapsym>
+                    <symbol name="puVar1" id="0x400001000000000a" cat="-1">
+                      <type name="" size="4" metatype="ptr" core="true">
+                        <typeref name="uchar" id="0xc00085de63689fd9"/>
+                      </type>
+                    </symbol>
+                    <hash val="0x0"/>
+                    <rangelist>
+                      <range space="ram" first="0x11129" last="0x11129"/>
+                    </rangelist>
+                  </mapsym>
+                  <mapsym>
+                    <symbol name="puVar2" id="0x400001000000000b" cat="-1">
+                      <type name="" size="4" metatype="ptr" core="true">
+                        <typeref name="uint" id="0xc0000085203c3bdf"/>
+                      </type>
+                    </symbol>
+                    <hash val="0x0"/>
+                    <rangelist>
+                      <range space="ram" first="0x11131" last="0x11131"/>
+                    </rangelist>
+                  </mapsym>
+                  <mapsym>
+                    <symbol name="puVar3" id="0x400001000000000c" cat="-1">
+                      <type name="" size="4" metatype="ptr" core="true">
+                        <typeref name="uchar" id="0xc00085de63689fd9"/>
+                      </type>
+                    </symbol>
+                    <hash val="0x0"/>
+                    <rangelist>
+                      <range space="ram" first="0x11129" last="0x11129"/>
+                    </rangelist>
+                  </mapsym>
+                  <mapsym>
+                    <symbol name="puVar4" id="0x400001000000000d" cat="-1">
+                      <type name="" size="4" metatype="ptr" core="true">
+                        <typeref name="uint" id="0xc0000085203c3bdf"/>
+                      </type>
+                    </symbol>
+                    <hash val="0x0"/>
+                    <rangelist>
+                      <range space="ram" first="0x11131" last="0x11131"/>
+                    </rangelist>
+                  </mapsym>
+                  <mapsym>
+                    <symbol name="puVar7" id="0x4000010000000010" cat="-1">
+                      <type name="" size="2" metatype="ptr" core="true">
+                        <typeref name="uint" id="0xc0000085203c3bdf"/>
+                      </type>
+                    </symbol>
+                    <hash val="0x0"/>
+                    <rangelist>
+                      <range space="ram" first="0x1112b" last="0x1112b"/>
+                    </rangelist>
+                  </mapsym>
+                  <mapsym>
+                    <symbol name="puVar8" id="0x4000010000000011" cat="-1">
+                      <type name="" size="2" metatype="ptr" core="true">
+                        <typeref name="uint" id="0xc0000085203c3bdf"/>
+                      </type>
+                    </symbol>
+                    <addr space="register" offset="0x1c"/>
+                    <rangelist>
+                      <range space="ram" first="0x1112d" last="0x1112d"/>
+                    </rangelist>
+                  </mapsym>
+                  <mapsym>
+                    <symbol name="source" id="0x4000010000000003" namelock="true" typelock="true" cat="0" index="0x0">
+                      <typeref name="FarAddress16" id="0xd0611de0b9d443e1"/>
+                    </symbol>
+                    <addr space="stack" offset="0x4"/>
+                    <rangelist/>
+                  </mapsym>
+                  <mapsym>
+                    <symbol name="uVar6" id="0x400001000000000f" cat="-1">
+                      <typeref name="uint16_t" id="0xe03cc574cf9d5ff9"/>
+                    </symbol>
+                    <addr space="register" offset="0x4"/>
+                    <rangelist>
+                      <range space="ram" first="0x1112f" last="0x1112f"/>
+                    </rangelist>
+                  </mapsym>
+                  <mapsym>
+                    <symbol name="uVar9" id="0x4000010000000012" cat="-1">
+                      <typeref name="uint8_t" id="0xc520c290df38a1df"/>
+                    </symbol>
+                    <addr space="register" offset="0x20a"/>
+                    <rangelist>
+                      <range space="ram" first="0x11105" last="0x11105"/>
+                    </rangelist>
+                  </mapsym>
+                </symbollist>
+              </scope>
+            </localdb>
+            <prototype model="borland_fmovmem_16far" extrapop="4" modellock="true">
+              <returnsym typelock="true">
+                <addr/>
+                <void/>
+              </returnsym>
+            </prototype>
+          </function>
+          <addr space="ram" offset="0x110e8"/>
+          <rangelist/>
+        </mapsym>
+      </symbollist>
+    </scope>
+  </db>
+  <context_points>
+    <context_pointset space="ram" offset="0x0">
+      <set name="addrsize" val="0x0"/>
+      <set name="bit64" val="0x0"/>
+      <set name="evexAAA" val="0x0"/>
+      <set name="evexB" val="0x0"/>
+      <set name="evexBType" val="0x0"/>
+      <set name="evexD8Type" val="0x0"/>
+      <set name="evexDisp8" val="0x0"/>
+      <set name="evexL" val="0x0"/>
+      <set name="evexLp" val="0x0"/>
+      <set name="evexRp" val="0x0"/>
+      <set name="evexTType" val="0x0"/>
+      <set name="evexV5" val="0x0"/>
+      <set name="evexVp" val="0x0"/>
+      <set name="evexZ" val="0x0"/>
+      <set name="highseg" val="0x0"/>
+      <set name="instrPhase" val="0x0"/>
+      <set name="lockprefx" val="0x0"/>
+      <set name="mandover" val="0x0"/>
+      <set name="opsize" val="0x0"/>
+      <set name="prefix_66" val="0x0"/>
+      <set name="prefix_f2" val="0x0"/>
+      <set name="prefix_f3" val="0x0"/>
+      <set name="protectedMode" val="0x1"/>
+      <set name="repneprefx" val="0x0"/>
+      <set name="repprefx" val="0x0"/>
+      <set name="reserved" val="0x0"/>
+      <set name="reservedHigh" val="0x0"/>
+      <set name="rexBprefix" val="0x0"/>
+      <set name="rexRprefix" val="0x0"/>
+      <set name="rexWRXBprefix" val="0x0"/>
+      <set name="rexWprefix" val="0x0"/>
+      <set name="rexXprefix" val="0x0"/>
+      <set name="rexprefix" val="0x0"/>
+      <set name="segover" val="0x0"/>
+      <set name="suffix3D" val="0x0"/>
+      <set name="vexHighV" val="0x0"/>
+      <set name="vexL" val="0x0"/>
+      <set name="vexMMMMM" val="0x0"/>
+      <set name="vexMode" val="0x0"/>
+      <set name="vexVVVV" val="0x0"/>
+      <set name="vexVVVV_r64" val="0x0"/>
+      <set name="xacquireprefx" val="0x0"/>
+      <set name="xreleaseprefx" val="0x0"/>
+    </context_pointset>
+    <context_pointset space="register" offset="0x0">
+      <set name="addrsize" val="0x0"/>
+      <set name="bit64" val="0x0"/>
+      <set name="evexAAA" val="0x0"/>
+      <set name="evexB" val="0x0"/>
+      <set name="evexBType" val="0x0"/>
+      <set name="evexD8Type" val="0x0"/>
+      <set name="evexDisp8" val="0x0"/>
+      <set name="evexL" val="0x0"/>
+      <set name="evexLp" val="0x0"/>
+      <set name="evexRp" val="0x0"/>
+      <set name="evexTType" val="0x0"/>
+      <set name="evexV5" val="0x0"/>
+      <set name="evexVp" val="0x0"/>
+      <set name="evexZ" val="0x0"/>
+      <set name="highseg" val="0x0"/>
+      <set name="instrPhase" val="0x0"/>
+      <set name="lockprefx" val="0x0"/>
+      <set name="mandover" val="0x0"/>
+      <set name="opsize" val="0x0"/>
+      <set name="prefix_66" val="0x0"/>
+      <set name="prefix_f2" val="0x0"/>
+      <set name="prefix_f3" val="0x0"/>
+      <set name="protectedMode" val="0x0"/>
+      <set name="repneprefx" val="0x0"/>
+      <set name="repprefx" val="0x0"/>
+      <set name="reserved" val="0x0"/>
+      <set name="reservedHigh" val="0x0"/>
+      <set name="rexBprefix" val="0x0"/>
+      <set name="rexRprefix" val="0x0"/>
+      <set name="rexWRXBprefix" val="0x0"/>
+      <set name="rexWprefix" val="0x0"/>
+      <set name="rexXprefix" val="0x0"/>
+      <set name="rexprefix" val="0x0"/>
+      <set name="segover" val="0x0"/>
+      <set name="suffix3D" val="0x0"/>
+      <set name="vexHighV" val="0x0"/>
+      <set name="vexL" val="0x0"/>
+      <set name="vexMMMMM" val="0x0"/>
+      <set name="vexMode" val="0x0"/>
+      <set name="vexVVVV" val="0x0"/>
+      <set name="vexVVVV_r64" val="0x0"/>
+      <set name="xacquireprefx" val="0x0"/>
+      <set name="xreleaseprefx" val="0x0"/>
+    </context_pointset>
+    <tracked_pointset space="ram" offset="0x0">
+      <set space="register" offset="0x20a" size="1" val="0x0"/>
+    </tracked_pointset>
+  </context_points>
+  <commentdb/>
+  <stringmanage/>
+</save_state>

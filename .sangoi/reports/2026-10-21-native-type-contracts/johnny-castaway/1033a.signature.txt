@@ -1,0 +1,1 @@
+void qualified_borland_f_scopy.0001033a (uint16_t byte_count, FarAddress16 source, FarAddress16 destination);

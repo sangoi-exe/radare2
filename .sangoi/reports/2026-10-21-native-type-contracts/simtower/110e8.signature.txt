@@ -1,0 +1,1 @@
+void qualified_borland_fmovmem.000110e8 (FarAddress16 source, FarAddress16 destination, uint16_t byte_count);

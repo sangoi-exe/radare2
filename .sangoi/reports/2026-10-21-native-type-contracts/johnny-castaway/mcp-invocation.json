@@ -1,0 +1,18 @@
+[
+  "/home/lucas/.cache/codex/radare2/native-type-contract-2026-10-21/final-runtime-2p16mosx/mcp/source/src/r2mcp",
+  "-n",
+  "-N",
+  "-r",
+  "-C",
+  "both",
+  "-s",
+  "/home/lucas/work/johnny-castaway/original/internet-archive-src/scrantic-run",
+  "-c",
+  "L /home/lucas/.cache/codex/radare2/native-type-contract-2026-10-21/final-runtime-2p16mosx/bridge/build/libcore_r2ghidra.so",
+  "-c",
+  "e r2ghidra.sleighhome=/home/lucas/.cache/codex/radare2/native-type-contract-2026-10-21/final-runtime-2p16mosx/bridge/languages",
+  "-c",
+  "e r2ghidra.timeout=0",
+  "-d",
+  "pd:g"
+]

@@ -1,0 +1,11 @@
+0x000100b0: CALLF 0x20000
+    (unique,0x40700,2) = COPY CS
+    SP = INT_SUB SP, 0x2
+    (unique,0x40a00,4) = CALLOTHER 0x0, SS, SP
+    STORE ram[(unique,0x40a00,4)] = (unique,0x40700,2)
+    CS = COPY 0x2
+    (unique,0x40700,2) = COPY 0xb5
+    SP = INT_SUB SP, 0x2
+    (unique,0x40a00,4) = CALLOTHER 0x0, SS, SP
+    STORE ram[(unique,0x40a00,4)] = (unique,0x40700,2)
+    CALL dword_ptr(0x00020000)

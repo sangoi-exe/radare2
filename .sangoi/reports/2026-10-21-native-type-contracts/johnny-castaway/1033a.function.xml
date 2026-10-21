@@ -1,0 +1,1316 @@
+<result><function>
+<function name="qualified_borland_f_scopy.0001033a" size="28">
+  <addr space="ram" offset="0x1033a"/>
+  <localdb main="stack" lock="false">
+    <scope name="qualified_borland_f_scopy.0001033a" id="0x1">
+      <parent id="0x0"/>
+      <rangelist>
+        <range space="stack" first="0x4" last="0x7"/>
+        <range space="stack" first="0x8" last="0xb"/>
+        <range space="stack" first="0xd8f0" last="0xfff7"/>
+      </rangelist>
+      <symbollist>
+        <mapsym>
+          <symbol name="byte_count" id="0x4000010000000003" namelock="true" typelock="true" cat="0" index="0x0">
+            <typeref name="uint16_t" id="0xe03cc574cf9d5ff9"/>
+          </symbol>
+          <addr space="register" offset="0x4"/>
+          <rangelist>
+            <range space="ram" first="0x10339" last="0x10339"/>
+          </rangelist>
+        </mapsym>
+        <mapsym>
+          <symbol name="destination" id="0x4000010000000005" namelock="true" typelock="true" cat="0" index="0x2">
+            <typeref name="FarAddress16" id="0xd0611de0b9d443e1"/>
+          </symbol>
+          <addr space="stack" offset="0x8"/>
+          <rangelist/>
+        </mapsym>
+        <mapsym>
+          <symbol name="puVar1" id="0x400001000000000a" cat="-1">
+            <type name="" size="4" metatype="ptr" core="true">
+              <typeref name="uint" id="0xc0000085203c3bdf"/>
+            </type>
+          </symbol>
+          <hash val="0x0"/>
+          <rangelist>
+            <range space="ram" first="0x10349" last="0x10349"/>
+          </rangelist>
+        </mapsym>
+        <mapsym>
+          <symbol name="puVar2" id="0x400001000000000b" cat="-1">
+            <type name="" size="4" metatype="ptr" core="true">
+              <typeref name="uint" id="0xc0000085203c3bdf"/>
+            </type>
+          </symbol>
+          <hash val="0x0"/>
+          <rangelist>
+            <range space="ram" first="0x10349" last="0x10349"/>
+          </rangelist>
+        </mapsym>
+        <mapsym>
+          <symbol name="puVar4" id="0x400001000000000d" cat="-1">
+            <type name="" size="2" metatype="ptr" core="true">
+              <typeref name="uint" id="0xc0000085203c3bdf"/>
+            </type>
+          </symbol>
+          <addr space="register" offset="0x18"/>
+          <rangelist>
+            <range space="ram" first="0x10340" last="0x10340"/>
+          </rangelist>
+        </mapsym>
+        <mapsym>
+          <symbol name="puVar5" id="0x400001000000000e" cat="-1">
+            <type name="" size="2" metatype="ptr" core="true">
+              <typeref name="uint" id="0xc0000085203c3bdf"/>
+            </type>
+          </symbol>
+          <addr space="register" offset="0x1c"/>
+          <rangelist>
+            <range space="ram" first="0x10343" last="0x10343"/>
+          </rangelist>
+        </mapsym>
+        <mapsym>
+          <symbol name="source" id="0x4000010000000004" namelock="true" typelock="true" cat="0" index="0x1">
+            <typeref name="FarAddress16" id="0xd0611de0b9d443e1"/>
+          </symbol>
+          <addr space="stack" offset="0x4"/>
+          <rangelist/>
+        </mapsym>
+        <mapsym>
+          <symbol name="uVar3" id="0x400001000000000c" cat="-1">
+            <typeref name="uint16_t" id="0xe03cc574cf9d5ff9"/>
+          </symbol>
+          <addr space="register" offset="0x4"/>
+          <rangelist>
+            <range space="ram" first="0x10347" last="0x10347"/>
+          </rangelist>
+        </mapsym>
+      </symbollist>
+    </scope>
+  </localdb>
+  <ast>
+    <varnodes>
+      <addr space="const" offset="0x0" size="2" ref="0x5c"/>
+      <addr space="const" offset="0x0" size="2" ref="0x73"/>
+      <addr space="const" offset="0x0" size="2" ref="0xcd"/>
+      <addr space="const" offset="0x0" size="4" ref="0x41"/>
+      <addr space="const" offset="0x0" size="4" ref="0x51"/>
+      <addr space="const" offset="0x0" size="4" ref="0x14a"/>
+      <addr space="const" offset="0x1" size="2" ref="0x59"/>
+      <addr space="const" offset="0x1" size="2" ref="0xd9"/>
+      <addr space="const" offset="0x1" size="2" ref="0xe8"/>
+      <addr space="const" offset="0x1" size="2" ref="0x220"/>
+      <addr space="const" offset="0x1" size="2" ref="0x223"/>
+      <addr space="const" offset="0x1" size="2" ref="0x226"/>
+      <addr space="const" offset="0x1" size="2" ref="0x227"/>
+      <addr space="const" offset="0x1" size="4" ref="0x5f"/>
+      <addr space="const" offset="0x2" size="2" ref="0x221"/>
+      <addr space="const" offset="0x2" size="2" ref="0x224"/>
+      <addr space="const" offset="0x2" size="4" ref="0x3e"/>
+      <addr space="const" offset="0x2" size="4" ref="0x4e"/>
+      <addr space="const" offset="0x55ca1f9a9120" size="8" ref="0x98"/>
+      <addr space="const" offset="0x55ca1f9a9120" size="8" ref="0x9c"/>
+      <addr space="const" offset="0x55ca1f9a9120" size="8" ref="0xf2"/>
+      <addr space="const" offset="0x55ca1f9a9120" size="8" ref="0xf6"/>
+      <addr space="const" offset="0x55ca1f9a9120" size="8" ref="0x1cb"/>
+      <addr space="const" offset="0x55ca1f9a9120" size="8" ref="0x1cc"/>
+      <addr space="const" offset="0x55ca1f9a9120" size="8" ref="0x1cd"/>
+      <addr space="const" offset="0x55ca1f9a9120" size="8" ref="0x1ce"/>
+      <addr space="unique" offset="0x12300" size="4" ref="0xe2"/>
+      <addr space="unique" offset="0x12400" size="2" ref="0xe6"/>
+      <addr space="unique" offset="0x12800" size="1" ref="0xf1"/>
+      <addr space="unique" offset="0x13000" size="4" ref="0x88" grp="1"/>
+      <addr space="unique" offset="0x13100" size="2" ref="0x8c"/>
+      <addr space="unique" offset="0x13500" size="2" ref="0x97"/>
+      <addr space="unique" offset="0x14a00" size="4" ref="0xd3"/>
+      <addr space="unique" offset="0x14b00" size="2" ref="0xd7"/>
+      <addr space="unique" offset="0x15700" size="4" ref="0x79" grp="1"/>
+      <addr space="unique" offset="0x15800" size="2" ref="0x7d"/>
+      <addr space="unique" offset="0x19100" size="1" ref="0x71"/>
+      <addr space="unique" offset="0x19100" size="1" ref="0xcb"/>
+      <addr space="unique" offset="0x48100" size="2" ref="0xa0" grp="1"/>
+      <addr space="unique" offset="0xaac00" size="2" ref="0x57"/>
+      <addr space="unique" offset="0x1000001a" size="2" ref="0x228"/>
+      <addr space="unique" offset="0x1000001c" size="2" ref="0x229"/>
+      <addr space="unique" offset="0x1000001e" size="2" ref="0x22a"/>
+      <addr space="unique" offset="0x10000020" size="2" ref="0x22b"/>
+      <addr space="unique" offset="0x10000022" size="2" ref="0x22c"/>
+      <addr space="unique" offset="0x10000024" size="2" ref="0x22d"/>
+      <addr space="unique" offset="0x10000026" size="4" ref="0x22e"/>
+      <addr space="unique" offset="0x1000002a" size="4" ref="0x22f"/>
+      <addr space="ram" offset="0x10349" size="1" ref="0x9f"/>
+      <addr space="ram" offset="0x1034b" size="1" ref="0x74"/>
+      <addr space="ram" offset="0x1034d" size="1" ref="0xf9"/>
+      <addr space="ram" offset="0x1034f" size="1" ref="0xce"/>
+      <addr space="register" offset="0x4" size="2" ref="0x14b" input="true"/>
+      <addr space="register" offset="0x4" size="2" ref="0x5d"/>
+      <addr space="register" offset="0x4" size="2" ref="0x76"/>
+      <addr space="register" offset="0x4" size="2" ref="0x193"/>
+      <addr space="register" offset="0x4" size="2" ref="0xd0" grp="1"/>
+      <addr space="register" offset="0x4" size="2" ref="0x190" grp="1"/>
+      <addr space="register" offset="0x18" size="2" ref="0x3f"/>
+      <addr space="register" offset="0x18" size="2" ref="0x199"/>
+      <addr space="register" offset="0x18" size="2" ref="0x196"/>
+      <addr space="register" offset="0x1c" size="2" ref="0x4f"/>
+      <addr space="register" offset="0x1c" size="2" ref="0x19f"/>
+      <addr space="register" offset="0x1c" size="2" ref="0x19c"/>
+      <addr space="register" offset="0x100" size="2" ref="0x4c"/>
+      <addr space="register" offset="0x106" size="2" ref="0x3c"/>
+      <addr space="register" offset="0x200" size="1" ref="0x5a"/>
+      <addr space="stack" offset="0x4" size="4" ref="0x14c" addrtied="true" input="true"/>
+      <addr space="stack" offset="0x8" size="4" ref="0x14d" addrtied="true" input="true"/>
+    </varnodes>
+    <block index="0">
+      <rangelist>
+        <range space="ram" first="0x1033a" last="0x10347"/>
+      </rangelist>
+      <op code="63">
+        <seqnum space="ram" offset="0x10340" uniq="0x14" is_dead="false"/>
+        <addr ref="0x3c"/>
+        <addr ref="0x14c"/>
+        <addr ref="0x3e"/>
+      </op>
+      <op code="63">
+        <seqnum space="ram" offset="0x10340" uniq="0x15" is_dead="false"/>
+        <addr ref="0x228"/>
+        <addr ref="0x14c"/>
+        <addr ref="0x41"/>
+      </op>
+      <op code="64">
+        <seqnum space="ram" offset="0x10340" uniq="0x9f" is_dead="false"/>
+        <addr ref="0x3f"/>
+        <addr ref="0x228"/>
+      </op>
+      <op code="63">
+        <seqnum space="ram" offset="0x10343" uniq="0x19" is_dead="false"/>
+        <addr ref="0x4c"/>
+        <addr ref="0x14d"/>
+        <addr ref="0x4e"/>
+      </op>
+      <op code="63">
+        <seqnum space="ram" offset="0x10343" uniq="0x1a" is_dead="false"/>
+        <addr ref="0x229"/>
+        <addr ref="0x14d"/>
+        <addr ref="0x51"/>
+      </op>
+      <op code="64">
+        <seqnum space="ram" offset="0x10343" uniq="0xa0" is_dead="false"/>
+        <addr ref="0x4f"/>
+        <addr ref="0x229"/>
+      </op>
+      <op code="27">
+        <seqnum space="ram" offset="0x10347" uniq="0x1d" is_dead="false"/>
+        <addr ref="0x57"/>
+        <addr ref="0x14b"/>
+        <addr ref="0x59"/>
+      </op>
+      <op code="12">
+        <seqnum space="ram" offset="0x10347" uniq="0x1e" is_dead="false"/>
+        <addr ref="0x5a"/>
+        <addr ref="0x57"/>
+        <addr ref="0x5c"/>
+      </op>
+      <op code="30">
+        <seqnum space="ram" offset="0x10347" uniq="0x1f" is_dead="false"/>
+        <addr ref="0x5d"/>
+        <addr ref="0x14b"/>
+        <addr ref="0x5f"/>
+      </op>
+    </block>
+    <block index="1">
+      <rangelist>
+        <range space="ram" first="0x10349" last="0x10349"/>
+      </rangelist>
+      <op code="60">
+        <seqnum space="ram" offset="0x10349" uniq="0x8e" is_dead="false"/>
+        <addr ref="0x19f"/>
+        <addr ref="0x4f"/>
+        <addr ref="0x7d"/>
+      </op>
+      <op code="60">
+        <seqnum space="ram" offset="0x10349" uniq="0x8c" is_dead="false"/>
+        <addr ref="0x199"/>
+        <addr ref="0x3f"/>
+        <addr ref="0x8c"/>
+      </op>
+      <op code="60">
+        <seqnum space="ram" offset="0x10349" uniq="0x8a" is_dead="false"/>
+        <addr ref="0x193"/>
+        <addr ref="0x5d"/>
+        <addr ref="0x76"/>
+      </op>
+      <op code="12">
+        <seqnum space="ram" offset="0x10349" uniq="0x26" is_dead="false"/>
+        <addr ref="0x71"/>
+        <addr ref="0x193"/>
+        <addr ref="0x73"/>
+      </op>
+      <op code="5">
+        <seqnum space="ram" offset="0x10349" uniq="0x27" is_dead="false"/>
+        <void/>
+        <addr ref="0x74"/>
+        <addr ref="0x71"/>
+      </op>
+    </block>
+    <block index="2">
+      <rangelist>
+        <range space="ram" first="0x1034b" last="0x1034b"/>
+      </rangelist>
+      <op code="17">
+        <seqnum space="ram" offset="0x1034b" uniq="0x37" is_dead="false"/>
+        <addr ref="0xa0"/>
+        <addr ref="0x5a"/>
+      </op>
+    </block>
+    <block index="3">
+      <rangelist>
+        <range space="ram" first="0x1034d" last="0x1034d"/>
+      </rangelist>
+      <op code="60">
+        <seqnum space="ram" offset="0x1034d" uniq="0x8d" is_dead="false"/>
+        <addr ref="0x19c"/>
+        <addr ref="0x19f"/>
+        <addr ref="0xd7"/>
+      </op>
+      <op code="60">
+        <seqnum space="ram" offset="0x1034d" uniq="0x8b" is_dead="false"/>
+        <addr ref="0x196"/>
+        <addr ref="0x199"/>
+        <addr ref="0xe6"/>
+      </op>
+      <op code="60">
+        <seqnum space="ram" offset="0x1034d" uniq="0x89" is_dead="false"/>
+        <addr ref="0x190"/>
+        <addr ref="0xa0"/>
+        <addr ref="0xd0"/>
+      </op>
+      <op code="12">
+        <seqnum space="ram" offset="0x1034d" uniq="0x46" is_dead="false"/>
+        <addr ref="0xcb"/>
+        <addr ref="0x190"/>
+        <addr ref="0xcd"/>
+      </op>
+      <op code="5">
+        <seqnum space="ram" offset="0x1034d" uniq="0x47" is_dead="false"/>
+        <void/>
+        <addr ref="0xce"/>
+        <addr ref="0xcb"/>
+      </op>
+    </block>
+    <block index="4">
+      <rangelist>
+        <range space="ram" first="0x1034f" last="0x10353"/>
+      </rangelist>
+      <op code="10">
+        <seqnum space="ram" offset="0x10353" uniq="0x71" is_dead="false"/>
+        <void/>
+        <addr ref="0x14a"/>
+      </op>
+    </block>
+    <block index="5">
+      <rangelist>
+        <range space="ram" first="0x1034d" last="0x1034d"/>
+      </rangelist>
+      <op code="67">
+        <seqnum space="ram" offset="0x1034d" uniq="0x49" is_dead="false"/>
+        <addr ref="0xd3"/>
+        <addr ref="0x1cd"/>
+        <addr ref="0x4c"/>
+        <addr ref="0x19c"/>
+      </op>
+      <op code="64">
+        <seqnum space="ram" offset="0x1034d" uniq="0xa1" is_dead="false"/>
+        <addr ref="0x22a"/>
+        <addr ref="0x19c"/>
+      </op>
+      <op code="19">
+        <seqnum space="ram" offset="0x1034d" uniq="0x4a" is_dead="false"/>
+        <addr ref="0x22b"/>
+        <addr ref="0x22a"/>
+        <addr ref="0xd9"/>
+      </op>
+      <op code="64">
+        <seqnum space="ram" offset="0x1034d" uniq="0xa2" is_dead="false"/>
+        <addr ref="0xd7"/>
+        <addr ref="0x22b"/>
+      </op>
+      <op code="67">
+        <seqnum space="ram" offset="0x1034d" uniq="0x4e" is_dead="false"/>
+        <addr ref="0xe2"/>
+        <addr ref="0x1ce"/>
+        <addr ref="0x3c"/>
+        <addr ref="0x196"/>
+      </op>
+      <op code="64">
+        <seqnum space="ram" offset="0x1034d" uniq="0xa3" is_dead="false"/>
+        <addr ref="0x22c"/>
+        <addr ref="0x196"/>
+      </op>
+      <op code="19">
+        <seqnum space="ram" offset="0x1034d" uniq="0x4f" is_dead="false"/>
+        <addr ref="0x22d"/>
+        <addr ref="0x22c"/>
+        <addr ref="0xe8"/>
+      </op>
+      <op code="64">
+        <seqnum space="ram" offset="0x1034d" uniq="0xa4" is_dead="false"/>
+        <addr ref="0xe6"/>
+        <addr ref="0x22d"/>
+      </op>
+      <op code="64">
+        <seqnum space="ram" offset="0x1034d" uniq="0xa5" is_dead="false"/>
+        <addr ref="0x22e"/>
+        <addr ref="0xe2"/>
+      </op>
+      <op code="2">
+        <seqnum space="ram" offset="0x1034d" uniq="0x53" is_dead="false"/>
+        <addr ref="0xf1"/>
+        <spaceid name="ram"/>
+        <addr ref="0x22e"/>
+      </op>
+      <op code="64">
+        <seqnum space="ram" offset="0x1034d" uniq="0xa6" is_dead="false"/>
+        <addr ref="0x22f"/>
+        <addr ref="0xd3"/>
+      </op>
+      <op code="3">
+        <seqnum space="ram" offset="0x1034d" uniq="0x55" is_dead="false"/>
+        <void/>
+        <spaceid name="ram"/>
+        <addr ref="0x22f"/>
+        <addr ref="0xf1"/>
+      </op>
+      <op code="20">
+        <seqnum space="ram" offset="0x1034d" uniq="0x48" is_dead="false"/>
+        <addr ref="0xd0"/>
+        <addr ref="0x190"/>
+        <addr ref="0x227"/>
+      </op>
+      <op code="4">
+        <seqnum space="ram" offset="0x1034d" uniq="0x56" is_dead="false"/>
+        <void/>
+        <addr ref="0xf9"/>
+      </op>
+    </block>
+    <block index="6">
+      <rangelist>
+        <range space="ram" first="0x10349" last="0x10349"/>
+      </rangelist>
+      <op code="67">
+        <seqnum space="ram" offset="0x10349" uniq="0x29" is_dead="false"/>
+        <addr ref="0x79"/>
+        <addr ref="0x1cb"/>
+        <addr ref="0x4c"/>
+        <addr ref="0x19f"/>
+      </op>
+      <op code="65">
+        <seqnum space="ram" offset="0x10349" uniq="0x9d" is_dead="false"/>
+        <addr ref="0x7d"/>
+        <addr ref="0x19f"/>
+        <addr ref="0x220"/>
+        <addr ref="0x221"/>
+      </op>
+      <op code="67">
+        <seqnum space="ram" offset="0x10349" uniq="0x2e" is_dead="false"/>
+        <addr ref="0x88"/>
+        <addr ref="0x1cc"/>
+        <addr ref="0x3c"/>
+        <addr ref="0x199"/>
+      </op>
+      <op code="65">
+        <seqnum space="ram" offset="0x10349" uniq="0x9e" is_dead="false"/>
+        <addr ref="0x8c"/>
+        <addr ref="0x199"/>
+        <addr ref="0x223"/>
+        <addr ref="0x224"/>
+      </op>
+      <op code="2">
+        <seqnum space="ram" offset="0x10349" uniq="0x33" is_dead="false"/>
+        <addr ref="0x97"/>
+        <spaceid name="ram"/>
+        <addr ref="0x88"/>
+      </op>
+      <op code="3">
+        <seqnum space="ram" offset="0x10349" uniq="0x35" is_dead="false"/>
+        <void/>
+        <spaceid name="ram"/>
+        <addr ref="0x79"/>
+        <addr ref="0x97"/>
+      </op>
+      <op code="20">
+        <seqnum space="ram" offset="0x10349" uniq="0x28" is_dead="false"/>
+        <addr ref="0x76"/>
+        <addr ref="0x193"/>
+        <addr ref="0x226"/>
+      </op>
+      <op code="4">
+        <seqnum space="ram" offset="0x10349" uniq="0x36" is_dead="false"/>
+        <void/>
+        <addr ref="0x9f"/>
+      </op>
+    </block>
+    <blockedge index="1">
+      <edge end="0" rev="0"/>
+      <edge end="6" rev="0"/>
+    </blockedge>
+    <blockedge index="2">
+      <edge end="1" rev="0"/>
+    </blockedge>
+    <blockedge index="3">
+      <edge end="2" rev="0"/>
+      <edge end="5" rev="0"/>
+    </blockedge>
+    <blockedge index="4">
+      <edge end="3" rev="0"/>
+    </blockedge>
+    <blockedge index="5">
+      <edge end="3" rev="1"/>
+    </blockedge>
+    <blockedge index="6">
+      <edge end="1" rev="1"/>
+    </blockedge>
+  </ast>
+  <highlist>
+    <high repref="0x5c" class="constant">
+      <typeref name="uint16_t" id="0xe03cc574cf9d5ff9"/>
+      <addr ref="0x5c"/>
+    </high>
+    <high repref="0x73" class="constant">
+      <typeref name="uint16_t" id="0xe03cc574cf9d5ff9"/>
+      <addr ref="0x73"/>
+    </high>
+    <high repref="0xcd" class="constant">
+      <typeref name="uint16_t" id="0xe03cc574cf9d5ff9"/>
+      <addr ref="0xcd"/>
+    </high>
+    <high repref="0x41" class="constant">
+      <typeref name="ulong" id="0xc0fed0756c91c567"/>
+      <addr ref="0x41"/>
+    </high>
+    <high repref="0x51" class="constant">
+      <typeref name="ulong" id="0xc0fed0756c91c567"/>
+      <addr ref="0x51"/>
+    </high>
+    <high repref="0x14a" class="constant">
+      <typeref name="ulong" id="0xc0fed0756c91c567"/>
+      <addr ref="0x14a"/>
+    </high>
+    <high repref="0x59" class="constant">
+      <typeref name="uint16_t" id="0xe03cc574cf9d5ff9"/>
+      <addr ref="0x59"/>
+    </high>
+    <high repref="0xd9" class="constant">
+      <typeref name="int" id="0xc00000fe2e3c3bdf"/>
+      <addr ref="0xd9"/>
+    </high>
+    <high repref="0xe8" class="constant">
+      <typeref name="int" id="0xc00000fe2e3c3bdf"/>
+      <addr ref="0xe8"/>
+    </high>
+    <high repref="0x220" class="constant">
+      <typeref name="int" id="0xc00000fe2e3c3bdf"/>
+      <addr ref="0x220"/>
+    </high>
+    <high repref="0x223" class="constant">
+      <typeref name="int" id="0xc00000fe2e3c3bdf"/>
+      <addr ref="0x223"/>
+    </high>
+    <high repref="0x226" class="constant">
+      <typeref name="uint16_t" id="0xe03cc574cf9d5ff9"/>
+      <addr ref="0x226"/>
+    </high>
+    <high repref="0x227" class="constant">
+      <typeref name="uint16_t" id="0xe03cc574cf9d5ff9"/>
+      <addr ref="0x227"/>
+    </high>
+    <high repref="0x5f" class="constant">
+      <typeref name="int32_t" id="0xee3cc57433329ed9"/>
+      <addr ref="0x5f"/>
+    </high>
+    <high repref="0x221" class="constant">
+      <typeref name="int" id="0xc00000fe2e3c3bdf"/>
+      <addr ref="0x221"/>
+    </high>
+    <high repref="0x224" class="constant">
+      <typeref name="int" id="0xc00000fe2e3c3bdf"/>
+      <addr ref="0x224"/>
+    </high>
+    <high repref="0x3e" class="constant">
+      <typeref name="ulong" id="0xc0fed0756c91c567"/>
+      <addr ref="0x3e"/>
+    </high>
+    <high repref="0x4e" class="constant">
+      <typeref name="ulong" id="0xc0fed0756c91c567"/>
+      <addr ref="0x4e"/>
+    </high>
+    <high repref="0x98" class="constant">
+      <type name="" size="8" metatype="unknown"/>
+      <addr ref="0x98"/>
+    </high>
+    <high repref="0x9c" class="constant">
+      <type name="" size="8" metatype="unknown"/>
+      <addr ref="0x9c"/>
+    </high>
+    <high repref="0xf2" class="constant">
+      <type name="" size="8" metatype="unknown"/>
+      <addr ref="0xf2"/>
+    </high>
+    <high repref="0xf6" class="constant">
+      <type name="" size="8" metatype="unknown"/>
+      <addr ref="0xf6"/>
+    </high>
+    <high repref="0x1cb" class="constant">
+      <type name="" size="8" metatype="unknown"/>
+      <addr ref="0x1cb"/>
+    </high>
+    <high repref="0x1cc" class="constant">
+      <type name="" size="8" metatype="unknown"/>
+      <addr ref="0x1cc"/>
+    </high>
+    <high repref="0x1cd" class="constant">
+      <type name="" size="8" metatype="unknown"/>
+      <addr ref="0x1cd"/>
+    </high>
+    <high repref="0x1ce" class="constant">
+      <type name="" size="8" metatype="unknown"/>
+      <addr ref="0x1ce"/>
+    </high>
+    <high repref="0x88" class="local" symref="0x400001000000000a">
+      <type name="" size="4" metatype="ptr" core="true">
+        <typeref name="uint" id="0xc0000085203c3bdf"/>
+      </type>
+      <addr ref="0xe2"/>
+      <addr ref="0x88"/>
+    </high>
+    <high repref="0x196" class="local" symref="0x400001000000000d">
+      <type name="" size="2" metatype="ptr" core="true">
+        <typeref name="uint" id="0xc0000085203c3bdf"/>
+      </type>
+      <addr ref="0xe6"/>
+      <addr ref="0x8c"/>
+      <addr ref="0x196"/>
+      <addr ref="0x199"/>
+      <addr ref="0x3f"/>
+    </high>
+    <high repref="0xf1" class="other">
+      <typeref name="uchar" id="0xc00085de63689fd9"/>
+      <addr ref="0xf1"/>
+    </high>
+    <high repref="0x97" class="other">
+      <typeref name="uint" id="0xc0000085203c3bdf"/>
+      <addr ref="0x97"/>
+    </high>
+    <high repref="0x79" class="local" symref="0x400001000000000b">
+      <type name="" size="4" metatype="ptr" core="true">
+        <typeref name="uint" id="0xc0000085203c3bdf"/>
+      </type>
+      <addr ref="0xd3"/>
+      <addr ref="0x79"/>
+    </high>
+    <high repref="0x19c" class="local" symref="0x400001000000000e">
+      <type name="" size="2" metatype="ptr" core="true">
+        <typeref name="uint" id="0xc0000085203c3bdf"/>
+      </type>
+      <addr ref="0xd7"/>
+      <addr ref="0x7d"/>
+      <addr ref="0x19c"/>
+      <addr ref="0x19f"/>
+      <addr ref="0x4f"/>
+    </high>
+    <high repref="0x71" class="other">
+      <typeref name="bool" id="0xc0feab8537c491c7"/>
+      <addr ref="0x71"/>
+    </high>
+    <high repref="0xcb" class="other">
+      <typeref name="bool" id="0xc0feab8537c491c7"/>
+      <addr ref="0xcb"/>
+    </high>
+    <high repref="0x5d" class="local" symref="0x400001000000000c">
+      <typeref name="uint16_t" id="0xe03cc574cf9d5ff9"/>
+      <addr ref="0xa0"/>
+      <addr ref="0x193"/>
+      <addr ref="0x5d"/>
+      <addr ref="0x76"/>
+      <addr ref="0x190"/>
+      <addr ref="0xd0"/>
+    </high>
+    <high repref="0x57" class="other">
+      <typeref name="uint16_t" id="0xe03cc574cf9d5ff9"/>
+      <addr ref="0x57"/>
+    </high>
+    <high repref="0x228" class="other">
+      <typeref name="uint16_t" id="0xe03cc574cf9d5ff9"/>
+      <addr ref="0x228"/>
+    </high>
+    <high repref="0x229" class="other">
+      <typeref name="uint16_t" id="0xe03cc574cf9d5ff9"/>
+      <addr ref="0x229"/>
+    </high>
+    <high repref="0x22a" class="other">
+      <typeref name="int" id="0xc00000fe2e3c3bdf"/>
+      <addr ref="0x22a"/>
+    </high>
+    <high repref="0x22b" class="other">
+      <typeref name="int" id="0xc00000fe2e3c3bdf"/>
+      <addr ref="0x22b"/>
+    </high>
+    <high repref="0x22c" class="other">
+      <typeref name="int" id="0xc00000fe2e3c3bdf"/>
+      <addr ref="0x22c"/>
+    </high>
+    <high repref="0x22d" class="other">
+      <typeref name="int" id="0xc00000fe2e3c3bdf"/>
+      <addr ref="0x22d"/>
+    </high>
+    <high repref="0x22e" class="other">
+      <type name="" size="4" metatype="ptr" core="true">
+        <typeref name="uchar" id="0xc00085de63689fd9"/>
+      </type>
+      <addr ref="0x22e"/>
+    </high>
+    <high repref="0x22f" class="other">
+      <type name="" size="4" metatype="ptr" core="true">
+        <typeref name="uchar" id="0xc00085de63689fd9"/>
+      </type>
+      <addr ref="0x22f"/>
+    </high>
+    <high repref="0x14b" class="param" typelock="true" symref="0x4000010000000003">
+      <typeref name="uint16_t" id="0xe03cc574cf9d5ff9"/>
+      <addr ref="0x14b"/>
+    </high>
+    <high repref="0x4c" class="other">
+      <typeref name="uint16_t" id="0xe03cc574cf9d5ff9"/>
+      <addr ref="0x4c"/>
+    </high>
+    <high repref="0x3c" class="other">
+      <typeref name="uint16_t" id="0xe03cc574cf9d5ff9"/>
+      <addr ref="0x3c"/>
+    </high>
+    <high repref="0x5a" class="other">
+      <typeref name="bool" id="0xc0feab8537c491c7"/>
+      <addr ref="0x5a"/>
+    </high>
+    <high repref="0x14c" class="param" typelock="true" symref="0x4000010000000004">
+      <typeref name="FarAddress16" id="0xd0611de0b9d443e1"/>
+      <addr ref="0x14c"/>
+    </high>
+    <high repref="0x14d" class="param" typelock="true" symref="0x4000010000000005">
+      <typeref name="FarAddress16" id="0xd0611de0b9d443e1"/>
+      <addr ref="0x14d"/>
+    </high>
+  </highlist>
+  <prototype model="borland_f_scopy_16far" extrapop="12" modellock="true">
+    <returnsym typelock="true">
+      <addr/>
+      <void/>
+    </returnsym>
+  </prototype>
+</function></function><code>
+<function>
+  <syntax></syntax>
+  <break indent="0"/>
+  <funcproto>
+    <return_type>
+      <type color="0x2" id="0xc0feab8523c497cf">void</type>
+    </return_type>
+    <syntax></syntax>
+    <syntax></syntax>
+    <syntax> </syntax>
+    <syntax color="0x0">borland_f_scopy_16far</syntax>
+    <break indent="0"/>
+    <funcname color="0x3">qualified_borland_f_scopy.0001033a</funcname>
+    <syntax></syntax>
+    <syntax open="115">(</syntax>
+    <syntax></syntax>
+    <vardecl symref="0x4000010000000003">
+      <type color="0x2" id="0xe03cc574cf9d5ff9">uint16_t</type>
+      <syntax> </syntax>
+      <variable color="0x6">byte_count</variable>
+    </vardecl>
+    <syntax></syntax>
+    <syntax>, </syntax>
+    <syntax></syntax>
+    <vardecl symref="0x4000010000000004">
+      <type color="0x2" id="0xd0611de0b9d443e1">FarAddress16</type>
+      <syntax> </syntax>
+      <variable color="0x6">source</variable>
+    </vardecl>
+    <syntax></syntax>
+    <syntax>, </syntax>
+    <syntax></syntax>
+    <vardecl symref="0x4000010000000005">
+      <type color="0x2" id="0xd0611de0b9d443e1">FarAddress16</type>
+      <syntax> </syntax>
+      <variable color="0x6">destination</variable>
+    </vardecl>
+    <syntax></syntax>
+    <syntax close="115">)</syntax>
+  </funcproto>
+  <break indent="0"/>
+  <syntax></syntax>
+  <break indent="0"/>
+  <syntax>{</syntax>
+  <break indent="4"/>
+  <vardecl symref="0x400001000000000a">
+    <type color="0x2" id="0xc0000085203c3bdf">uint</type>
+    <syntax> </syntax>
+    <op>far *</op>
+    <syntax></syntax>
+    <variable color="0x4">puVar1</variable>
+  </vardecl>
+  <syntax></syntax>
+  <syntax>;</syntax>
+  <break indent="4"/>
+  <vardecl symref="0x400001000000000b">
+    <type color="0x2" id="0xc0000085203c3bdf">uint</type>
+    <syntax> </syntax>
+    <op>far *</op>
+    <syntax></syntax>
+    <variable color="0x4">puVar2</variable>
+  </vardecl>
+  <syntax></syntax>
+  <syntax>;</syntax>
+  <break indent="4"/>
+  <vardecl symref="0x400001000000000c">
+    <type color="0x2" id="0xe03cc574cf9d5ff9">uint16_t</type>
+    <syntax> </syntax>
+    <variable color="0x4">uVar3</variable>
+  </vardecl>
+  <syntax></syntax>
+  <syntax>;</syntax>
+  <break indent="4"/>
+  <vardecl symref="0x400001000000000d">
+    <type color="0x2" id="0xc0000085203c3bdf">uint</type>
+    <syntax> </syntax>
+    <op>near *</op>
+    <syntax></syntax>
+    <variable color="0x4">puVar4</variable>
+  </vardecl>
+  <syntax></syntax>
+  <syntax>;</syntax>
+  <break indent="4"/>
+  <vardecl symref="0x400001000000000e">
+    <type color="0x2" id="0xc0000085203c3bdf">uint</type>
+    <syntax> </syntax>
+    <op>near *</op>
+    <syntax></syntax>
+    <variable color="0x4">puVar5</variable>
+  </vardecl>
+  <syntax></syntax>
+  <syntax>;</syntax>
+  <break indent="4"/>
+  <block blockref="0">
+    <block blockref="0">
+      <syntax></syntax>
+      <break indent="4"/>
+      <comment color="0x1" space="ram" off="0x1033a">// </comment>
+      <syntax></syntax>
+      <comment color="0x1" space="ram" off="0x1033a">Qualified</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">Borland</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">F_SCOPY:</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">CX</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">is</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">the</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">unsigned</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">WORD</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">byte</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">count;</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">source/destination</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">FarAddress16</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">records</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">at</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">entry</comment>
+      <break indent="4"/>
+      <syntax color="0x1">// </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">SP+4/+8.</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">RETF</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">8</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">purges</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">eight</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">argument</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">bytes</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">plus</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">the</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">four-byte</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">far</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">return</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">(total12).</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">Analysis</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">void,</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">not</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">a</comment>
+      <break indent="4"/>
+      <syntax color="0x1">// </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">historical</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">declaration.</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">Forward</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">WORD</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">copies</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">then</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">odd</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">BYTE,</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">not</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">memmove.</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">Ordinary</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">intact-frame/non-disruptive</comment>
+      <break indent="4"/>
+      <syntax color="0x1">// </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">completion</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">preserves</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">low16</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">BP/SI/DI/DS,</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">leaves</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">AX/BX/DX</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">untouched</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">and</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">SS</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">unwritten;</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">ES/CX/DF</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">and</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">arithmetic</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">flags</comment>
+      <break indent="4"/>
+      <syntax color="0x1">// </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">are</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">conservatively</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">clobbered</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">by</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">the</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">native</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">model.</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">Storage</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">is</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">not</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">a</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">flat</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">pointer</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">or</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">selector</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">mapping;</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">prototype</comment>
+      <break indent="4"/>
+      <syntax color="0x1">// </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">does</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">not</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">compute</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">post-call</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">values,</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">copy</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">effects,</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">faults</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">or</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">arbitrary</comment>
+      <syntax> </syntax>
+      <comment color="0x1" space="ram" off="0x1033a">aliases.</comment>
+      <break indent="4"/>
+      <statement opref="0x9f">
+        <variable color="0x4" varref="0x3f" opref="0x9f">puVar4</variable>
+        <syntax> </syntax>
+        <op opref="0x9f">=</op>
+        <syntax> </syntax>
+        <variable color="0x6" varref="0x228" opref="0x15">source</variable>
+        <syntax></syntax>
+        <op opref="0x15">.</op>
+        <syntax></syntax>
+        <field name="FarAddress16" id="0xd0611de0b9d443e1" off="0" opref="0x15">offset</field>
+      </statement>
+      <syntax></syntax>
+      <syntax>;</syntax>
+      <break indent="4"/>
+      <statement opref="0xa0">
+        <variable color="0x4" varref="0x4f" opref="0xa0">puVar5</variable>
+        <syntax> </syntax>
+        <op opref="0xa0">=</op>
+        <syntax> </syntax>
+        <variable color="0x6" varref="0x229" opref="0x1a">destination</variable>
+        <syntax></syntax>
+        <op opref="0x1a">.</op>
+        <syntax></syntax>
+        <field name="FarAddress16" id="0xd0611de0b9d443e1" off="0" opref="0x1a">offset</field>
+      </statement>
+      <syntax></syntax>
+      <syntax>;</syntax>
+    </block>
+    <block blockref="1">
+      <break indent="4"/>
+      <op color="0x0" opref="0x27">for</op>
+      <syntax> </syntax>
+      <syntax open="147">(</syntax>
+      <syntax></syntax>
+      <statement opref="0x1f">
+        <variable color="0x4" varref="0x5d" opref="0x1f">uVar3</variable>
+        <syntax> </syntax>
+        <op opref="0x1f">=</op>
+        <syntax> </syntax>
+        <variable color="0x6" varref="0x14b" opref="0x1f">byte_count</variable>
+        <syntax> </syntax>
+        <op opref="0x1f">&gt;&gt;</op>
+        <syntax> </syntax>
+        <variable color="0x5" varref="0x5f" opref="0x1f">1</variable>
+      </statement>
+      <syntax></syntax>
+      <syntax>;</syntax>
+      <syntax> </syntax>
+      <statement opref="0x27">
+        <variable color="0x4" varref="0x193" opref="0x26">uVar3</variable>
+        <syntax> </syntax>
+        <op opref="0x26">!=</op>
+        <syntax> </syntax>
+        <variable color="0x5" varref="0x73" opref="0x26">0</variable>
+      </statement>
+      <syntax></syntax>
+      <syntax>;</syntax>
+      <syntax> </syntax>
+      <statement opref="0x28">
+        <variable color="0x4" varref="0x76" opref="0x28">uVar3</variable>
+        <syntax> </syntax>
+        <op opref="0x28">=</op>
+        <syntax> </syntax>
+        <variable color="0x4" varref="0x193" opref="0x28">uVar3</variable>
+        <syntax> </syntax>
+        <op opref="0x28">-</op>
+        <syntax> </syntax>
+        <variable color="0x5" varref="0x226" opref="0x28">1</variable>
+      </statement>
+      <syntax></syntax>
+      <syntax close="147">)</syntax>
+      <syntax> </syntax>
+      <syntax>{</syntax>
+      <block blockref="6">
+        <break indent="8"/>
+        <statement opref="0x29">
+          <variable color="0x4" varref="0x79" opref="0x29">puVar2</variable>
+          <syntax> </syntax>
+          <op opref="0x29">=</op>
+          <syntax> </syntax>
+          <op opref="0x29">segmentop</op>
+          <syntax></syntax>
+          <syntax open="162">(</syntax>
+          <syntax></syntax>
+          <variable color="0x6" varref="0x4c" opref="0x19">destination</variable>
+          <syntax></syntax>
+          <op opref="0x19">.</op>
+          <syntax></syntax>
+          <field name="FarAddress16" id="0xd0611de0b9d443e1" off="2" opref="0x19">selector</field>
+          <syntax></syntax>
+          <op opref="0x29">, </op>
+          <syntax></syntax>
+          <variable color="0x4" varref="0x19f" opref="0x29">puVar5</variable>
+          <syntax></syntax>
+          <syntax close="162">)</syntax>
+        </statement>
+        <syntax></syntax>
+        <syntax>;</syntax>
+        <break indent="8"/>
+        <statement opref="0x9d">
+          <variable color="0x4" varref="0x7d" opref="0x9d">puVar5</variable>
+          <syntax> </syntax>
+          <op opref="0x9d">=</op>
+          <syntax> </syntax>
+          <variable color="0x4" varref="0x19f" opref="0x9d">puVar5</variable>
+          <syntax> </syntax>
+          <op opref="0x9d">+</op>
+          <syntax> </syntax>
+          <variable color="0x5" varref="0x220" opref="0x9d">1</variable>
+        </statement>
+        <syntax></syntax>
+        <syntax>;</syntax>
+        <break indent="8"/>
+        <statement opref="0x2e">
+          <variable color="0x4" varref="0x88" opref="0x2e">puVar1</variable>
+          <syntax> </syntax>
+          <op opref="0x2e">=</op>
+          <syntax> </syntax>
+          <op opref="0x2e">segmentop</op>
+          <syntax></syntax>
+          <syntax open="171">(</syntax>
+          <syntax></syntax>
+          <variable color="0x6" varref="0x3c" opref="0x14">source</variable>
+          <syntax></syntax>
+          <op opref="0x14">.</op>
+          <syntax></syntax>
+          <field name="FarAddress16" id="0xd0611de0b9d443e1" off="2" opref="0x14">selector</field>
+          <syntax></syntax>
+          <op opref="0x2e">, </op>
+          <syntax></syntax>
+          <variable color="0x4" varref="0x199" opref="0x2e">puVar4</variable>
+          <syntax></syntax>
+          <syntax close="171">)</syntax>
+        </statement>
+        <syntax></syntax>
+        <syntax>;</syntax>
+        <break indent="8"/>
+        <statement opref="0x9e">
+          <variable color="0x4" varref="0x8c" opref="0x9e">puVar4</variable>
+          <syntax> </syntax>
+          <op opref="0x9e">=</op>
+          <syntax> </syntax>
+          <variable color="0x4" varref="0x199" opref="0x9e">puVar4</variable>
+          <syntax> </syntax>
+          <op opref="0x9e">+</op>
+          <syntax> </syntax>
+          <variable color="0x5" varref="0x223" opref="0x9e">1</variable>
+        </statement>
+        <syntax></syntax>
+        <syntax>;</syntax>
+        <break indent="8"/>
+        <statement opref="0x35">
+          <op opref="0x35">*</op>
+          <syntax></syntax>
+          <variable color="0x4" varref="0x79" opref="0x35">puVar2</variable>
+          <syntax> </syntax>
+          <op opref="0x35">=</op>
+          <syntax> </syntax>
+          <op opref="0x33">*</op>
+          <syntax></syntax>
+          <variable color="0x4" varref="0x88" opref="0x33">puVar1</variable>
+        </statement>
+        <syntax></syntax>
+        <syntax>;</syntax>
+      </block>
+      <break indent="4"/>
+      <syntax>}</syntax>
+    </block>
+    <block blockref="2"/>
+    <block blockref="3">
+      <break indent="4"/>
+      <op color="0x0" opref="0x47">for</op>
+      <syntax> </syntax>
+      <syntax open="183">(</syntax>
+      <syntax></syntax>
+      <statement opref="0x37">
+        <variable color="0x4" varref="0xa0" opref="0x37">uVar3</variable>
+        <syntax> </syntax>
+        <op opref="0x37">=</op>
+        <syntax> </syntax>
+        <syntax open="187">(</syntax>
+        <syntax></syntax>
+        <variable color="0x6" varref="0x14b" opref="0x1d">byte_count</variable>
+        <syntax> </syntax>
+        <op opref="0x1d">&amp;</op>
+        <syntax> </syntax>
+        <variable color="0x5" varref="0x59" opref="0x1d">1</variable>
+        <syntax></syntax>
+        <syntax close="187">)</syntax>
+        <syntax> </syntax>
+        <op opref="0x1e">!=</op>
+        <syntax> </syntax>
+        <variable color="0x5" varref="0x5c" opref="0x1e">0</variable>
+      </statement>
+      <syntax></syntax>
+      <syntax>;</syntax>
+      <syntax> </syntax>
+      <statement opref="0x47">
+        <variable color="0x4" varref="0x190" opref="0x46">uVar3</variable>
+        <syntax> </syntax>
+        <op opref="0x46">!=</op>
+        <syntax> </syntax>
+        <variable color="0x5" varref="0xcd" opref="0x46">0</variable>
+      </statement>
+      <syntax></syntax>
+      <syntax>;</syntax>
+      <syntax> </syntax>
+      <statement opref="0x48">
+        <variable color="0x4" varref="0xd0" opref="0x48">uVar3</variable>
+        <syntax> </syntax>
+        <op opref="0x48">=</op>
+        <syntax> </syntax>
+        <variable color="0x4" varref="0x190" opref="0x48">uVar3</variable>
+        <syntax> </syntax>
+        <op opref="0x48">-</op>
+        <syntax> </syntax>
+        <variable color="0x5" varref="0x227" opref="0x48">1</variable>
+      </statement>
+      <syntax></syntax>
+      <syntax close="183">)</syntax>
+      <syntax> </syntax>
+      <syntax>{</syntax>
+      <block blockref="5">
+        <break indent="8"/>
+        <statement opref="0x49">
+          <variable color="0x4" varref="0xd3" opref="0x49">puVar2</variable>
+          <syntax> </syntax>
+          <op opref="0x49">=</op>
+          <syntax> </syntax>
+          <op opref="0x49">segmentop</op>
+          <syntax></syntax>
+          <syntax open="199">(</syntax>
+          <syntax></syntax>
+          <variable color="0x6" varref="0x4c" opref="0x19">destination</variable>
+          <syntax></syntax>
+          <op opref="0x19">.</op>
+          <syntax></syntax>
+          <field name="FarAddress16" id="0xd0611de0b9d443e1" off="2" opref="0x19">selector</field>
+          <syntax></syntax>
+          <op opref="0x49">, </op>
+          <syntax></syntax>
+          <variable color="0x4" varref="0x19c" opref="0x49">puVar5</variable>
+          <syntax></syntax>
+          <syntax close="199">)</syntax>
+        </statement>
+        <syntax></syntax>
+        <syntax>;</syntax>
+        <break indent="8"/>
+        <statement opref="0xa2">
+          <variable color="0x4" varref="0xd7" opref="0xa2">puVar5</variable>
+          <syntax> </syntax>
+          <op opref="0xa2">=</op>
+          <syntax> </syntax>
+          <variable color="0x4" varref="0x19c" opref="0xa1">puVar5</variable>
+          <syntax> </syntax>
+          <op opref="0x4a">+</op>
+          <syntax> </syntax>
+          <variable color="0x5" varref="0xd9" opref="0x4a">1</variable>
+        </statement>
+        <syntax></syntax>
+        <syntax>;</syntax>
+        <break indent="8"/>
+        <statement opref="0x4e">
+          <variable color="0x4" varref="0xe2" opref="0x4e">puVar1</variable>
+          <syntax> </syntax>
+          <op opref="0x4e">=</op>
+          <syntax> </syntax>
+          <op opref="0x4e">segmentop</op>
+          <syntax></syntax>
+          <syntax open="208">(</syntax>
+          <syntax></syntax>
+          <variable color="0x6" varref="0x3c" opref="0x14">source</variable>
+          <syntax></syntax>
+          <op opref="0x14">.</op>
+          <syntax></syntax>
+          <field name="FarAddress16" id="0xd0611de0b9d443e1" off="2" opref="0x14">selector</field>
+          <syntax></syntax>
+          <op opref="0x4e">, </op>
+          <syntax></syntax>
+          <variable color="0x4" varref="0x196" opref="0x4e">puVar4</variable>
+          <syntax></syntax>
+          <syntax close="208">)</syntax>
+        </statement>
+        <syntax></syntax>
+        <syntax>;</syntax>
+        <break indent="8"/>
+        <statement opref="0xa4">
+          <variable color="0x4" varref="0xe6" opref="0xa4">puVar4</variable>
+          <syntax> </syntax>
+          <op opref="0xa4">=</op>
+          <syntax> </syntax>
+          <variable color="0x4" varref="0x196" opref="0xa3">puVar4</variable>
+          <syntax> </syntax>
+          <op opref="0x4f">+</op>
+          <syntax> </syntax>
+          <variable color="0x5" varref="0xe8" opref="0x4f">1</variable>
+        </statement>
+        <syntax></syntax>
+        <syntax>;</syntax>
+        <break indent="8"/>
+        <statement opref="0x55">
+          <op opref="0x55">*</op>
+          <syntax></syntax>
+          <variable color="0x4" varref="0xd3" opref="0xa6">puVar2</variable>
+          <syntax> </syntax>
+          <op opref="0x55">=</op>
+          <syntax> </syntax>
+          <op opref="0x53">*</op>
+          <syntax></syntax>
+          <variable color="0x4" varref="0xe2" opref="0xa5">puVar1</variable>
+        </statement>
+        <syntax></syntax>
+        <syntax>;</syntax>
+      </block>
+      <break indent="4"/>
+      <syntax>}</syntax>
+    </block>
+    <block blockref="4">
+      <break indent="4"/>
+      <statement opref="0x71">
+        <op color="0x0" opref="0x71">return</op>
+      </statement>
+      <syntax></syntax>
+      <syntax>;</syntax>
+    </block>
+  </block>
+  <break indent="0"/>
+  <syntax>}</syntax>
+  <break indent="0"/>
+  <syntax></syntax>
+</function></code></result>

@@ -1,0 +1,10 @@
+INFO: [R2MCP] r2mcp starting
+INFO: [R2MCP] sandbox grain: exec,socket
+INFO: Radare2 core initialized
+[INFO] Borland scrantic-runtime-qualified: FILE 0x00000de2 qualified (including unchanged)
+[INFO] Borland scrantic-runtime-qualified: FILE 0x00002eb8 qualified (including unchanged)
+[INFO] Borland scrantic-runtime-qualified: FILE 0x00002f76 qualified (including unchanged)
+[INFO] Borland scrantic-runtime-qualified: FILE 0x00002a9c qualified (including unchanged)
+[INFO] Borland scrantic-runtime-qualified: FILE 0x00002aae qualified (including unchanged)
+[INFO] Borland scrantic-runtime-qualified: FILE 0x00002ae1 qualified (including unchanged)
+[INFO] Borland scrantic-runtime-qualified: FILE 0x00002af8 qualified (including unchanged)

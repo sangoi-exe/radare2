@@ -1,0 +1,180 @@
+<result><function>
+<function name="qualified_borland_fmemmove.00011141" size="39">
+  <addr space="ram" offset="0x11141"/>
+  <localdb main="stack" lock="false">
+    <scope name="qualified_borland_fmemmove.00011141" id="0x1">
+      <parent id="0x0"/>
+      <rangelist>
+        <range space="stack" first="0x4" last="0x7"/>
+        <range space="stack" first="0x8" last="0xb"/>
+        <range space="stack" first="0xc" last="0xd"/>
+        <range space="stack" first="0xd8f0" last="0xffed"/>
+        <range space="stack" first="0xfffe" last="0xffff"/>
+      </rangelist>
+      <symbollist>
+        <mapsym>
+          <symbol name="byte_count" id="0x4000010000000005" namelock="true" typelock="true" cat="0" index="0x2">
+            <typeref name="uint16_t" id="0xe03cc574cf9d5ff9"/>
+          </symbol>
+          <addr space="stack" offset="0xc"/>
+          <rangelist/>
+        </mapsym>
+        <mapsym>
+          <symbol name="destination" id="0x4000010000000003" namelock="true" typelock="true" cat="0" index="0x0">
+            <typeref name="FarAddress16" id="0xd0611de0b9d443e1"/>
+          </symbol>
+          <addr space="stack" offset="0x4"/>
+          <rangelist/>
+        </mapsym>
+        <mapsym>
+          <symbol name="source" id="0x4000010000000004" namelock="true" typelock="true" cat="0" index="0x1">
+            <typeref name="FarAddress16" id="0xd0611de0b9d443e1"/>
+          </symbol>
+          <addr space="stack" offset="0x8"/>
+          <rangelist/>
+        </mapsym>
+      </symbollist>
+    </scope>
+  </localdb>
+  <ast>
+    <varnodes>
+      <addr space="const" offset="0x0" size="4" ref="0x156"/>
+      <addr space="ram" offset="0x110e8" size="8" ref="0xc4"/>
+      <addr space="join" piece1="register:0x8:2" piece2="register:0x0:2" ref="0x157"/>
+      <addr space="stack" offset="0x4" size="4" ref="0x158" addrtied="true" input="true"/>
+      <addr space="stack" offset="0x8" size="4" ref="0x159" addrtied="true" input="true"/>
+      <addr space="stack" offset="0xc" size="2" ref="0x15a" addrtied="true" input="true"/>
+    </varnodes>
+    <block index="0">
+      <rangelist>
+        <range space="ram" first="0x11141" last="0x11167"/>
+      </rangelist>
+      <op code="7">
+        <seqnum space="ram" offset="0x11157" uniq="0x40" is_dead="false"/>
+        <void/>
+        <addr ref="0xc4"/>
+        <addr ref="0x159"/>
+        <addr ref="0x158"/>
+        <addr ref="0x15a"/>
+      </op>
+      <op code="1">
+        <seqnum space="ram" offset="0x11167" uniq="0x7e" is_dead="false"/>
+        <addr ref="0x157"/>
+        <addr ref="0x158"/>
+      </op>
+      <op code="10">
+        <seqnum space="ram" offset="0x11167" uniq="0x70" is_dead="false"/>
+        <void/>
+        <addr ref="0x156"/>
+        <addr ref="0x157"/>
+      </op>
+    </block>
+  </ast>
+  <highlist>
+    <high repref="0x156" class="constant">
+      <typeref name="ulong" id="0xc0fed0756c91c567"/>
+      <addr ref="0x156"/>
+    </high>
+    <high repref="0x157" class="other" typelock="true">
+      <typeref name="FarAddress16" id="0xd0611de0b9d443e1"/>
+      <addr ref="0x157"/>
+    </high>
+    <high repref="0x158" class="param" typelock="true" symref="0x4000010000000003">
+      <typeref name="FarAddress16" id="0xd0611de0b9d443e1"/>
+      <addr ref="0x158"/>
+    </high>
+    <high repref="0x159" class="param" typelock="true" symref="0x4000010000000004">
+      <typeref name="FarAddress16" id="0xd0611de0b9d443e1"/>
+      <addr ref="0x159"/>
+    </high>
+    <high repref="0x15a" class="param" typelock="true" symref="0x4000010000000005">
+      <typeref name="uint16_t" id="0xe03cc574cf9d5ff9"/>
+      <addr ref="0x15a"/>
+    </high>
+  </highlist>
+  <prototype model="borland_fmemmove_16far" extrapop="4" modellock="true">
+    <returnsym typelock="true">
+      <addr space="join" piece1="register:0x8:2" piece2="register:0x0:2"/>
+      <typeref name="FarAddress16" id="0xd0611de0b9d443e1"/>
+    </returnsym>
+  </prototype>
+</function></function><code>
+<function>
+  <syntax></syntax>
+  <break indent="0"/>
+  <funcproto>
+    <return_type varref="0x157">
+      <type color="0x2" id="0xd0611de0b9d443e1">FarAddress16</type>
+    </return_type>
+    <syntax></syntax>
+    <syntax></syntax>
+    <syntax> </syntax>
+    <syntax color="0x0">borland_fmemmove_16far</syntax>
+    <break indent="0"/>
+    <funcname color="0x3">qualified_borland_fmemmove.00011141</funcname>
+    <syntax></syntax>
+    <syntax open="447">(</syntax>
+    <syntax></syntax>
+    <vardecl symref="0x4000010000000003">
+      <type color="0x2" id="0xd0611de0b9d443e1">FarAddress16</type>
+      <syntax> </syntax>
+      <variable color="0x6">destination</variable>
+    </vardecl>
+    <syntax></syntax>
+    <syntax>, </syntax>
+    <syntax></syntax>
+    <vardecl symref="0x4000010000000004">
+      <type color="0x2" id="0xd0611de0b9d443e1">FarAddress16</type>
+      <syntax> </syntax>
+      <variable color="0x6">source</variable>
+    </vardecl>
+    <syntax></syntax>
+    <syntax>, </syntax>
+    <syntax></syntax>
+    <vardecl symref="0x4000010000000005">
+      <type color="0x2" id="0xe03cc574cf9d5ff9">uint16_t</type>
+      <syntax> </syntax>
+      <variable color="0x6">byte_count</variable>
+    </vardecl>
+    <syntax></syntax>
+    <syntax close="447">)</syntax>
+  </funcproto>
+  <break indent="0"/>
+  <syntax></syntax>
+  <break indent="0"/>
+  <syntax>{</syntax>
+  <block blockref="0">
+    <break indent="4"/>
+    <statement opref="0x40">
+      <funcname color="0x3" opref="0x40">qualified_borland_fmovmem.000110e8</funcname>
+      <syntax></syntax>
+      <syntax open="458">(</syntax>
+      <syntax></syntax>
+      <variable color="0x6" varref="0x159" opref="0x40">source</variable>
+      <syntax></syntax>
+      <op opref="0x40">, </op>
+      <syntax></syntax>
+      <variable color="0x6" varref="0x158" opref="0x40">destination</variable>
+      <syntax></syntax>
+      <op opref="0x40">, </op>
+      <syntax></syntax>
+      <variable color="0x6" varref="0x15a" opref="0x40">byte_count</variable>
+      <syntax></syntax>
+      <syntax close="458">)</syntax>
+    </statement>
+    <syntax></syntax>
+    <syntax>;</syntax>
+    <break indent="4"/>
+    <statement opref="0x70">
+      <op color="0x0" opref="0x70">return</op>
+      <syntax> </syntax>
+      <variable color="0x6" varref="0x158" opref="0x7e">destination</variable>
+    </statement>
+    <syntax></syntax>
+    <syntax>;</syntax>
+  </block>
+  <break indent="0"/>
+  <syntax>}</syntax>
+  <break indent="0"/>
+  <syntax></syntax>
+</function></code></result>

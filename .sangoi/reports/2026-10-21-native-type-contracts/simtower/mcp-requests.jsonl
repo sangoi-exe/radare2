@@ -1,0 +1,19 @@
+{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"capabilities": {}, "clientInfo": {"name": "native-type-contract-validation", "version": "1"}}}
+{"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}}
+{"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "open_file", "arguments": {"file_path": "/home/lucas/.cache/codex/simtower-recovery-init/win311-uysi1iw1/scratch/decoded/SIMTOWER.EXE"}}}
+{"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "run_command", "arguments": {"command": "ij"}}}
+{"jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": {"name": "run_command", "arguments": {"command": "pd:gss"}}}
+{"jsonrpc": "2.0", "id": 5, "method": "tools/call", "params": {"name": "apply_borland_profiles", "arguments": {}}}
+{"jsonrpc": "2.0", "id": 6, "method": "tools/call", "params": {"name": "decompile_function", "arguments": {"address": "0x110e8", "page_size": 10000}}}
+{"jsonrpc": "2.0", "id": 7, "method": "tools/call", "params": {"name": "get_decompiler_context", "arguments": {"address": "0x110e8"}}}
+{"jsonrpc": "2.0", "id": 8, "method": "tools/call", "params": {"name": "export_function_pcode", "arguments": {"address": "0x110e8"}}}
+{"jsonrpc": "2.0", "id": 9, "method": "tools/call", "params": {"name": "decompile_function", "arguments": {"address": "0x11141", "page_size": 10000}}}
+{"jsonrpc": "2.0", "id": 10, "method": "tools/call", "params": {"name": "get_decompiler_context", "arguments": {"address": "0x11141"}}}
+{"jsonrpc": "2.0", "id": 11, "method": "tools/call", "params": {"name": "export_function_pcode", "arguments": {"address": "0x11141"}}}
+{"jsonrpc": "2.0", "id": 12, "method": "tools/call", "params": {"name": "read_instruction_pcode", "arguments": {"address": "0x11140", "num_instructions": 1}}}
+{"jsonrpc": "2.0", "id": 13, "method": "tools/call", "params": {"name": "read_instruction_pcode", "arguments": {"address": "0x11156", "num_instructions": 1}}}
+{"jsonrpc": "2.0", "id": 14, "method": "tools/call", "params": {"name": "read_instruction_pcode", "arguments": {"address": "0x11157", "num_instructions": 1}}}
+{"jsonrpc": "2.0", "id": 15, "method": "tools/call", "params": {"name": "read_instruction_pcode", "arguments": {"address": "0x10006", "num_instructions": 1}}}
+{"jsonrpc": "2.0", "id": 16, "method": "tools/call", "params": {"name": "read_instruction_pcode", "arguments": {"address": "0x4f02ee", "num_instructions": 1}}}
+{"jsonrpc": "2.0", "id": 17, "method": "tools/call", "params": {"name": "read_instruction_pcode", "arguments": {"address": "0x4f00a1", "num_instructions": 1}}}
+{"jsonrpc": "2.0", "id": 18, "method": "tools/call", "params": {"name": "close_file", "arguments": {}}}

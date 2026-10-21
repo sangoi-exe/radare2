@@ -1,0 +1,2 @@
+Borland: 35 function contracts qualified (including unchanged); refusals are logged
+

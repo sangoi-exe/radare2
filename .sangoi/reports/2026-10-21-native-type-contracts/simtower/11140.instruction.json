@@ -1,0 +1,1 @@
+[{"opcode":"retf","disasm":"retf","pseudo":"retf","description":"return from procedure","mnemonic":"retf","mask":"ff","esil":"sp,[2],ip,=,2,sp,+,[2],cs,=,4,sp,+=","sign":false,"id":351,"opex":{"operands":[]},"addr":69952,"bytes":"cb","val":0,"size":1,"type":"ret","esilcost":4,"cycles":3,"failcycles":0,"delay":0,"stack":"inc","stackptr":18446744073709551612,"family":"cpu"}]
