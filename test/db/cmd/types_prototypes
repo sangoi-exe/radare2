@@ -1,3 +1,25 @@
+NAME=near and far remain ordinary parameter names in declarations and manual afs
+FILE=malloc://16
+ARGS=-a x86 -b 64
+CMDS=<<EOF
+'td void near_far_params(float near,float far);
+tk func.near_far_params.arg.0
+tk func.near_far_params.arg.1
+wx c3
+af+ 0 original
+afb+ 0 0 1
+'afs int far_ok(int far)
+afs
+tk func.far_ok.arg.0
+EOF
+EXPECT=<<EOF
+float,near
+float,far
+int far_ok (int far);
+int,far
+EOF
+RUN
+
 NAME=manual afs composes a pointer-to-array return around the function name
 FILE=malloc://16
 ARGS=-a x86 -b 16

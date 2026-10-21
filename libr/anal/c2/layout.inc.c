@@ -1,6 +1,15 @@
 /* radare - LGPL - Copyright 2026 - pancake, Codex */
 
 static bool kvc_type_layout(KVCParser *kvc, const char *name, int *size, int *align) {
+	if (!kvc->layout_ready) {
+		Sdb *types = sdb_new0 ();
+		if (kvc->host_types) {
+			sdb_copy (kvc->host_types, types);
+		}
+		sdb_free (kvc->types);
+		kvc->types = types;
+		kvc->layout_ready = true;
+	}
 	const char *records = r_strbuf_get (kvc->sb);
 	sdb_query_lines (kvc->types, records + kvc->synced);
 	kvc->synced = r_strbuf_length (kvc->sb);

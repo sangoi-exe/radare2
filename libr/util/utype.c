@@ -565,6 +565,19 @@ static char *type_pointer_format(Sdb *db, const RTypeDeclNode *node) {
 	return layout.bits == sdb_num_get (db, "type.char *.size", NULL)? strdup ("p"): r_str_newf ("p%" PFMT64u, layout.bits / 8);
 }
 
+static char *type_format_repeat(const char *body, ut64 elements) {
+	if (*body == '[') {
+		char *end;
+		errno = 0;
+		ut64 repeat = strtoull (body + 1, &end, 0);
+		if (errno == ERANGE || !isdigit ((ut8)body[1]) || *end != ']' || r_mul_overflow (elements, repeat, &elements)) {
+			return NULL;
+		}
+		body = end + 1;
+	}
+	return r_str_newf ("[%" PFMT64u "]%s", elements, body);
+}
+
 static char *fmt_struct_union(Sdb *db, char *var, bool is_typedef) {
 	char *fields = is_typedef? r_str_newf ("%s.fields", var): strdup (var);
 	if (!fields) {
@@ -636,12 +649,14 @@ static char *fmt_struct_union(Sdb *db, char *var, bool is_typedef) {
 					body = type_format_base (db, base, 0);
 				}
 			}
+			if (body && (elements > 1 || count > 0)) {
+				char *repeated = type_format_repeat (body, elements);
+				free (body);
+				body = repeated;
+			}
 			if (!body) {
 				complete = false;
 			} else {
-				if (elements > 1 || count > 0) {
-					r_strbuf_appendf (fmt, "[%" PFMT64u "]", elements);
-				}
 				r_strbuf_append (fmt, body);
 				if (aggregate || enumeration) {
 					const char *name = aggregate? aggregate_name: base;

@@ -572,7 +572,7 @@ bool test_r_anal_str_to_fcn_defaults_omitted_return_type(void) {
 		const char *signature;
 		int argc;
 	} cases[] = {
-		{ "no_type", "no_type(int a, char **b);", "void no_type (int a, char * *b);", 2 },
+		{ "no_type", "no_type(int a, char **b);", "void no_type (int a, char **b);", 2 },
 		{ "foo.bar", "foo.bar();;", "void foo.bar ();", 0 },
 	};
 	size_t i;

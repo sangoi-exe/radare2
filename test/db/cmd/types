@@ -1,3 +1,48 @@
+NAME=Win16 long double member arrays compose their primitive format repeat
+FILE=malloc://32
+ARGS=-a x86 -b 16
+CMDS=<<EOF
+'td struct Wide {long double values[2];char tail;};
+tk struct.Wide.tail
+ts Wide
+.ts* Wide
+wx 7f @ 20
+pfs.Wide
+pfj.Wide
+EOF
+EXPECT=<<EOF
+char,20,0
+'pf [20]bc values tail
+21
+[{"name":"values","type":"b","offset":0,"values":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},{"name":"tail","type":"c","offset":20,"value":"\u007f"}]
+EOF
+RUN
+
+NAME=aaft mixed pointer spellings from parallel branches retain char double pointer
+FILE=malloc://512
+ARGS=-a x86 -b 64
+CMDS=<<EOF
+wx 554889e54883ec2085ff7424488b7df8e84b000000eb39 @ 0
+wx 488b7df8e837000000eb15 @ 0x30
+wx c9c3 @ 0x50
+wx c3 @ 0x60
+wx c3 @ 0x70
+af @ 0x60
+afn first @ 0x60
+af @ 0x70
+afn second @ 0x70
+"td int first(char **p);int second(char **p);"
+tk func.second.arg.0=char **,p
+af @ 0
+aaft
+afv @ 0
+EOF
+EXPECT=<<EOF
+arg int64_t arg1 @ rdi
+var char ** p @ rbp-0x8
+EOF
+RUN
+
 NAME=strcpy lowerdashes
 FILE=bins/mach0/strcpy-overflow
 CMDS=<<EOF
@@ -823,7 +868,7 @@ afv~arg
 afv~arg
 EOF
 EXPECT=<<EOF
-int main (int argc, char * *argv, char * *envp);
+int main (int argc, char **argv, char **envp);
 tn main
 afc amd64
 afvr rdi argc int
@@ -2203,8 +2248,8 @@ afs
 EOF
 EXPECT=<<EOF
 void fcn.004e2420 (int64_t arg1, int64_t arg2, int64_t arg3, int64_t arg4, int64_t arg5, int64_t arg6, int64_t arg_8h);
-void no_type (int a, char * *b);
-char type (int a, char * *b);
+void no_type (int a, char **b);
+char type (int a, char **b);
 EOF
 RUN
 
@@ -2238,7 +2283,7 @@ char foo.bar (int a, ...);
 --
 size_t sym.imp.strlen (const char *s);
 --
-int main (int argc, char * *argv, char * *envp);
+int main (int argc, char **argv, char **envp);
 {
   "name": "main",
   "noreturn": false,
@@ -4648,7 +4693,7 @@ afv
 EOF
 EXPECT=<<EOF
 arg int64_t arg1 @ rdi
-var char * * s @ rbp-0x20
+var char ** s @ rbp-0x20
 EOF
 RUN
 
@@ -5553,7 +5598,7 @@ EXPECT=<<EOF
 _vptr_Bird
 int (**)(),2,0
 struct Bird {
-  int (* *_vptr_Bird)();
+  int (**_vptr_Bird)();
 };
 EOF
 RUN
@@ -5692,18 +5737,18 @@ EXPECT=<<EOF
 int g_strcmp0(const char *str1, const char *str2);
 gboolean g_str_equal(gconstpointer v1, gconstpointer v2);
 gchar *g_strdup(const gchar *str);
-gchar * *g_strsplit(const gchar *string, const gchar *delimiter, gint max_tokens);
+gchar **g_strsplit(const gchar *string, const gchar *delimiter, gint max_tokens);
 gchar *g_strdup_printf(const gchar *format, ...);
 gchar *g_strdup_vprintf(const gchar *format, va_list args);
 gchar *g_strconcat(const gchar *string1, ...);
 GString *g_string_new(const gchar *init);
 void g_string_append_printf(GString *string, const gchar *format, ...);
-gboolean g_utf8_validate(const gchar *str, gssize max_len, const gchar * *end);
+gboolean g_utf8_validate(const gchar *str, gssize max_len, const gchar **end);
 gpointer g_malloc_n(gsize n_blocks, gsize n_block_bytes);
 gpointer g_memdup(gconstpointer mem, guint byte_size);
 gpointer g_memdup2(gconstpointer mem, gsize byte_size);
-gboolean g_shell_parse_argv(const gchar *command_line, gint *argcp, gchar * * *argvp, GError * *error);
-gboolean g_file_get_contents(const gchar *filename, gchar * *contents, gsize *length, GError * *error);
+gboolean g_shell_parse_argv(const gchar *command_line, gint *argcp, gchar ***argvp, GError **error);
+gboolean g_file_get_contents(const gchar *filename, gchar **contents, gsize *length, GError **error);
 EOF
 RUN
 
@@ -5842,7 +5887,7 @@ tfc g_ptr_array_sort
 EOF
 EXPECT=<<EOF
 GHashTable *g_hash_table_new_full(GHashFunc hash_func, GEqualFunc key_equal_func, GDestroyNotify key_destroy_func, GDestroyNotify value_destroy_func);
-gboolean g_option_context_parse(GOptionContext *context, gint *argc, gchar * * *argv, GError * *error);
+gboolean g_option_context_parse(GOptionContext *context, gint *argc, gchar ***argv, GError **error);
 gboolean g_variant_dict_lookup(GVariantDict *dict, const gchar *key, const gchar *format_string, ...);
 void g_ptr_array_sort(GPtrArray *array, GCompareFunc compare_func);
 EOF
@@ -5884,9 +5929,9 @@ tss GBusType
 tss GConnectFlags
 EOF
 EXPECT=<<EOF
-gboolean g_file_copy(GFile *source, GFile *destination, GFileCopyFlags flags, GCancellable *cancellable, GFileProgressCallback progress_callback, gpointer progress_callback_data, GError * *error);
-GVariant *g_dbus_proxy_call_sync(GDBusProxy *proxy, const gchar *method_name, GVariant *parameters, GDBusCallFlags flags, gint timeout_msec, GCancellable *cancellable, GError * *error);
-GSubprocess *g_subprocess_new(GSubprocessFlags flags, GError * *error, const gchar *argv0, ...);
+gboolean g_file_copy(GFile *source, GFile *destination, GFileCopyFlags flags, GCancellable *cancellable, GFileProgressCallback progress_callback, gpointer progress_callback_data, GError **error);
+GVariant *g_dbus_proxy_call_sync(GDBusProxy *proxy, const gchar *method_name, GVariant *parameters, GDBusCallFlags flags, gint timeout_msec, GCancellable *cancellable, GError **error);
+GSubprocess *g_subprocess_new(GSubprocessFlags flags, GError **error, const gchar *argv0, ...);
 GInputStream *g_unix_input_stream_new(gint fd, gboolean close_fd);
 char *g_desktop_app_info_get_string(GDesktopAppInfo *info, const char *key);
 4

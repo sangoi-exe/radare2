@@ -159,10 +159,6 @@ static RTypeDeclNode *decl_base(DeclParser *parser) {
 		if (have_type) {
 			break;
 		}
-		if (decl_word (parser, "near") || decl_word (parser, "far")) {
-			decl_error (parser, "Expected a base type before a pointer qualifier");
-			break;
-		}
 		char *word = decl_identifier (parser, true);
 		if (!word) {
 			decl_error (parser, "Expected a base type");
@@ -276,6 +272,22 @@ static bool decl_array(DeclParser *parser, RTypeDeclNode *node) {
 	return true;
 }
 
+static RTypePointerKind decl_pointer_kind(DeclParser *parser) {
+	DeclParser lookahead = *parser;
+	RTypePointerKind kind = R_TYPE_POINTER_DEFAULT;
+	if (decl_word (&lookahead, "near")) {
+		kind = R_TYPE_POINTER_NEAR;
+	} else if (decl_word (&lookahead, "far")) {
+		kind = R_TYPE_POINTER_FAR;
+	}
+	decl_skip_space (&lookahead);
+	if (kind != R_TYPE_POINTER_DEFAULT && *lookahead.cursor == '*') {
+		parser->cursor = lookahead.cursor;
+		return kind;
+	}
+	return R_TYPE_POINTER_DEFAULT;
+}
+
 static bool decl_declarator(DeclParser *parser, DeclChain *chain, char **name) {
 	if (parser->depth >= 64) {
 		return decl_error (parser, "Declaration nesting is too deep");
@@ -284,18 +296,10 @@ static bool decl_declarator(DeclParser *parser, DeclChain *chain, char **name) {
 	DeclChain pointers = { 0 };
 	pointers.tail = &pointers.head;
 	while (true) {
-		RTypePointerKind kind = R_TYPE_POINTER_DEFAULT;
-		if (decl_word (parser, "near")) {
-			kind = R_TYPE_POINTER_NEAR;
-		} else if (decl_word (parser, "far")) {
-			kind = R_TYPE_POINTER_FAR;
-		}
+		RTypePointerKind kind = decl_pointer_kind (parser);
 		decl_skip_space (parser);
 		bool reference = *parser->cursor == '&' && kind == R_TYPE_POINTER_DEFAULT;
 		if (*parser->cursor != '*' && !reference) {
-			if (kind != R_TYPE_POINTER_DEFAULT) {
-				decl_error (parser, "Expected * after pointer qualifier");
-			}
 			break;
 		}
 		parser->cursor++;
@@ -326,7 +330,7 @@ static bool decl_declarator(DeclParser *parser, DeclChain *chain, char **name) {
 		lookahead.cursor++;
 		decl_skip_space (&lookahead);
 		bool grouped = *lookahead.cursor == '*' || *lookahead.cursor == '&' || *lookahead.cursor == '(' || *lookahead.cursor == '['
-			|| decl_word (&lookahead, "near") || decl_word (&lookahead, "far");
+			|| decl_pointer_kind (&lookahead) != R_TYPE_POINTER_DEFAULT;
 		if (grouped) {
 			parser->cursor++;
 			if (decl_declarator (parser, chain, name)) {
@@ -426,6 +430,7 @@ R_API R_OWNED char *r_type_decl_render(const RTypeDecl *decl, bool include_name)
 	r_strbuf_init (&out);
 	bool ok = !include_name || !decl->name || r_strbuf_append (&out, decl->name);
 	RTypeDeclKind previous = R_TYPE_DECL_BASE;
+	const RTypeDeclNode *previous_node = NULL;
 	const RTypeDeclNode *node;
 	for (node = decl->type; node && ok; node = node->child) {
 		if (node->kind == R_TYPE_DECL_BASE || node->kind == R_TYPE_DECL_POINTER
@@ -452,7 +457,9 @@ R_API R_OWNED char *r_type_decl_render(const RTypeDecl *decl, bool include_name)
 				}
 				ok = ok && r_strbuf_append (&prefix, symbol);
 				bool previous_prefix = previous == R_TYPE_DECL_POINTER || previous == R_TYPE_DECL_LVALUE_REFERENCE || previous == R_TYPE_DECL_RVALUE_REFERENCE;
-				if (ok && (node->qualifiers || (previous_prefix && r_strbuf_length (&out)))) {
+				bool compact = node->kind == R_TYPE_DECL_POINTER && node->pointer.kind == R_TYPE_POINTER_DEFAULT && !node->qualifiers
+					&& previous_node && previous_node->kind == R_TYPE_DECL_POINTER && previous_node->pointer.kind == R_TYPE_POINTER_DEFAULT && !previous_node->qualifiers;
+				if (ok && (node->qualifiers || (previous_prefix && !compact && r_strbuf_length (&out)))) {
 					ok = r_strbuf_append (&prefix, " ") && decl_render_qualifiers (&prefix, node->qualifiers);
 				}
 			}
@@ -488,6 +495,7 @@ R_API R_OWNED char *r_type_decl_render(const RTypeDecl *decl, bool include_name)
 			}
 		}
 		previous = node->kind;
+		previous_node = node;
 	}
 	char *text = ok? r_strbuf_drain_nofree (&out): NULL;
 	r_strbuf_fini (&out);

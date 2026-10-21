@@ -11,6 +11,8 @@ typedef struct {
 
 typedef struct {
 	Sdb *types;
+	Sdb *host_types;
+	bool layout_ready;
 	size_t synced;
 	RStrBuf *sb;
 	int line;
@@ -364,6 +366,25 @@ static void kvc_register_typedef(KVCParser *kvc, const char *name, const char *t
 	sdb_setf (kvc->types, type, 0, "typedef.%s", name);
 }
 
+static char *kvc_resolve_typedef(KVCParser *kvc, const char *name) {
+	const char *current = name;
+	int links;
+	for (links = 0; links < 4096; links++) {
+		const char *target = sdb_const_getf (kvc->types, NULL, "typedef.%s", current);
+		if (!target && !kvc->layout_ready && kvc->host_types) {
+			target = sdb_const_getf (kvc->host_types, NULL, "typedef.%s", current);
+			if (target) {
+				sdb_setf (kvc->types, target, 0, "typedef.%s", current);
+			}
+		}
+		if (!target) {
+			break;
+		}
+		current = target;
+	}
+	return r_type_resolve_typedef (kvc->types, name);
+}
+
 static RTypeDecl *kvc_declaration(KVCParser *kvc, RStrs span) {
 	char *text = collapse_whitespace (span);
 	char *error = NULL;
@@ -387,7 +408,7 @@ static void emit_func_signature(KVCParser *kvc, const char *name, const RTypeDec
 		RTypeDecl *resolved = NULL;
 		RTypeDeclNode *type_node = param->type;
 		if (type_node->kind == R_TYPE_DECL_BASE) {
-			char *target = r_type_resolve_typedef (kvc->types, type_node->base.name);
+			char *target = kvc_resolve_typedef (kvc, type_node->base.name);
 			resolved = target? r_type_decl_parse (target, NULL): NULL;
 			free (target);
 			if (resolved) {
@@ -985,9 +1006,7 @@ R_IPI char *kvc_parse(RAnal *anal, const char *header_content, char **errmsg) {
 	KVCParser _kvc = { 0 };
 	KVCParser *kvc = &_kvc;
 	kvcparser_init (&_kvc, pre);
-	if (anal) {
-		sdb_copy (anal->sdb_types, kvc->types);
-	}
+	kvc->host_types = anal? anal->sdb_types: NULL;
 	while (!r_strs_empty (kvc->s)) {
 		skip_ws (kvc);
 		if (r_strs_empty (kvc->s)) {

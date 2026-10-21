@@ -159,7 +159,8 @@ static bool test_type_decl_roundtrip(void) {
 		"void (*(*xDlSym)(void *ctx, void *handle, const char *name))(void)",
 		"BYTE far * near *fetch(int n)", "char * const * volatile p",
 		"int values[]", "Row rows[COUNT + 1]", "int f()", "int f(void)",
-		"int *lookup(const char *name, void (*cb)(int value), ...)"
+		"int *lookup(const char *name, void (*cb)(int value), ...)",
+		"void near_far_params(float near, float far)", "int far_ok(int far)", "near value", "far value"
 	};
 	size_t i;
 	for (i = 0; i < R_ARRAY_SIZE (inputs); i++) {
@@ -181,6 +182,25 @@ static bool test_type_decl_roundtrip(void) {
 		r_type_decl_free (again);
 		r_type_decl_free (decl);
 	}
+	mu_end;
+}
+
+static bool test_type_decl_contextual_names(void) {
+	RTypeDecl *decl = r_type_decl_parse ("void near_far_params(float near, float far)", NULL);
+	mu_assert_notnull (decl, "near and far remain ordinary parameter names without a following pointer star");
+	RTypeDecl *param = r_list_get_n (decl->type->function.parameters, 0);
+	mu_assert_streq (param->name, "near", "retain the near parameter name");
+	mu_assert_eq (param->type->kind, R_TYPE_DECL_BASE, "near is not a pointer qualifier on a scalar parameter");
+	param = r_list_get_n (decl->type->function.parameters, 1);
+	mu_assert_streq (param->name, "far", "retain the far parameter name");
+	mu_assert_eq (param->type->kind, R_TYPE_DECL_BASE, "far is not a pointer qualifier on a scalar parameter");
+	r_type_decl_free (decl);
+	decl = r_type_decl_parse ("char * *p", NULL);
+	mu_assert_notnull (decl, "parse spaced default pointer layers");
+	char *text = r_type_decl_render (decl, true);
+	mu_assert_streq (text, "char **p", "adjacent unqualified default pointers render compactly");
+	free (text);
+	r_type_decl_free (decl);
 	mu_end;
 }
 
@@ -289,6 +309,7 @@ int all_tests(void) {
 	mu_run_test (test_type_decl_array_precedence);
 	mu_run_test (test_type_decl_functions);
 	mu_run_test (test_type_decl_roundtrip);
+	mu_run_test (test_type_decl_contextual_names);
 	mu_run_test (test_type_decl_reject_malformed);
 	mu_run_test (test_type_decl_utility_qualifiers);
 	mu_run_test (test_type_decl_dotted_names);

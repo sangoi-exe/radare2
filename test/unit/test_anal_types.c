@@ -822,6 +822,38 @@ static bool test_anal_cparse_callback_array_layout(void) {
 	mu_end;
 }
 
+static bool test_anal_cparse_lazy_alias_layout(void) {
+	RAnal *anal = r_anal_new ();
+	r_anal_types_reload (anal, R2_PREFIX, NULL, NULL);
+	char *error = NULL;
+	mu_assert_true (r_anal_import_c_decls (anal,
+		"typedef int HostRow[4];typedef HostRow HostChain;typedef int HostFn(int);", &error), "establish host aliases without aggregate layout");
+	mu_assert_null (error, "host signature-only aliases parse successfully");
+	char *kv = r_anal_cparse (anal,
+		"typedef HostChain Local;void before(Local values,HostFn callback);"
+		"typedef char HostRow[2];void shadowed(HostChain values);"
+		"struct LocalRecord {Local values;char tail;};void after(Local values);", &error);
+	mu_assert_null (error, "resolve aliases across local and host records before and after first layout");
+	mu_assert_notnull (kv, "serialize private alias and aggregate definitions");
+	mu_assert_notnull (strstr (kv, "func.before.arg.0=int *,values\n"), "local alias reaches a transitive host array alias");
+	mu_assert_notnull (strstr (kv, "func.before.arg.1=HostFn *,callback\n"), "host function typedef parameters retain adjustment");
+	mu_assert_notnull (strstr (kv, "func.shadowed.arg.0=char *,values\n"), "local definition shadows the end of a host alias chain");
+	mu_assert_notnull (strstr (kv, "struct.LocalRecord.tail=char,2,0\n"), "first layout replays all local definitions after host metadata");
+	mu_assert_notnull (strstr (kv, "func.after.arg.0=char *,values\n"), "post-layout alias lookup retains the same local precedence");
+	mu_assert_streq (sdb_const_get (anal->sdb_types, "typedef.HostRow", NULL), "int [4]", "private shadowing does not change the host alias");
+	mu_assert_null (sdb_const_get (anal->sdb_types, "Local", NULL), "successful parsing does not import local aliases");
+	mu_assert_null (sdb_const_get (anal->sdb_types, "LocalRecord", NULL), "successful layout does not import local aggregates");
+	free (kv);
+	kv = r_anal_cparse (anal, "typedef char HostRow[2];struct Partial {HostRow row;};struct Broken {Unknown value;};", &error);
+	mu_assert_null (kv, "failed aggregate parsing returns no partial definitions");
+	mu_assert_notnull (error, "failed private layout reports the unmeasurable member");
+	mu_assert_streq (sdb_const_get (anal->sdb_types, "typedef.HostRow", NULL), "int [4]", "failed parsing does not overwrite host aliases");
+	mu_assert_null (sdb_const_get (anal->sdb_types, "Partial", NULL), "failed parsing does not import an earlier complete aggregate");
+	free (error);
+	r_anal_free (anal);
+	mu_end;
+}
+
 static bool test_anal_cparse_definition_alias(void) {
 	RAnal *anal = r_anal_new ();
 	anal->config->bits = 64;
@@ -1009,6 +1041,7 @@ static bool test_anal_x86_16_declaration_layout(void) {
 		"typedef int (far *CB)(int x[4], void (*cb)(int, int));"
 		"struct Mixed {char lead;MIX p;int far *farptr;CB cb;char tail;};"
 		"void consume(int values[4], int callback(int));struct Wide {long double values[2];};"
+		"struct WideTail {long double values[2];char tail;};"
 		"typedef int FN(int);typedef int Row[4];void aliases(Row values, FN callback, CB qualified);", &error), "import mixed pointers and explicit far callback");
 	mu_assert_null (error, "target declaration import succeeds");
 	mu_assert_streq (sdb_const_get (anal->sdb_types, "typedef.MIX", NULL), "BYTE far * volatile near *", "mixed pointer typedef retains ordered explicit layers");
@@ -1022,6 +1055,14 @@ static bool test_anal_x86_16_declaration_layout(void) {
 	mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.Mixed.tail", NULL), "char,12,0", "callback occupies four bytes");
 	mu_assert_eq (r_anal_type_bitsize (anal, "Mixed"), 112, "aggregate retains two-byte pointer alignment and tail padding");
 	mu_assert_eq (r_anal_type_bitsize (anal, "Wide"), 160, "long-double array aggregate retains twenty-byte extent");
+	mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.WideTail.tail", NULL), "char,20,0", "tail follows twenty bytes of long-double elements");
+	char *format = r_type_format (anal->sdb_types, "WideTail");
+	mu_assert_streq (format, "[20]bc values tail ", "format composes primitive repetition with the member array extent");
+	free (format);
+	sdb_set (anal->sdb_types, "type.long double", "[18446744073709551615]b", 0);
+	format = r_type_format (anal->sdb_types, "WideTail");
+	mu_assert_null (format, "overflowing repeat composition is not serialized");
+	sdb_set (anal->sdb_types, "type.long double", "[10]b", 0);
 	char *argument = r_type_func_args_type (anal->sdb_types, "CB", 1);
 	mu_assert_streq (argument, "void (*)(int, int)", "nested callback commas are not discarded");
 	mu_assert_streq (r_type_func_args_name (anal->sdb_types, "CB", 1), "cb", "nested callback name uses the canonical final delimiter");
@@ -1079,6 +1120,7 @@ int all_tests(void) {
 	mu_run_test (test_anal_cparse_multiline_fnptr);
 	mu_run_test (test_anal_cparse_nested_layout);
 	mu_run_test (test_anal_cparse_callback_array_layout);
+	mu_run_test (test_anal_cparse_lazy_alias_layout);
 	mu_run_test (test_anal_cparse_definition_alias);
 	mu_run_test (test_anal_get_base_type_union);
 	mu_run_test (test_anal_save_base_type_union);
