@@ -876,7 +876,7 @@ static bool type_expand_function_refs(Sdb *db, RTypeDeclNode **slot, int depth) 
 		if (!ret || !r_type_func_args_count (db, name, &argc) || !r_type_func_get_prototype (db, name, &prototype)) {
 			return false;
 		}
-		RTypeDecl *result = r_type_decl_parse (ret, R_TYPE_DECL_CONTEXT_ABSTRACT, NULL);
+		RTypeDecl *result = r_type_decl_parse (ret, R_TYPE_DECL_CONTEXT_ABSTRACT, db, NULL);
 		if (!result || result->name) {
 			r_type_decl_free (result);
 			return false;
@@ -898,7 +898,7 @@ static bool type_expand_function_refs(Sdb *db, RTypeDeclNode **slot, int depth) 
 				free (type);
 				continue;
 			}
-			RTypeDecl *param = type? r_type_decl_parse (type, R_TYPE_DECL_CONTEXT_ABSTRACT, NULL): NULL;
+			RTypeDecl *param = type? r_type_decl_parse (type, R_TYPE_DECL_CONTEXT_ABSTRACT, db, NULL): NULL;
 			free (type);
 			if (!param || param->name) {
 				r_type_decl_free (param);
@@ -932,7 +932,7 @@ static bool type_expand_function_refs(Sdb *db, RTypeDeclNode **slot, int depth) 
 }
 
 static char *type_c_declaration(Sdb *db, const char *type, const char *name, int count) {
-	RTypeDecl *decl = r_type_decl_parse (type, R_TYPE_DECL_CONTEXT_ABSTRACT, NULL);
+	RTypeDecl *decl = r_type_decl_parse (type, R_TYPE_DECL_CONTEXT_ABSTRACT, db, NULL);
 	if (!decl || decl->name || !type_expand_function_refs (db, &decl->type, 0)) {
 		r_type_decl_free (decl);
 		R_LOG_ERROR ("Cannot render type declaration: %s", type);

@@ -973,6 +973,50 @@ static bool test_anal_cparse_grouped_names(void) {
 	mu_end;
 }
 
+static bool test_anal_cparse_visible_typedef_callbacks(void) {
+	int existing;
+	for (existing = 0; existing < 2; existing++) {
+		RAnal *anal = r_anal_new ();
+		char *error = NULL;
+		if (existing) {
+			mu_assert_true (r_anal_import_c_decls (anal, "typedef int T;", &error), "seed the existing analysis typedef");
+		}
+		char *header = r_str_newf ("%sint f(int (T));int h(int (T,T));int g(int (*)(T));int control(int (value));"
+			"int hide(int T, void (*cb)(int (T)));int scoped(void (*cb)(int T), int (T));",
+			existing? "": "typedef int T;");
+		mu_assert_true (r_anal_import_c_decls (anal, header, &error), "import contextual declarations from the same header or the analysis database");
+		mu_assert_null (error, "contextual declarations import without errors");
+		free (header);
+		const char *names[] = { "f", "h", "g" };
+		size_t i;
+		for (i = 0; i < R_ARRAY_SIZE (names); i++) {
+			char *type = r_type_func_args_type (anal->sdb_types, names[i], 0);
+			mu_assert_streq (type, i == 1? "int (*)(T, T)": "int (*)(T)", "imported callback retains adjusted pointer and typedef parameters");
+			RTypeDecl *decl = r_type_decl_parse (type, R_TYPE_DECL_CONTEXT_ABSTRACT, anal->sdb_types, NULL);
+			mu_assert_notnull (decl, "imported callback is a shared declaration");
+			mu_assert_eq (decl->type->kind, R_TYPE_DECL_POINTER, "import adjusts a function parameter to a pointer");
+			mu_assert_eq (decl->type->child->kind, R_TYPE_DECL_FUNCTION, "callback category survives real import");
+			mu_assert_true (decl->type->child->function.prototype, "callback prototype remains fixed");
+			r_type_decl_free (decl);
+			free (type);
+		}
+		char *type = r_type_func_args_type (anal->sdb_types, "control", 0);
+		mu_assert_streq (type, "int", "ordinary grouped parameter remains scalar during import");
+		mu_assert_streq (r_type_func_args_name (anal->sdb_types, "control", 0), "value", "ordinary grouped parameter retains its name");
+		free (type);
+		type = r_type_func_args_type (anal->sdb_types, "hide", 1);
+		mu_assert_streq (type, "void (*)(int T)", "earlier parameter hides the typedef during import");
+		free (type);
+		type = r_type_func_args_type (anal->sdb_types, "scoped", 1);
+		mu_assert_streq (type, "int (*)(T)", "nested prototype parameter does not leak into outer import");
+		free (type);
+		mu_assert_false (r_anal_import_c_decls (anal, "int invalid(int T, T value);", &error), "import refuses a hidden typedef used as a type");
+		free (error);
+		r_anal_free (anal);
+	}
+	mu_end;
+}
+
 static bool test_anal_cparse_forward_identity(void) {
 	RAnal *anal = r_anal_new ();
 	anal->config->bits = 16;
@@ -1588,6 +1632,7 @@ int all_tests(void) {
 	mu_run_test (test_anal_cparse_prototype_metadata);
 	mu_run_test (test_anal_tcc_prototype_metadata);
 	mu_run_test (test_anal_cparse_grouped_names);
+	mu_run_test (test_anal_cparse_visible_typedef_callbacks);
 	mu_run_test (test_anal_cparse_forward_identity);
 	mu_run_test (test_anal_cparse_forward_completion);
 	mu_run_test (test_anal_cparse_forward_typedef);

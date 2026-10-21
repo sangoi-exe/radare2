@@ -7,6 +7,8 @@ typedef struct {
 	const char *cursor;
 	const char *error;
 	unsigned int depth;
+	Sdb *types;
+	RList *ordinary;
 } DeclParser;
 
 typedef struct {
@@ -124,6 +126,39 @@ static char *decl_identifier(DeclParser *parser, bool base) {
 	return word;
 }
 
+typedef enum {
+	DECL_BINDING_UNKNOWN,
+	DECL_BINDING_TYPE,
+	DECL_BINDING_ORDINARY
+} DeclBinding;
+
+static DeclBinding decl_binding(DeclParser *parser, const char *name) {
+	RListIter *iter;
+	const char *ordinary;
+	r_list_foreach_prev (parser->ordinary, iter, ordinary) {
+		if (!strcmp (ordinary, name)) {
+			return DECL_BINDING_ORDINARY;
+		}
+	}
+	const char *kind = parser->types? sdb_const_get (parser->types, name, NULL): NULL;
+	if (kind && (!strcmp (kind, "typedef") || !strcmp (kind, "type"))) {
+		return DECL_BINDING_TYPE;
+	}
+	return DECL_BINDING_UNKNOWN;
+}
+
+static bool decl_visible_type(DeclParser *parser, const char *cursor) {
+	DeclParser lookahead = *parser;
+	lookahead.cursor = cursor;
+	char *name = decl_identifier (&lookahead, false);
+	if (lookahead.error) {
+		decl_error (parser, lookahead.error);
+	}
+	bool visible = name && decl_binding (parser, name) == DECL_BINDING_TYPE;
+	free (name);
+	return visible;
+}
+
 enum {
 	DECL_BUILTIN_VOID, DECL_BUILTIN_CHAR, DECL_BUILTIN_SHORT, DECL_BUILTIN_INT,
 	DECL_BUILTIN_LONG, DECL_BUILTIN_FLOAT, DECL_BUILTIN_DOUBLE,
@@ -226,6 +261,11 @@ static RTypeDeclNode *decl_base(DeclParser *parser) {
 			break;
 		}
 		bool tagged = !strcmp (word, "struct") || !strcmp (word, "union") || !strcmp (word, "enum");
+		if (!tagged && decl_binding (parser, word) == DECL_BINDING_ORDINARY) {
+			free (word);
+			decl_error (parser, "Ordinary identifier is not a type name");
+			break;
+		}
 		bool ok = r_strbuf_append (&name, word);
 		free (word);
 		if (tagged) {
@@ -297,6 +337,8 @@ static bool decl_parameters(DeclParser *parser, RTypeDeclNode *node) {
 		} else if (!r_list_append (node->function.parameters, param)) {
 			r_type_decl_free (param);
 			return decl_error (parser, "Cannot allocate parameter list");
+		} else if (param->name && !r_list_append (parser->ordinary, param->name)) {
+			return decl_error (parser, "Cannot allocate parameter binding");
 		}
 		if (*parser->cursor == ')') {
 			parser->cursor++;
@@ -352,11 +394,12 @@ static RTypePointerKind decl_pointer_kind(DeclParser *parser) {
 	return R_TYPE_POINTER_DEFAULT;
 }
 
-static bool decl_declarator(DeclParser *parser, DeclChain *chain, char **name, RTypeDeclContext context) {
+static bool decl_declarator(DeclParser *parser, DeclChain *chain, char **name, RTypeDeclContext context, bool parameter) {
 	if (parser->depth >= 64) {
 		return decl_error (parser, "Declaration nesting is too deep");
 	}
 	parser->depth++;
+	int bindings = r_list_length (parser->ordinary);
 	DeclChain pointers = { 0 };
 	pointers.tail = &pointers.head;
 	while (true) {
@@ -395,10 +438,10 @@ static bool decl_declarator(DeclParser *parser, DeclChain *chain, char **name, R
 		decl_skip_space (&lookahead);
 		bool grouped = *lookahead.cursor == '*' || *lookahead.cursor == '&' || *lookahead.cursor == '(' || *lookahead.cursor == '['
 			|| decl_pointer_kind (&lookahead) != R_TYPE_POINTER_DEFAULT
-			|| (context == R_TYPE_DECL_CONTEXT_NAMED && decl_ident_start (*lookahead.cursor) && !decl_name_keyword (&lookahead));
+			|| (context == R_TYPE_DECL_CONTEXT_NAMED && decl_ident_start (*lookahead.cursor) && !decl_name_keyword (&lookahead) && (!parameter || !decl_visible_type (parser, lookahead.cursor)));
 		if (grouped) {
 			parser->cursor++;
-			if (decl_declarator (parser, chain, name, context)) {
+			if (decl_declarator (parser, chain, name, context, parameter)) {
 				if (*parser->cursor == ')') {
 					parser->cursor++;
 				} else {
@@ -434,6 +477,9 @@ static bool decl_declarator(DeclParser *parser, DeclChain *chain, char **name, R
 	if (pointers.head) {
 		chain->tail = pointers.tail;
 	}
+	while (r_list_length (parser->ordinary) > bindings) {
+		r_list_pop (parser->ordinary);
+	}
 	parser->depth--;
 	return !parser->error;
 }
@@ -446,7 +492,7 @@ static RTypeDecl *decl_parse(DeclParser *parser, RTypeDeclContext context, bool 
 	RTypeDecl *decl = R_NEW0 (RTypeDecl);
 	DeclChain chain = { 0 };
 	chain.tail = &chain.head;
-	bool ok = decl_declarator (parser, &chain, &decl->name, context);
+	bool ok = decl_declarator (parser, &chain, &decl->name, context, !require_name);
 	if (ok && require_name && !decl->name) {
 		ok = decl_error (parser, "Expected a declaration name");
 	}
@@ -459,7 +505,7 @@ static RTypeDecl *decl_parse(DeclParser *parser, RTypeDeclContext context, bool 
 	return decl;
 }
 
-R_API R_OWNED RTypeDecl *r_type_decl_parse(const char *text, RTypeDeclContext context, char **error) {
+R_API R_OWNED RTypeDecl *r_type_decl_parse(const char *text, RTypeDeclContext context, Sdb *types, char **error) {
 	R_RETURN_VAL_IF_FAIL (text && (context == R_TYPE_DECL_CONTEXT_NAMED || context == R_TYPE_DECL_CONTEXT_ABSTRACT), NULL);
 	if (error) {
 		*error = NULL;
@@ -470,7 +516,7 @@ R_API R_OWNED RTypeDecl *r_type_decl_parse(const char *text, RTypeDeclContext co
 		}
 		return NULL;
 	}
-	DeclParser parser = { .text = text, .cursor = text };
+	DeclParser parser = { .text = text, .cursor = text, .types = types, .ordinary = r_list_new () };
 	RTypeDecl *decl = decl_parse (&parser, context, context == R_TYPE_DECL_CONTEXT_NAMED);
 	if (decl) {
 		if (*parser.cursor == ';') {
@@ -486,6 +532,7 @@ R_API R_OWNED RTypeDecl *r_type_decl_parse(const char *text, RTypeDeclContext co
 	if (error && parser.error) {
 		*error = r_str_newf ("at offset %zu: %s", (size_t)(parser.cursor - parser.text), parser.error);
 	}
+	r_list_free (parser.ordinary);
 	return decl;
 }
 

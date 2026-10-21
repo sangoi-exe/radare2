@@ -22,8 +22,8 @@ R_API bool r_type_set(Sdb *TDB, ut64 at, const char *field, ut64 val) {
 	return false;
 }
 
-static char *type_unqualified(const char *type) {
-	RTypeDecl *decl = r_type_decl_parse (type, R_TYPE_DECL_CONTEXT_ABSTRACT, NULL);
+static char *type_unqualified(Sdb *types, const char *type) {
+	RTypeDecl *decl = r_type_decl_parse (type, R_TYPE_DECL_CONTEXT_ABSTRACT, types, NULL);
 	if (!decl || decl->name) {
 		r_type_decl_free (decl);
 		return NULL;
@@ -51,7 +51,7 @@ static const char *type_aggregate_prefixed(const char *R_NONNULL type, const cha
 
 R_API RTypeKind r_type_kind(Sdb *TDB, const char *name) {
 	R_RETURN_VAL_IF_FAIL (TDB && name, R_TYPE_INVALID);
-	RTypeDecl *decl = r_type_decl_parse (name, R_TYPE_DECL_CONTEXT_ABSTRACT, NULL);
+	RTypeDecl *decl = r_type_decl_parse (name, R_TYPE_DECL_CONTEXT_ABSTRACT, TDB, NULL);
 	if (!decl || decl->name || decl->type->kind != R_TYPE_DECL_BASE) {
 		r_type_decl_free (decl);
 		return R_TYPE_INVALID;
@@ -239,7 +239,7 @@ static inline const char *typedef_target(Sdb *R_NONNULL TDB, const char *R_NONNU
 R_API R_OWNED char *r_type_resolve_typedef(Sdb *R_NONNULL TDB, const char *R_NONNULL type) {
 	R_RETURN_VAL_IF_FAIL (TDB && type, NULL);
 	// a typedef may be spelled with qualifiers; the sdb keys it bare
-	char *normalized = type_unqualified (type);
+	char *normalized = type_unqualified (TDB, type);
 	if (!normalized) {
 		return NULL;
 	}
@@ -295,7 +295,7 @@ static bool type_name_is_signed(const char *R_NONNULL t) {
 R_API bool r_type_is_signed(Sdb *TDB, const char *type) {
 	R_RETURN_VAL_IF_FAIL (TDB && type, false);
 	char *resolved = r_type_resolve_typedef (TDB, type);
-	RTypeDecl *decl = r_type_decl_parse (resolved? resolved: type, R_TYPE_DECL_CONTEXT_ABSTRACT, NULL);
+	RTypeDecl *decl = r_type_decl_parse (resolved? resolved: type, R_TYPE_DECL_CONTEXT_ABSTRACT, TDB, NULL);
 	bool result = decl && !decl->name && decl->type->kind == R_TYPE_DECL_BASE && type_name_is_signed (decl->type->base.name);
 	r_type_decl_free (decl);
 	free (resolved);
@@ -310,7 +310,7 @@ static bool type_kind_is_aggregate(const char *R_NONNULL kind) {
 
 static const char *type_aggregate_kind(Sdb *TDB, const char *type, char **name) {
 	*name = NULL;
-	RTypeDecl *decl = r_type_decl_parse (type, R_TYPE_DECL_CONTEXT_ABSTRACT, NULL);
+	RTypeDecl *decl = r_type_decl_parse (type, R_TYPE_DECL_CONTEXT_ABSTRACT, TDB, NULL);
 	if (!decl || decl->name || decl->type->kind != R_TYPE_DECL_BASE) {
 		r_type_decl_free (decl);
 		return NULL;
@@ -519,7 +519,7 @@ static char *type_format(Sdb *TDB, const char *t, int depth);
 static char *type_format_base(Sdb *TDB, const char *t, int depth);
 
 static RTypeDecl *type_format_resolve(Sdb *db, const char *text, RTypeDeclNode **element, ut64 *elements) {
-	RTypeDecl *decl = r_type_decl_parse (text, R_TYPE_DECL_CONTEXT_ABSTRACT, NULL);
+	RTypeDecl *decl = r_type_decl_parse (text, R_TYPE_DECL_CONTEXT_ABSTRACT, db, NULL);
 	*elements = 1;
 	int depth;
 	for (depth = 0; decl && !decl->name && depth < TYPE_CHAIN_MAX; depth++) {
@@ -537,7 +537,7 @@ static RTypeDecl *type_format_resolve(Sdb *db, const char *text, RTypeDeclNode *
 			*element = node;
 			return decl;
 		}
-		RTypeDecl *next = r_type_decl_parse (target, R_TYPE_DECL_CONTEXT_ABSTRACT, NULL);
+		RTypeDecl *next = r_type_decl_parse (target, R_TYPE_DECL_CONTEXT_ABSTRACT, db, NULL);
 		r_type_decl_free (decl);
 		decl = next;
 	}

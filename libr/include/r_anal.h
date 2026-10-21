@@ -1241,8 +1241,8 @@ R_API int r_anal_function_loops(RAnalFunction *fcn);
 R_API void r_anal_trim_jmprefs(RAnal *anal, RAnalFunction *fcn);
 R_API void r_anal_del_jmprefs(RAnal *anal, RAnalFunction *fcn);
 R_API RAnalFunction *r_anal_function_next(RAnal *anal, ut64 addr);
-// Parse one named function signature, defaulting an omitted result to void; free with r_type_decl_free.
-R_API R_OWNED RTypeDecl *r_anal_function_signature_parse(const char * R_NONNULL signature, char ** R_NULLABLE error);
+// Parse one named function signature with the visible type bindings, defaulting an omitted result to void; free with r_type_decl_free.
+R_API R_OWNED RTypeDecl *r_anal_function_signature_parse(const char * R_NONNULL signature, Sdb * R_NULLABLE types, char ** R_NULLABLE error);
 typedef struct r_anal_function_signature_prepared_t RAnalFunctionSignaturePrepared;
 typedef enum {
 	R_ANAL_SIGNATURE_APPLY_SHARED,

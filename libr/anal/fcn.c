@@ -3072,9 +3072,9 @@ static void function_param_free(RAnalFunctionParam *param) {
 	free (param);
 }
 
-static RTypeDecl *function_param_decl(const RAnalFunctionParam *param) {
+static RTypeDecl *function_param_decl(Sdb *types, const RAnalFunctionParam *param) {
 	R_RETURN_VAL_IF_FAIL (param && param->type, NULL);
-	RTypeDecl *decl = r_type_decl_parse (param->type, R_TYPE_DECL_CONTEXT_ABSTRACT, NULL);
+	RTypeDecl *decl = r_type_decl_parse (param->type, R_TYPE_DECL_CONTEXT_ABSTRACT, types, NULL);
 	if (decl && R_STR_ISNOTEMPTY (param->name)) {
 		free (decl->name);
 		decl->name = strdup (param->name);
@@ -3101,7 +3101,7 @@ static const RAnalFunctionParam *function_signature_default_param(const RAnalFun
 	return tmp;
 }
 
-static char *function_signature_string(const char *name, const char *ret_type, RList *params, RTypeFunctionPrototype prototype, bool sanitize_name, bool fill_defaults) {
+static char *function_signature_string(Sdb *types, const char *name, const char *ret_type, RList *params, RTypeFunctionPrototype prototype, bool sanitize_name, bool fill_defaults) {
 	RListIter *iter;
 	RAnalFunctionParam *param;
 	char *sane = NULL;
@@ -3110,7 +3110,7 @@ static char *function_signature_string(const char *name, const char *ret_type, R
 	bool ok = true;
 
 	R_RETURN_VAL_IF_FAIL (name, NULL);
-	RTypeDecl *decl = r_type_decl_parse (r_str_get_fail (ret_type, "void"), R_TYPE_DECL_CONTEXT_ABSTRACT, NULL);
+	RTypeDecl *decl = r_type_decl_parse (r_str_get_fail (ret_type, "void"), R_TYPE_DECL_CONTEXT_ABSTRACT, types, NULL);
 	if (!decl) {
 		return NULL;
 	}
@@ -3133,7 +3133,7 @@ static char *function_signature_string(const char *name, const char *ret_type, R
 				function->function.variadic = true;
 				ok = !iter->n;
 			} else {
-				RTypeDecl *arg = function_param_decl (current);
+				RTypeDecl *arg = function_param_decl (types, current);
 				ok = arg && r_list_append (function->function.parameters, arg);
 				if (!ok) {
 					r_type_decl_free (arg);
@@ -3323,6 +3323,7 @@ R_API RAnalFunctionSignature *r_anal_function_get_signature(RAnalFunction *funct
 	RTypeFunctionPrototype rendered_prototype = argc >= 0? signature->prototype: R_TYPE_FUNC_PROTOTYPE_UNKNOWN;
 	// the declaration carries the function's own name; the key is only a lookup handle
 	signature->signature = function_signature_string (
+		anal->sdb_types,
 		R_STR_ISNOTEMPTY (function->name)? function->name: type_name,
 		signature->ret_type, signature->params, rendered_prototype, true, false);
 	if (!signature->signature) {
@@ -3385,7 +3386,7 @@ R_API bool r_anal_function_set_signature(RAnal *anal, RAnalFunction *fcn, const 
 	if (callconv) {
 		resolved_callconv = strdup (callconv);
 	}
-	decl = function_signature_string (type_name, resolved_ret_type, signature->params, signature->prototype, false, true);
+	decl = function_signature_string (anal->sdb_types, type_name, resolved_ret_type, signature->params, signature->prototype, false, true);
 	if (decl) {
 		ok = r_anal_str_to_fcn (anal, fcn, decl);
 		if (ok) {
@@ -3407,7 +3408,7 @@ R_API bool r_anal_function_set_signature(RAnal *anal, RAnalFunction *fcn, const 
 	return ok;
 }
 
-R_API R_OWNED RTypeDecl *r_anal_function_signature_parse(const char *sig, char **error) {
+R_API R_OWNED RTypeDecl *r_anal_function_signature_parse(const char *sig, Sdb *types, char **error) {
 	R_RETURN_VAL_IF_FAIL (sig, NULL);
 	if (error) {
 		*error = NULL;
@@ -3420,7 +3421,7 @@ R_API R_OWNED RTypeDecl *r_anal_function_signature_parse(const char *sig, char *
 	while (length && (isspace ((ut8)text[length - 1]) || text[length - 1] == ';')) {
 		text[--length] = 0;
 	}
-	RTypeDecl *decl = r_type_decl_parse (text, R_TYPE_DECL_CONTEXT_NAMED, error);
+	RTypeDecl *decl = r_type_decl_parse (text, R_TYPE_DECL_CONTEXT_NAMED, types, error);
 	if (!decl) {
 		const char *name = r_str_trim_head_ro (text);
 		const char *end = name;
@@ -3436,7 +3437,7 @@ R_API R_OWNED RTypeDecl *r_anal_function_signature_parse(const char *sig, char *
 				free (*error);
 				*error = NULL;
 			}
-			decl = explicit_return? r_type_decl_parse (explicit_return, R_TYPE_DECL_CONTEXT_NAMED, error): NULL;
+			decl = explicit_return? r_type_decl_parse (explicit_return, R_TYPE_DECL_CONTEXT_NAMED, types, error): NULL;
 			free (explicit_return);
 		}
 	}
@@ -3474,7 +3475,7 @@ R_API const char *r_anal_function_signature_prepared_name(const RAnalFunctionSig
 
 R_API RAnalFunctionSignaturePrepared *r_anal_function_signature_prepare(RAnal *anal, const char *sig, char **error) {
 	R_RETURN_VAL_IF_FAIL (anal && sig, NULL);
-	RTypeDecl *decl = r_anal_function_signature_parse (sig, error);
+	RTypeDecl *decl = r_anal_function_signature_parse (sig, anal->sdb_types, error);
 	char *text = decl? r_type_decl_render (decl, true): NULL;
 	char *normalized = text? r_str_newf ("%s;", text): NULL;
 	free (text);

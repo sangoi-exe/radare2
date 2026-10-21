@@ -598,7 +598,7 @@ bool test_r_anal_function_signature_parse_requires_a_named_function(void) {
 	size_t i;
 	for (i = 0; i < R_ARRAY_SIZE (inputs); i++) {
 		char *error = NULL;
-		RTypeDecl *decl = r_anal_function_signature_parse (inputs[i], &error);
+		RTypeDecl *decl = r_anal_function_signature_parse (inputs[i], NULL, &error);
 		mu_assert_notnull (decl, "prepare a named normalized signature");
 		mu_assert_null (error, "valid named signature has no diagnostic");
 		mu_assert_streq (decl->name, names[i], "normalization exposes the actual function name");
@@ -608,11 +608,40 @@ bool test_r_anal_function_signature_parse_requires_a_named_function(void) {
 	const char *invalid[] = { "int (*)(int)", "int object", "int (object)", "Result (object)", "int()", "void()", "const()", "struct()", "if()", "int malformed(" };
 	for (i = 0; i < R_ARRAY_SIZE (invalid); i++) {
 		char *error = NULL;
-		RTypeDecl *decl = r_anal_function_signature_parse (invalid[i], &error);
+		RTypeDecl *decl = r_anal_function_signature_parse (invalid[i], NULL, &error);
 		mu_assert_null (decl, "signature preparation does not invent a function name");
 		mu_assert_notnull (error, "invalid named signature reports its failure");
 		free (error);
 	}
+	mu_end;
+}
+
+bool test_r_anal_function_signature_visible_typedef(void) {
+	RAnal *anal = r_anal_new ();
+	char *error = NULL;
+	mu_assert_true (r_anal_import_c_decls (anal, "typedef int T;", &error), "make the analysis typedef visible to signature admission");
+	const char *inputs[] = { "int f(int (T))", "int h(int (T,T))", "int g(int (*)(T))", "int control(int (value))" };
+	const char *names[] = { "f", "h", "g", "control" };
+	const char *types[] = { "int (*)(T)", "int (*)(T, T)", "int (*)(T)", "int" };
+	size_t i;
+	for (i = 0; i < R_ARRAY_SIZE (inputs); i++) {
+		RAnalFunction *fcn = r_anal_create_function (anal, names[i], 0x1000 + i * 0x10, R_ANAL_FCN_TYPE_FCN, NULL);
+		RAnalFunctionSignaturePrepared *prepared = r_anal_function_signature_prepare (anal, inputs[i], &error);
+		mu_assert_notnull (prepared, "prepare the signature using visible analysis bindings before normalization");
+		mu_assert_null (error, "contextual signature admission has no diagnostic");
+		mu_assert_true (r_anal_function_signature_apply (anal, fcn, prepared, R_ANAL_SIGNATURE_APPLY_SHARED), "apply the admitted callback signature");
+		r_anal_function_signature_prepared_free (prepared);
+		RAnalFunctionSignature *signature = r_anal_function_get_signature (fcn);
+		mu_assert_notnull (signature, "read back the real applied signature");
+		RAnalFunctionParam *param = r_list_first (signature->params);
+		mu_assert_notnull (param, "applied signature retains its parameter");
+		mu_assert_streq (param->type, types[i], "normalization and application preserve the contextual parameter category");
+		if (i == 3) {
+			mu_assert_streq (param->name, "value", "grouped ordinary parameter keeps its name");
+		}
+		r_anal_function_signature_free (signature);
+	}
+	r_anal_free (anal);
 	mu_end;
 }
 
@@ -740,7 +769,7 @@ bool test_r_anal_function_signature_empty_list_specificity(void) {
 
 bool test_r_anal_function_signature_grouped_name(void) {
 	char *error = NULL;
-	RTypeDecl *decl = r_anal_function_signature_parse ("int (grouped)(int)", &error);
+	RTypeDecl *decl = r_anal_function_signature_parse ("int (grouped)(int)", NULL, &error);
 	mu_assert_notnull (decl, "grouped function identifier is a named signature");
 	mu_assert_null (error, "grouped function name has no diagnostic");
 	mu_assert_streq (decl->name, "grouped", "signature preparation retains the actual grouped function name");
@@ -751,7 +780,7 @@ bool test_r_anal_function_signature_grouped_name(void) {
 	mu_assert_null (param->name, "an unnamed int parameter remains unnamed");
 	mu_assert_streq (param->type->base.name, "int", "the parameter retains its type");
 	r_type_decl_free (decl);
-	decl = r_anal_function_signature_parse ("int (object)", &error);
+	decl = r_anal_function_signature_parse ("int (object)", NULL, &error);
 	mu_assert_null (decl, "a grouped object declaration must not become a signature named int");
 	mu_assert_notnull (error, "a grouped object reports signature rejection");
 	free (error);
@@ -1786,6 +1815,7 @@ int all_tests(void) {
 	mu_run_test (test_r_anal_function_set_signature_rejects_invalid_declarators);
 	mu_run_test (test_r_anal_str_to_fcn_defaults_omitted_return_type);
 	mu_run_test (test_r_anal_function_signature_parse_requires_a_named_function);
+	mu_run_test (test_r_anal_function_signature_visible_typedef);
 	mu_run_test (test_r_anal_function_signature_prototype_roundtrip);
 	mu_run_test (test_r_anal_function_set_signature_refuses_incomplete_fixed_snapshot);
 	mu_run_test (test_r_anal_function_signature_empty_list_specificity);

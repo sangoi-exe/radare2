@@ -392,10 +392,13 @@ static char *kvc_resolve_typedef(KVCParser *kvc, const char *name) {
 	return r_type_resolve_typedef (kvc->types, name);
 }
 
+static void kvc_sync_types(KVCParser *kvc);
+
 static RTypeDecl *kvc_declaration(KVCParser *kvc, RStrs span) {
+	kvc_sync_types (kvc);
 	char *text = collapse_whitespace (span);
 	char *error = NULL;
-	RTypeDecl *decl = text? r_type_decl_parse (text, R_TYPE_DECL_CONTEXT_NAMED, &error): NULL;
+	RTypeDecl *decl = text? r_type_decl_parse (text, R_TYPE_DECL_CONTEXT_NAMED, kvc->types, &error): NULL;
 	if (!decl) {
 		kvc_error (kvc, error? error: "Cannot parse declaration");
 	}
@@ -416,7 +419,7 @@ static void emit_func_signature(KVCParser *kvc, const char *name, const RTypeDec
 		RTypeDeclNode *type_node = param->type;
 		if (type_node->kind == R_TYPE_DECL_BASE) {
 			char *target = kvc_resolve_typedef (kvc, type_node->base.name);
-			resolved = target? r_type_decl_parse (target, R_TYPE_DECL_CONTEXT_ABSTRACT, NULL): NULL;
+			resolved = target? r_type_decl_parse (target, R_TYPE_DECL_CONTEXT_ABSTRACT, kvc->types, NULL): NULL;
 			free (target);
 			if (resolved) {
 				type_node = resolved->type;

@@ -178,7 +178,7 @@ static bool array_type_info(RAnal *anal, const char *type, ArrayTypeInfo *info) 
 	if (R_STR_ISEMPTY (type)) {
 		return false;
 	}
-	RTypeDecl *decl = r_type_decl_parse (type, R_TYPE_DECL_CONTEXT_ABSTRACT, NULL);
+	RTypeDecl *decl = r_type_decl_parse (type, R_TYPE_DECL_CONTEXT_ABSTRACT, anal->sdb_types, NULL);
 	if (!decl || decl->name || decl->type->kind != R_TYPE_DECL_ARRAY) {
 		r_type_decl_free (decl);
 		return false;
