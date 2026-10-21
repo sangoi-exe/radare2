@@ -168,45 +168,45 @@ R_API bool r_anal_function_rebase_vars(RAnal *a, RAnalFunction *fcn) {
 	return true;
 }
 
-// Element size (bytes) and count of an array type like "char[4]"/"int[9][9]".
-// False if it is not a sized array (unknown element type or missing [N]).
-static bool array_type_info(RAnal *anal, const char *type, int *esize, int *count) {
-	const char *br = type? strchr (type, '['): NULL;
-	if (!br) {
+typedef struct {
+	ut64 size;
+	ut64 element_size;
+	ut64 count;
+} ArrayTypeInfo;
+
+static bool array_type_info(RAnal *anal, const char *type, ArrayTypeInfo *info) {
+	if (R_STR_ISEMPTY (type)) {
 		return false;
 	}
-	char *base = r_str_ndup (type, br - type);
-	if (!base) {
+	RTypeDecl *decl = r_type_decl_parse (type, NULL);
+	if (!decl || decl->name || decl->type->kind != R_TYPE_DECL_ARRAY) {
+		r_type_decl_free (decl);
 		return false;
 	}
-	r_str_trim (base);
-	const ut64 bits = r_anal_type_bitsize (anal, base);
-	free (base);
-	if (bits < 8) {
-		return false;
+	const RTypeDeclNode *element = decl->type;
+	while (element->kind == R_TYPE_DECL_ARRAY) {
+		element = element->child;
 	}
-	ut64 n = 1;
-	const char *p;
-	for (p = br; p; p = strchr (p + 1, '[')) {
-		const int dim = atoi (p + 1);
-		if (dim <= 0) {
-			return false;
-		}
-		n *= (ut64)dim;
+	RTypeLayout layout, element_layout;
+	bool ok = r_type_decl_layout (anal->sdb_types, decl->type, &layout) && layout.bits && !(layout.bits % 8)
+		&& r_type_decl_layout (anal->sdb_types, element, &element_layout) && element_layout.bits >= 8 && !(element_layout.bits % 8);
+	if (ok) {
+		info->size = layout.bits / 8;
+		info->element_size = element_layout.bits / 8;
+		info->count = layout.bits / element_layout.bits;
 	}
-	*esize = bits / 8;
-	*count = (int)n;
-	return true;
+	r_type_decl_free (decl);
+	return ok;
 }
 
 // Bytes a stack variable covers when its type is an aggregate; 0 for anything else
-static int aggregate_extent(RAnal *anal, const RAnalVar *var) {
+static ut64 aggregate_extent(RAnal *anal, const RAnalVar *var) {
 	if (R_STR_ISEMPTY (var->type)) {
 		return 0;
 	}
-	int esize, count;
-	if (array_type_info (anal, var->type, &esize, &count)) {
-		return esize * count;
+	ArrayTypeInfo array;
+	if (array_type_info (anal, var->type, &array)) {
+		return array.size;
 	}
 	char *resolved = r_type_resolve_typedef (anal->sdb_types, var->type);
 	const RTypeKind kind = r_type_kind (anal->sdb_types, resolved? resolved: var->type);
@@ -214,7 +214,8 @@ static int aggregate_extent(RAnal *anal, const RAnalVar *var) {
 	if (kind != R_TYPE_STRUCT && kind != R_TYPE_UNION) {
 		return 0;
 	}
-	return (int)(r_anal_type_bitsize (anal, var->type) / 8);
+	RTypeLayout layout;
+	return r_type_get_layout (anal->sdb_types, var->type, &layout) && !(layout.bits % 8)? layout.bits / 8: 0;
 }
 
 // An aggregate owns its whole extent: drop the stack vars recovery had named inside it
@@ -223,7 +224,7 @@ static void shadow_interior_vars(RAnal *anal, RAnalVar *var) {
 	if (var->kind != R_ANAL_VAR_KIND_SPV && var->kind != R_ANAL_VAR_KIND_BPV) {
 		return;
 	}
-	const int extent = aggregate_extent (anal, var);
+	const ut64 extent = aggregate_extent (anal, var);
 	if (extent < 2) {
 		return;
 	}
@@ -234,7 +235,7 @@ static void shadow_interior_vars(RAnal *anal, RAnalVar *var) {
 	RAnalVar **it;
 	R_VEC_FOREACH (vars, it) {
 		RAnalVar *other = *it;
-		if (other != var && other->kind == var->kind && other->delta > var->delta && other->delta < var->delta + extent) {
+		if (other != var && other->kind == var->kind && other->delta > var->delta && (ut64)other->delta - (ut64)var->delta < extent) {
 			r_anal_var_delete (anal, other);
 		}
 	}
@@ -696,10 +697,10 @@ R_API st64 r_anal_function_get_var_stackptr_at(RAnalFunction *fcn, st64 delta, u
 	RAnalVar **it;
 	R_VEC_FOREACH (inst_accesses, it) {
 		RAnalVar *v = *it;
-		int esize, count;
+		ArrayTypeInfo array;
 		if (v->delta == delta || (v->kind != R_ANAL_VAR_KIND_REG && delta > v->delta
-			&& array_type_info (fcn->anal, v->type, &esize, &count)
-			&& delta - v->delta < (st64)esize * count)) {
+			&& array_type_info (fcn->anal, v->type, &array)
+			&& (ut64)delta - (ut64)v->delta < array.size)) {
 			var = v;
 			break;
 		}
@@ -718,7 +719,9 @@ R_API st64 r_anal_function_get_var_stackptr_at(RAnalFunction *fcn, st64 delta, u
 		return ST64_MAX;
 	}
 	// An array access records its base displacement at this instruction, including SP adjustments.
-	return acc->stackptr + delta - var->delta;
+	st64 interior = (ut64)delta - (ut64)var->delta;
+	st64 stackptr;
+	return r_add_overflow_st64 (acc->stackptr, interior, &stackptr)? ST64_MAX: stackptr;
 }
 
 R_API const char *r_anal_function_get_var_reg_at(RAnalFunction *fcn, st64 delta, ut64 addr) {
@@ -1108,13 +1111,14 @@ static bool var_add_structure_fields_to_list(RAnal *a, RAnalVar *av, RList *list
 		free (type_key);
 		return true;
 	}
-	int esize, count;
-	if (av->type && array_type_info (a, av->type, &esize, &count) && count >= 2 && count <= 256) {
+	ArrayTypeInfo array;
+	if (array_type_info (a, av->type, &array) && array.count >= 2 && array.count <= 256) {
+		const int count = array.count;
 		int i;
 		for (i = 0; i < count; i++) {
 			RAnalVarField *field = R_NEW0 (RAnalVarField);
 			field->name = i? r_str_newf ("%s[%d]", av->name, i): strdup (av->name);
-			field->delta = av->delta + i * esize;
+			field->delta = (st64)av->delta + (st64)array.element_size * i;
 			field->field = true;
 			r_list_append (list, field);
 		}
@@ -1182,15 +1186,15 @@ static RAnalVar *get_stack_var(RAnal *anal, RAnalFunction *fcn, int delta, int a
 		if (is_stack && var->delta == delta) {
 			return var;
 		}
-		if (fuzzy && is_stack && access_size > 0 && access_size < var_size && delta > var->delta && delta < var->delta + var_size) {
+		if (fuzzy && is_stack && access_size > 0 && access_size < var_size && delta > var->delta && delta < (st64)var->delta + var_size) {
 			return var;
 		}
 		// An address taken inside a variable the function stores to belongs to
 		// that variable: the store fixed the extent, and lea establishes none.
 		if (is_stack && addr_taken && delta > var->delta
 			&& R_STR_ISNOTEMPTY (var->type) && var_is_written (var)) {
-			const int extent = (int)(r_anal_type_bitsize (anal, var->type) / 8);
-			if (extent > 0 && delta < var->delta + extent) {
+			const ut64 extent = r_anal_type_bitsize (anal, var->type) / 8;
+			if (extent && (ut64)delta - (ut64)var->delta < extent) {
 				return var;
 			}
 		}

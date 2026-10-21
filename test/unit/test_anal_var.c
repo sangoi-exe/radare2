@@ -321,9 +321,183 @@ bool test_r_anal_var_rename_meta(void) {
 	mu_end;
 }
 
+static bool test_r_anal_var_array_layout(void) {
+	const char *types[] = { "uint16_t[8]", "uint16_t[010]", "uint16_t[0x8]", "uint16_t[1|2+3]", "uint16_t[2][010]", "uint8_t *[8]", "uint8_t[256]", "uint8_t[257]" };
+	const int counts[] = { 8, 8, 8, 5, 16, 8, 256, 257 };
+	const int strides[] = { 2, 2, 2, 2, 2, 8, 1, 1 };
+	size_t i;
+	for (i = 0; i < R_ARRAY_SIZE (types); i++) {
+		RAnal *anal = r_anal_new ();
+		r_anal_use (anal, "x86");
+		r_anal_set_bits (anal, 64);
+		r_anal_types_reload (anal, R2_PREFIX, NULL, NULL);
+		RAnalFunction *fcn = r_anal_create_function (anal, "arrays", 0x100, R_ANAL_FCN_TYPE_FCN, NULL);
+		const int base = 16;
+		const int size = counts[i] * strides[i];
+		RAnalVar *before = r_anal_function_set_var (fcn, base - 1, R_ANAL_VAR_KIND_BPV, "uint8_t", 1, false, "before");
+		RAnalVar *interior = r_anal_function_set_var (fcn, base + size - 1, R_ANAL_VAR_KIND_BPV, "uint8_t", 1, false, "interior");
+		RAnalVar *after = r_anal_function_set_var (fcn, base + size, R_ANAL_VAR_KIND_BPV, "uint8_t", 1, false, "after");
+		RAnalVar *array = r_anal_function_set_var (fcn, base, R_ANAL_VAR_KIND_BPV, "uint8_t", 1, false, "array");
+		r_anal_var_set_access (anal, interior, "rbp", 0x120, R_PERM_R, base + size - 1);
+		r_anal_var_set_type (anal, array, types[i]);
+		mu_assert_streq (array->type, types[i], "array spelling is preserved while canonical layout determines its extent");
+		mu_assert_null (r_anal_function_get_var_byname (fcn, "interior"), "the complete canonical array shadows an interior variable");
+		mu_assert_ptreq (r_anal_function_get_var_byname (fcn, "before"), before, "preceding variable is not shadowed");
+		mu_assert_ptreq (r_anal_function_get_var_byname (fcn, "after"), after, "the exact array endpoint is outside its extent");
+		RVecAnalVarPtr *used = r_anal_function_get_vars_used_at (fcn, 0x120);
+		mu_assert_true (!used || !RVecAnalVarPtr_length (used), "shadowing removes the old inverse access without transferring it");
+		r_anal_var_set_access (anal, array, "rbp", 0x110, R_PERM_R, 32);
+		mu_assert_eq (r_anal_function_get_var_stackptr_at (fcn, base + size - 1, 0x110), 32 + size - 1, "interior reference lookup uses canonical extent");
+		mu_assert_eq (r_anal_function_get_var_stackptr_at (fcn, base + size, 0x110), ST64_MAX, "reference lookup excludes the array endpoint");
+		RList *fields = r_anal_function_get_var_fields (fcn, R_ANAL_VAR_KIND_BPV);
+		RListIter *iter;
+		RAnalVarField *field;
+		int displayed = 0;
+		bool bounded = false;
+		r_list_foreach (fields, iter, field) {
+			if (!strcmp (field->name, "before") || !strcmp (field->name, "after")) {
+				continue;
+			}
+			if (counts[i] <= 256) {
+				char *expected = displayed? r_str_newf ("array[%d]", displayed): strdup ("array");
+				mu_assert_streq (field->name, expected, "bounded display retains flattened array indices");
+				mu_assert_eq (field->delta, base + displayed * strides[i], "field display uses the canonical element stride");
+				mu_assert_true (field->field, "expanded array entries are fields");
+				free (expected);
+				displayed++;
+			} else {
+				mu_assert_streq (field->name, "array", "large arrays retain one bounded display entry");
+				mu_assert_false (field->field, "large arrays are not partially expanded");
+				bounded = true;
+			}
+		}
+		mu_assert_eq (displayed, counts[i] <= 256? counts[i]: 0, "the existing 256-element display boundary is retained");
+		mu_assert_eq (bounded, counts[i] > 256, "arrays above the display boundary remain visible");
+		r_list_free (fields);
+		assert_sane (anal);
+		r_anal_free (anal);
+	}
+	mu_end;
+}
+
+static bool test_r_anal_var_large_array_extent(void) {
+	RAnal *anal = r_anal_new ();
+	r_anal_use (anal, "x86");
+	r_anal_set_bits (anal, 64);
+	r_anal_types_reload (anal, R2_PREFIX, NULL, NULL);
+	RAnalFunction *fcn = r_anal_create_function (anal, "large", 0x100, R_ANAL_FCN_TYPE_FCN, NULL);
+	RAnalVar *before = r_anal_function_set_var (fcn, -16, R_ANAL_VAR_KIND_BPV, "uint8_t", 1, false, "before");
+	r_anal_function_set_var (fcn, 2147483632, R_ANAL_VAR_KIND_BPV, "uint8_t", 1, false, "interior");
+	RAnalVar *after = r_anal_function_set_var (fcn, 2147483640, R_ANAL_VAR_KIND_BPV, "uint8_t", 1, false, "after");
+	RAnalVar *unrelated = r_anal_function_set_var (fcn, ST32_MAX, R_ANAL_VAR_KIND_BPV, "uint8_t", 1, false, "unrelated");
+	RAnalVar *other_kind = r_anal_function_set_var (fcn, 2147483632, R_ANAL_VAR_KIND_SPV, "uint8_t", 1, false, "other_kind");
+	RAnalVar *array = r_anal_function_set_var (fcn, -8, R_ANAL_VAR_KIND_BPV, "uint8_t", 1, false, "local");
+	r_anal_var_set_type (anal, array, "uint64_t[268435456]");
+	mu_assert_streq (array->type, "uint64_t[268435456]", "the demonstrated large declared type is preserved without a host ceiling");
+	mu_assert_null (r_anal_function_get_var_byname (fcn, "interior"), "the large array owns its actual two-GiB extent");
+	mu_assert_ptreq (r_anal_function_get_var_byname (fcn, "before"), before, "large extent keeps preceding variables");
+	mu_assert_ptreq (r_anal_function_get_var_byname (fcn, "after"), after, "large extent keeps its endpoint");
+	mu_assert_ptreq (r_anal_function_get_var_byname (fcn, "unrelated"), unrelated, "large extent does not wrap into unrelated offsets");
+	mu_assert_ptreq (r_anal_function_get_var_byname (fcn, "other_kind"), other_kind, "large extent does not shadow another location kind");
+	r_anal_var_set_access (anal, array, "rbp", 0x110, R_PERM_R, 40);
+	mu_assert_eq (r_anal_function_get_var_stackptr_at (fcn, 2147483639, 0x110), 2147483687LL, "large interior references retain a wide result");
+	mu_assert_eq (r_anal_function_get_var_stackptr_at (fcn, 2147483640, 0x110), ST64_MAX, "large array endpoint is not an interior reference");
+	mu_assert_eq (r_anal_function_get_var_stackptr_at (fcn, ST64_MAX, 0x110), ST64_MAX, "unrelated extreme offsets do not overflow the extent comparison");
+	RList *fields = r_anal_function_get_var_fields (fcn, R_ANAL_VAR_KIND_BPV);
+	mu_assert_eq (r_list_length (fields), 4, "large array display remains bounded to its base variable");
+	r_list_free (fields);
+	assert_sane (anal);
+	r_anal_free (anal);
+	mu_end;
+}
+
+static bool test_r_anal_var_large_array_stride(void) {
+	RAnal *anal = r_anal_new ();
+	r_anal_use (anal, "x86");
+	r_anal_set_bits (anal, 64);
+	r_anal_types_reload (anal, R2_PREFIX, NULL, NULL);
+	char *error = NULL;
+	mu_assert_true (r_anal_import_c_decls (anal, "typedef uint64_t HugeRow[268435456];", &error), "import a real array alias with a two-GiB row stride");
+	mu_assert_null (error, "large array alias imports without changing its meaning");
+	RAnalFunction *fcn = r_anal_create_function (anal, "stride", 0x100, R_ANAL_FCN_TYPE_FCN, NULL);
+	RAnalVar *array = r_anal_function_set_var (fcn, 16, R_ANAL_VAR_KIND_BPV, "HugeRow[2]", 1, false, "rows");
+	mu_assert_streq (array->type, "HugeRow[2]", "row alias spelling is retained");
+	RList *fields = r_anal_function_get_var_fields (fcn, R_ANAL_VAR_KIND_BPV);
+	mu_assert_eq (r_list_length (fields), 2, "two rows retain the ordinary bounded display behavior");
+	RAnalVarField *field = r_list_first (fields);
+	mu_assert_eq (field->delta, 16, "first row starts at the variable base");
+	field = r_list_last (fields);
+	mu_assert_streq (field->name, "rows[1]", "the second row has the established array field name");
+	mu_assert_eq (field->delta, 2147483664LL, "row offsets wider than int are represented exactly");
+	r_list_free (fields);
+	r_anal_var_set_access (anal, array, "rbp", 0x110, R_PERM_R, 48);
+	mu_assert_eq (r_anal_function_get_var_stackptr_at (fcn, 4294967311LL, 0x110), 4294967343LL, "lookup retains the full four-GiB aggregate extent");
+	mu_assert_eq (r_anal_function_get_var_stackptr_at (fcn, 4294967312LL, 0x110), ST64_MAX, "lookup excludes the full aggregate endpoint");
+	r_anal_var_set_access (anal, array, "rbp", 0x110, R_PERM_R, ST64_MAX - 32);
+	mu_assert_eq (r_anal_function_get_var_stackptr_at (fcn, 40, 0x110), ST64_MAX - 8, "reference arithmetic subtracts the base before adding the displacement");
+	mu_assert_eq (r_anal_function_get_var_stackptr_at (fcn, 56, 0x110), ST64_MAX, "unrepresentable reference results do not wrap");
+	assert_sane (anal);
+	r_anal_free (anal);
+	mu_end;
+}
+
+static bool test_r_anal_var_struct_extent(void) {
+	RAnal *anal = r_anal_new ();
+	r_anal_use (anal, "x86");
+	r_anal_set_bits (anal, 64);
+	r_anal_types_reload (anal, R2_PREFIX, NULL, NULL);
+	char *error = NULL;
+	mu_assert_true (r_anal_import_c_decls (anal, "struct Pair {uint64_t first;uint64_t second;};", &error), "import an ordinary sized aggregate");
+	mu_assert_null (error, "ordinary aggregate layout succeeds");
+	RAnalFunction *fcn = r_anal_create_function (anal, "record", 0x100, R_ANAL_FCN_TYPE_FCN, NULL);
+	RAnalVar *before = r_anal_function_set_var (fcn, -17, R_ANAL_VAR_KIND_BPV, "uint8_t", 1, false, "before");
+	r_anal_function_set_var (fcn, -1, R_ANAL_VAR_KIND_BPV, "uint8_t", 1, false, "interior");
+	RAnalVar *after = r_anal_function_set_var (fcn, 0, R_ANAL_VAR_KIND_BPV, "uint8_t", 1, false, "after");
+	r_anal_function_set_var (fcn, -16, R_ANAL_VAR_KIND_BPV, "Pair", 1, false, "record");
+	mu_assert_null (r_anal_function_get_var_byname (fcn, "interior"), "ordinary sized aggregates retain interior ownership");
+	mu_assert_ptreq (r_anal_function_get_var_byname (fcn, "before"), before, "ordinary aggregates keep preceding variables");
+	mu_assert_ptreq (r_anal_function_get_var_byname (fcn, "after"), after, "ordinary aggregates keep endpoint variables");
+	RList *fields = r_anal_function_get_var_fields (fcn, R_ANAL_VAR_KIND_BPV);
+	mu_assert_eq (r_list_length (fields), 4, "ordinary structure fields and unrelated variables remain visible");
+	r_list_free (fields);
+	assert_sane (anal);
+	r_anal_free (anal);
+	mu_end;
+}
+
+static bool test_r_anal_var_invalid_array_extent(void) {
+	const char *types[] = { "uint8_t[2+BOGUS]", "uint8_t[8junk]", "uint8_t[0]", "uint8_t[]", "uint64_t[18446744073709551615ULL]", "uint8_t (*)[8]" };
+	size_t i;
+	for (i = 0; i < R_ARRAY_SIZE (types); i++) {
+		RAnal *anal = r_anal_new ();
+		r_anal_use (anal, "x86");
+		r_anal_set_bits (anal, 64);
+		r_anal_types_reload (anal, R2_PREFIX, NULL, NULL);
+		RAnalFunction *fcn = r_anal_create_function (anal, "invalid", 0x100, R_ANAL_FCN_TYPE_FCN, NULL);
+		RAnalVar *interior = r_anal_function_set_var (fcn, -15, R_ANAL_VAR_KIND_BPV, "uint8_t", 1, false, "interior");
+		RAnalVar *array = r_anal_function_set_var (fcn, -16, R_ANAL_VAR_KIND_BPV, "uint8_t", 1, false, "array");
+		r_anal_var_set_type (anal, array, types[i]);
+		mu_assert_streq (array->type, types[i], "unsupported bounds and non-array declarations retain their exact type");
+		mu_assert_ptreq (r_anal_function_get_var_byname (fcn, "interior"), interior, "an unknown or non-aggregate extent cannot delete another variable");
+		r_anal_var_set_access (anal, array, "rbp", 0x110, R_PERM_R, -16);
+		mu_assert_eq (r_anal_function_get_var_stackptr_at (fcn, -15, 0x110), ST64_MAX, "reference lookup does not guess an array extent");
+		RList *fields = r_anal_function_get_var_fields (fcn, R_ANAL_VAR_KIND_BPV);
+		mu_assert_eq (r_list_length (fields), 2, "unsupported arrays and pointers to arrays are not expanded as sized arrays");
+		r_list_free (fields);
+		assert_sane (anal);
+		r_anal_free (anal);
+	}
+	mu_end;
+}
+
 int all_tests(void) {
 	mu_run_test (test_r_anal_var);
 	mu_run_test (test_r_anal_var_rename_meta);
+	mu_run_test (test_r_anal_var_array_layout);
+	mu_run_test (test_r_anal_var_large_array_extent);
+	mu_run_test (test_r_anal_var_large_array_stride);
+	mu_run_test (test_r_anal_var_struct_extent);
+	mu_run_test (test_r_anal_var_invalid_array_extent);
 	return tests_passed != tests_run;
 }
 
