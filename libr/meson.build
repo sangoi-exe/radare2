@@ -565,7 +565,6 @@ r_util_files = [
   'include/r_util/r_bitset.h',
   'include/r_util/r_buf.h',
   'include/r_util/r_type.h',
-  'include/r_util/r_type_expr.h',
   'include/r_util/r_debruijn.h',
   'include/r_util/r_diff.h',
   'include/r_util/r_bloom.h',

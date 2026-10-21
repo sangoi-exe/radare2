@@ -1,21 +1,6 @@
 /* radare - LGPL - Copyright 2026 - Codex */
 
-#ifndef R_TYPE_EXPR_H
-#define R_TYPE_EXPR_H
-
-#include <r_types.h>
-#include <r_types_overflow.h>
-#include <r_util/r_assert.h>
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-typedef struct {
-	unsigned int int_bits;
-	unsigned int long_bits;
-	unsigned int long_long_bits;
-} RTypeIntegerModel;
+#include <r_util.h>
 
 typedef struct {
 	ut64 bits;
@@ -30,20 +15,20 @@ typedef struct {
 	unsigned int depth;
 } RTypeExprParser;
 
-static inline bool r_type_expr_error(RTypeExprParser *parser, const char *message) {
+static bool r_type_expr_error(RTypeExprParser *parser, const char *message) {
 	if (!parser->error) {
 		parser->error = message;
 	}
 	return false;
 }
 
-static inline void r_type_expr_space(RTypeExprParser *parser) {
+static void r_type_expr_space(RTypeExprParser *parser) {
 	while (isspace ((ut8)*parser->cursor)) {
 		parser->cursor++;
 	}
 }
 
-static inline unsigned int r_type_expr_width(const RTypeIntegerModel *model, unsigned int rank) {
+static unsigned int r_type_expr_width(const RTypeIntegerModel *model, unsigned int rank) {
 	switch (rank) {
 	case 0: return model->int_bits;
 	case 1: return model->long_bits;
@@ -51,20 +36,20 @@ static inline unsigned int r_type_expr_width(const RTypeIntegerModel *model, uns
 	}
 }
 
-static inline ut64 r_type_expr_mask(unsigned int width) {
+static ut64 r_type_expr_mask(unsigned int width) {
 	return UT64_MAX >> (64 - width);
 }
 
-static inline bool r_type_expr_negative(const RTypeIntegerModel *model, RTypeExprValue value) {
+static bool r_type_expr_negative(const RTypeIntegerModel *model, RTypeExprValue value) {
 	return !value.is_unsigned && (value.bits & ((ut64)1 << (r_type_expr_width (model, value.rank) - 1)));
 }
 
-static inline st64 r_type_expr_signed(unsigned int width, ut64 bits) {
+static st64 r_type_expr_signed(unsigned int width, ut64 bits) {
 	ut64 mask = r_type_expr_mask (width);
 	return bits > (mask >> 1)? -1 - (st64)(mask - bits): (st64)bits;
 }
 
-static inline void r_type_expr_convert(const RTypeIntegerModel *model, RTypeExprValue *value, unsigned int rank, bool is_unsigned) {
+static void r_type_expr_convert(const RTypeIntegerModel *model, RTypeExprValue *value, unsigned int rank, bool is_unsigned) {
 	if (r_type_expr_negative (model, *value)) {
 		value->bits |= ~r_type_expr_mask (r_type_expr_width (model, value->rank));
 	}
@@ -73,7 +58,7 @@ static inline void r_type_expr_convert(const RTypeIntegerModel *model, RTypeExpr
 	value->bits &= r_type_expr_mask (r_type_expr_width (model, rank));
 }
 
-static inline void r_type_expr_common(const RTypeIntegerModel *model, RTypeExprValue *left, RTypeExprValue *right) {
+static void r_type_expr_common(const RTypeIntegerModel *model, RTypeExprValue *left, RTypeExprValue *right) {
 	unsigned int rank = R_MAX (left->rank, right->rank);
 	bool is_unsigned = left->is_unsigned;
 	if (left->is_unsigned != right->is_unsigned) {
@@ -86,7 +71,7 @@ static inline void r_type_expr_common(const RTypeIntegerModel *model, RTypeExprV
 	r_type_expr_convert (model, right, rank, is_unsigned);
 }
 
-static inline bool r_type_expr_literal(RTypeExprParser *parser, RTypeExprValue *value) {
+static bool r_type_expr_literal(RTypeExprParser *parser, RTypeExprValue *value) {
 	const char *cursor = parser->cursor;
 	unsigned int base = 10;
 	if (*cursor == '0') {
@@ -149,9 +134,9 @@ static inline bool r_type_expr_literal(RTypeExprParser *parser, RTypeExprValue *
 	return true;
 }
 
-static inline bool r_type_expr_parse(RTypeExprParser *parser, unsigned int precedence, RTypeExprValue *value);
+static bool r_type_expr_parse(RTypeExprParser *parser, unsigned int precedence, RTypeExprValue *value);
 
-static inline bool r_type_expr_unary(RTypeExprParser *parser, RTypeExprValue *value) {
+static bool r_type_expr_unary(RTypeExprParser *parser, RTypeExprValue *value) {
 	if (parser->depth >= 64) {
 		return r_type_expr_error (parser, "Integer expression nesting is too deep");
 	}
@@ -195,7 +180,7 @@ static inline bool r_type_expr_unary(RTypeExprParser *parser, RTypeExprValue *va
 	return ok;
 }
 
-static inline unsigned int r_type_expr_operator(const char *text, unsigned int *length) {
+static unsigned int r_type_expr_operator(const char *text, unsigned int *length) {
 	*length = 1;
 	switch (*text) {
 	case '|': return text[1] == '|'? 0: 1;
@@ -217,7 +202,7 @@ static inline unsigned int r_type_expr_operator(const char *text, unsigned int *
 	}
 }
 
-static inline bool r_type_expr_binary(RTypeExprParser *parser, char op, RTypeExprValue *left, RTypeExprValue right) {
+static bool r_type_expr_binary(RTypeExprParser *parser, char op, RTypeExprValue *left, RTypeExprValue right) {
 	const RTypeIntegerModel *model = parser->model;
 	if (op == '<' || op == '>') {
 		unsigned int width = r_type_expr_width (model, left->rank);
@@ -294,7 +279,7 @@ static inline bool r_type_expr_binary(RTypeExprParser *parser, char op, RTypeExp
 	return true;
 }
 
-static inline bool r_type_expr_parse(RTypeExprParser *parser, unsigned int precedence, RTypeExprValue *value) {
+static bool r_type_expr_parse(RTypeExprParser *parser, unsigned int precedence, RTypeExprValue *value) {
 	if (!r_type_expr_unary (parser, value)) {
 		return false;
 	}
@@ -314,11 +299,7 @@ static inline bool r_type_expr_parse(RTypeExprParser *parser, unsigned int prece
 	}
 }
 
-// R2_XY0: inline until the next ABI boundary; model widths are target value bits, including the sign bit.
-// Supports integer literals with U/L/LL suffixes, (), unary +/- and unsigned ~, and binary + - * / % << >> & ^ |.
-// Refuses missing models, unsupported syntax, signed overflow and representation-dependent signed operations/minima.
-// Empty bounds succeed with zero; nonempty results must be positive. Failure leaves count unchanged; error is borrowed.
-static inline bool r_type_array_bound(const RTypeIntegerModel * R_NULLABLE model, const char * R_NONNULL text, ut64 * R_NONNULL count, const char ** R_NULLABLE error) {
+R_API bool r_type_array_bound(const RTypeIntegerModel * R_NULLABLE model, const char * R_NONNULL text, ut64 * R_NONNULL count, const char ** R_NULLABLE error) {
 	R_RETURN_VAL_IF_FAIL (text && count, false);
 	if (error) {
 		*error = NULL;
@@ -351,8 +332,17 @@ static inline bool r_type_array_bound(const RTypeIntegerModel * R_NULLABLE model
 	return false;
 }
 
-#ifdef __cplusplus
+R_API bool r_type_array_bound_from_db(Sdb * R_NULLABLE db, const char * R_NONNULL text, ut64 * R_NONNULL count, const char ** R_NULLABLE error) {
+	RTypeIntegerModel model = { 0, 0, 0 };
+	if (db) {
+		ut64 int_bits = sdb_num_get (db, "type.int.size", NULL);
+		ut64 long_bits = sdb_num_get (db, "type.long.size", NULL);
+		ut64 long_long_bits = sdb_num_get (db, "type.long long.size", NULL);
+		if (int_bits <= 64 && long_bits <= 64 && long_long_bits <= 64) {
+			model.int_bits = int_bits;
+			model.long_bits = long_bits;
+			model.long_long_bits = long_long_bits;
+		}
+	}
+	return r_type_array_bound (&model, text, count, error);
 }
-#endif
-
-#endif
