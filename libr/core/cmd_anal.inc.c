@@ -5199,6 +5199,41 @@ R_API char *fcnshowr(RAnalFunction *function) {
 	return r_strbuf_drain (sb);
 }
 
+R_API bool r_core_anal_function_set_signature(RCore *core, ut64 addr, const char *signature, char **error) {
+	R_RETURN_VAL_IF_FAIL (core && signature, false);
+	if (error) {
+		*error = NULL;
+	}
+	RAnalFunction *fcn = r_anal_get_fcn_in (core->anal, addr, R_ANAL_FCN_TYPE_NULL);
+	if (!fcn) {
+		if (error) {
+			*error = r_str_newf ("No function defined at 0x%08" PFMT64x, addr);
+		}
+		return false;
+	}
+	char *message = NULL;
+	RAnalFunctionSignaturePrepared *prepared = r_anal_function_signature_prepare (core->anal, signature, &message);
+	bool ok = false;
+	if (prepared) {
+		const char *name = r_anal_function_signature_prepared_name (prepared);
+		if (!strcmp (fcn->name, name) || __setFunctionName (core, fcn->addr, name, false)) {
+			ok = r_anal_function_signature_apply (core->anal, fcn, prepared);
+		} else if (!message) {
+			message = r_str_newf ("Cannot rename function to '%s'", name);
+		}
+	}
+	if (!ok && !message) {
+		message = strdup ("Cannot set function signature");
+	}
+	r_anal_function_signature_prepared_free (prepared);
+	if (error) {
+		*error = message;
+	} else {
+		free (message);
+	}
+	return ok;
+}
+
 static void cmd_afsr(RCore *core, const char *input) {
 	ut64 addr = core->addr;
 	RAnalFunction *f;
@@ -6853,35 +6888,27 @@ static int cmd_af(RCore *core, const char *input) {
 		case 'Q': // "afsQ"
 		case ' ': { // "afs"
 			ut64 addr = core->addr;
-			RAnalFunction *f = r_anal_get_fcn_in (core->anal, addr, R_ANAL_FCN_TYPE_NULL);
-			if (!f) {
-				if (input[2] != 'q' && input[2] != 'Q') {
-					R_LOG_ERROR ("No function defined at 0x%08" PFMT64x, addr);
-				}
-				break;
-			}
 			if (input[2] == ' ') {
 				const char *arg = r_str_trim_head_ro (input + 2);
 				if (R_STR_ISNOTEMPTY (arg)) {
 					char *error = NULL;
-					RAnalFunctionSignaturePrepared *prepared = r_anal_function_signature_prepare (core->anal, arg, &error);
-					bool ok = false;
-					if (prepared) {
-						const char *name = r_anal_function_signature_prepared_name (prepared);
-						if (!strcmp (f->name, name) || __setFunctionName (core, f->addr, name, false)) {
-							ok = r_anal_function_signature_apply (core->anal, f, prepared);
-						}
-					}
+					bool ok = r_core_anal_function_set_signature (core, addr, arg, &error);
 					if (error) {
 						R_LOG_ERROR ("%s", error);
 					}
 					if (!ok) {
 						r_core_return_code (core, R_CMD_RC_FAILURE);
 					}
-					r_anal_function_signature_prepared_free (prepared);
 					free (error);
 					break;
 				}
+			}
+			RAnalFunction *f = r_anal_get_fcn_in (core->anal, addr, R_ANAL_FCN_TYPE_NULL);
+			if (!f) {
+				if (input[2] != 'q' && input[2] != 'Q') {
+					R_LOG_ERROR ("No function defined at 0x%08" PFMT64x, addr);
+				}
+				break;
 			}
 			if (input[2] == 'Q' && f->addr == addr) {
 				break;

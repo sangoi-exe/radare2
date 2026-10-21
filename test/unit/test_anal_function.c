@@ -721,6 +721,95 @@ bool test_r_anal_function_signature_grouped_name(void) {
 	mu_end;
 }
 
+bool test_r_core_anal_function_set_signature(void) {
+	const struct {
+		const char *declaration;
+		const char *parameter_type;
+		RTypeFunctionPrototype prototype;
+	} cases[] = {
+		{ "int grid(uint16_t (*values)[2+3])", "uint16_t (*)[2+3]", R_TYPE_FUNC_PROTOTYPE_FIXED },
+		{ "int grid(uint16_t (*values)[1|2+3])", "uint16_t (*)[1|2+3]", R_TYPE_FUNC_PROTOTYPE_FIXED },
+		{ "int grid(uint16_t (*values)[16>>1])", "uint16_t (*)[16>>1]", R_TYPE_FUNC_PROTOTYPE_FIXED },
+		{ "int grid()", NULL, R_TYPE_FUNC_PROTOTYPE_UNSPECIFIED },
+		{ "int grid(void)", NULL, R_TYPE_FUNC_PROTOTYPE_FIXED }
+	};
+	RCore *core = r_core_new ();
+	RAnalFunction *fcn = r_anal_create_function (core->anal, "original", 0x1000, R_ANAL_FCN_TYPE_FCN, NULL);
+	RAnalBlock *block = r_anal_create_block (core->anal, 0x1000, 8);
+	r_anal_function_add_block (fcn, block);
+	r_unref (block);
+	RFlagItem *flag = r_flag_set_inspace (core->flags, R_FLAGS_FS_FUNCTIONS, "original", 0x1000, 8);
+	r_core_seek (core, 0x2000, false);
+	size_t i;
+	for (i = 0; i < R_ARRAY_SIZE (cases); i++) {
+		char *error = NULL;
+		mu_assert_true (r_core_anal_function_set_signature (core, 0x1002, cases[i].declaration, &error), "apply direct signature at a containing address");
+		mu_assert_null (error, "successful direct signature has no error");
+		mu_assert_eq (core->addr, 0x2000, "direct signature application does not seek");
+		mu_assert_streq (fcn->name, "grid", "direct signature renames the actual containing function");
+		mu_assert_ptreq (r_flag_get (core->flags, "grid"), flag, "direct signature renames the function-owned flag");
+		RAnalFunctionSignature *signature = r_anal_function_get_signature (fcn);
+		mu_assert_notnull (signature, "read the effective direct signature");
+		mu_assert_eq (signature->prototype, cases[i].prototype, "direct signature preserves parameter-list specificity");
+		mu_assert_eq (r_list_length (signature->params), cases[i].parameter_type? 1: 0, "direct signature preserves parameter count");
+		if (cases[i].parameter_type) {
+			RAnalFunctionParam *param = r_list_first (signature->params);
+			mu_assert_streq (param->type, cases[i].parameter_type, "array expression operators reach the canonical signature owner");
+			mu_assert_streq (param->name, "values", "the array parameter keeps its name");
+		}
+		r_anal_function_signature_free (signature);
+	}
+	r_core_free (core);
+	mu_end;
+}
+
+bool test_r_core_anal_function_set_signature_errors(void) {
+	RCore *core = r_core_new ();
+	RAnalFunction *fcn = r_anal_create_function (core->anal, "keep", 0, R_ANAL_FCN_TYPE_FCN, NULL);
+	RAnalFunction *other = r_anal_create_function (core->anal, "taken", 16, R_ANAL_FCN_TYPE_FCN, NULL);
+	RAnalBlock *block = r_anal_create_block (core->anal, 0, 8);
+	r_anal_function_add_block (fcn, block);
+	r_unref (block);
+	mu_assert_true (r_anal_import_c_decls (core->anal, "int keep(int value);long taken(char saved);", NULL), "seed both contracts");
+	RFlagItem *flag = r_flag_set_inspace (core->flags, R_FLAGS_FS_FUNCTIONS, "keep", 0, 8);
+	ut64 function_epoch = r_anal_function_dirty_epoch (fcn);
+	ut64 types_epoch = r_anal_types_dirty_epoch (core->anal);
+	const char *declarations[] = { "int (object)", "char taken(void)", "int absent(void)" };
+	size_t i;
+	for (i = 0; i < R_ARRAY_SIZE (declarations); i++) {
+		char *error = NULL;
+		mu_assert_false (r_core_anal_function_set_signature (core, i == 2? 0x1000: 2, declarations[i], &error), "invalid declaration, duplicate name and absent function fail");
+		mu_assert_notnull (error, "direct signature failure has a diagnostic");
+		mu_assert_true (*error, "direct signature diagnostic is not empty");
+		if (i == 1) {
+			mu_assert_notnull (strstr (error, "taken"), "name-conflict diagnostic identifies the rejected name");
+		} else if (i == 2) {
+			mu_assert_notnull (strstr (error, "No function defined"), "missing-function diagnostic identifies the failure");
+		}
+		free (error);
+		mu_assert_streq (fcn->name, "keep", "failure preserves function identity");
+		mu_assert_streq (other->name, "taken", "failure preserves the conflicting function");
+		mu_assert_ptreq (r_flag_get (core->flags, "keep"), flag, "failure preserves the function-owned flag");
+		mu_assert_streq (r_type_func_ret (core->anal->sdb_types, "keep"), "int", "failure preserves the prior return type");
+		mu_assert_streq (sdb_const_get (core->anal->sdb_types, "func.keep.arg.0", NULL), "int,value", "failure preserves the prior parameter");
+		mu_assert_streq (r_type_func_ret (core->anal->sdb_types, "taken"), "long", "failure preserves the conflicting contract");
+		mu_assert_eq (r_anal_function_dirty_epoch (fcn), function_epoch, "failure leaves function metadata unchanged");
+		mu_assert_eq (r_anal_types_dirty_epoch (core->anal), types_epoch, "failure leaves type metadata unchanged");
+	}
+	mu_assert_false (r_core_anal_function_set_signature (core, 2, "int (object)", NULL), "diagnostic output is optional");
+	core->rc = R_CMD_RC_SUCCESS;
+	r_core_cmd0 (core, "afs char taken(void)");
+	mu_assert_eq (core->rc, R_CMD_RC_FAILURE, "CLI signature dispatch reports the same name-conflict failure");
+	r_core_seek (core, 0x1000, false);
+	core->rc = R_CMD_RC_SUCCESS;
+	r_core_cmd0 (core, "afs int absent(void)");
+	mu_assert_eq (core->rc, R_CMD_RC_FAILURE, "CLI signature dispatch reports the missing-function failure");
+	mu_assert_streq (fcn->name, "keep", "CLI failures preserve the prior identity");
+	mu_assert_streq (r_type_func_ret (core->anal->sdb_types, "keep"), "int", "CLI failures preserve the prior contract");
+	r_core_free (core);
+	mu_end;
+}
+
 bool test_r_core_afs_rejects_grouped_object_without_mutation(void) {
 	RCore *core = r_core_new ();
 	RAnalFunction *fcn = r_anal_create_function (core->anal, "keep", 0, R_ANAL_FCN_TYPE_FCN, NULL);
@@ -1552,6 +1641,8 @@ int all_tests(void) {
 	mu_run_test (test_r_anal_function_signature_prototype_roundtrip);
 	mu_run_test (test_r_anal_function_signature_empty_list_specificity);
 	mu_run_test (test_r_anal_function_signature_grouped_name);
+	mu_run_test (test_r_core_anal_function_set_signature);
+	mu_run_test (test_r_core_anal_function_set_signature_errors);
 	mu_run_test (test_r_core_afs_rejects_grouped_object_without_mutation);
 	mu_run_test (test_r_anal_str_to_fcn_does_not_retry_rejected_header);
 	mu_run_test (test_r_core_afs_preserves_compound_return_name_and_flags);
