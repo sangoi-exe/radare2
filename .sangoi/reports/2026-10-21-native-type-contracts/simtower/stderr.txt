@@ -1,4 +1,3 @@
-ERROR: Cannot find the sleigh home at '/home/lucas/.cache/codex/radare2/native-type-contract-2026-10-21/final-runtime-2p16mosx/install/lib/radare2/6.2.5/r2ghidra_sleigh'. Fix it with `r2pm -ci r2ghidra-sleigh`
 INFO: Borland simtower-runtime-qualified: function FILE 0x000022c9 qualified (including unchanged)
 INFO: Borland simtower-runtime-qualified: function FILE 0x000022db qualified (including unchanged)
 INFO: Borland simtower-runtime-qualified: function FILE 0x000022dc qualified (including unchanged)

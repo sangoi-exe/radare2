@@ -1,6 +1,6 @@
 # Native type-contract corrections
 
-Status: on hold after the final local Code Gate returned DO_NOT_PROCEED. Required material remediation and shared-link command policy await the current user.
+Status: active Remediation review. The current user selected the correction batch and per-function `afs`/MCP isolation; the structured setter retains intentional shared-type behavior. The initial Code Gate's DO_NOT_PROCEED remains the disposition of that earlier candidate.
 
 Authority: [Intent Contract](../planning/2026-10-21-native-type-contract-corrections.md), epoch2. The confirmed public-interface authorization permits the task-required ABI157 break and matching rebuild, not compatibility wrappers, saved-analysis migration, global installation or another push. Exact current-user anchors remain in that contract.
 
@@ -13,7 +13,7 @@ Authority: [Intent Contract](../planning/2026-10-21-native-type-contract-correct
 - The bridge removes the unresolved-declared-type substitution, preserves opaque/recursive alias identities, consumes shared array semantics and flexible tails, and retains explicit source facts while allowing native refinement of unproven analysis guesses. Annotation and format-buffer lifetime defects demonstrated during validation are corrected at their owners.
 - Native patches cover unsized-array codec/output, existing typedef completion, actual-function empty prototypes, union-facing arithmetic and anonymous callback interning. Preparation accepts the documented imported test target's actual outputs while retaining canonical-input refusal.
 
-## Commits and validation
+## Initial candidate commits and validation
 
 Final runtime inputs are host `6fba81631ce4b84f70ed6d6d68b2ff2aef3b96a0`, bridge `0294500175f30613c526580484c66d7160bb882a`, engine `fce4b2c2019da4588d9b51765a2649321c07cb43`, and MCP `51df6714dc5b40822ab421ac685caa4d3da2a0ae`. Source changes and documentation are separate coherent checkpoints where possible. Every new task commit carries the Codex co-author trailer. No remote mutation occurred.
 
@@ -49,4 +49,14 @@ Actual Claude quota failures removed only its BRIDGE reciprocal, PREPARATION fix
 
 Additional review observations remain deferred: existing enum/pointer-typedef namespace reuse, member-attribute and first-lookup/last-record duplicate policies, syntax-only typedef ambiguity, the separately reported 32-bit/Windows long database limit, and inherited non-function name collisions. No blanket new refusal or schema redesign was selected. The duplicate-alignment assertion does not independently prove alignment consistency. Historical sanitizer snapshots do not replace current final-source proof. The older root map date was not treated as evidence that the new owner pointer is wrong.
 
-The current bookkeeping is `bookkeeping memorialization`, and the two-file 91-case clarification is `bundle/proof correction`. Runtime/producer/status corrections remain `substantive runtime/contract fix`; test-route/snapshot corrections are pending `bundle/proof correction`; broader observations are `deferred observation`. No material correction is authorized until the current user decides the recorded package.
+The initial bookkeeping is `bookkeeping memorialization`, and the two-file 91-case clarification is `bundle/proof correction`. Runtime/producer/status corrections are `substantive runtime/contract fix`; test-route/snapshot corrections are `bundle/proof correction`; broader observations remain `deferred observation`.
+
+## Selected remediation
+
+Current-user message `msg_01a15e6f-791f-7d33-b9a7-45a6538715c2` at `2026-10-21T09:28:46.248-03:00` (`America/Sao_Paulo`) selected the recommendations and isolated command policy. Host `f1d71fc9c86777113c2565f7de8b815b53698505` corrects tagged formatting, partial signature writeback, incomplete DWARF serialization, generic Borland admission, per-function Core edits, Linux `strlen` knowledge and direct status/test followers. The private `remediation-runtime-t4sm1del` SDK passes190 unit controls,54 primary CLI controls and42 follower CLI controls. The CLI sets overlap; their counts are not a unique-test total. The actual rebuilt MCP passes38 requests across three sessions, with exactly one response per request, none for notifications, and both explicit/DWARF shared-link peers and source records preserved.
+
+Native runtime `6a4d8bf` and guidance commit `6f7438da7a942c7a1dd728e2dda08faabe8644b4` preserve the existing hidden-return representation through scope cleanup and open-input recovery. The first full native run passed53/54 and exposed earlier symbol cleanup; the admitted existing-owner follower closes that failure. The corrected normal run passes54/54, preparation10/10 and matching reuse. A requested patch-only cleanup was withdrawn after proving the four identical removal/addition pairs preserve tab context under ordinary patch whitespace checks; the qualified patch bytes were restored without semantic changes or another build. No new state, API, calling convention or provenance registry was added for hidden returns.
+
+Root's first primary CLI extraction selected53 cases and lacked the deeper Swift case. Five inputs also ran from the wrong fixture working directory. The corrected54-case run isolated two stale shared-edit assertions, which were updated to check the effective local contract and retained shared source instead of private key spelling. Final54/54 passes. Setup and failing streams remain retained; none is recast as a successful first attempt.
+
+Bridge runtime `40dbd80` and guidance `82d150dcbfffc0f03a91a3e4c3debde8dfd803a5` integrate the native pin and open callbacks/return inputs/zero-size object refusal. The matching two-file run is93/94 plus the corrected sole callback oracle1/1, with unchanged other inputs: compositional94/94, not a claimed second full run. The separate ten-case `ghidra_types` file and exact PPC/fmovmem followers pass12/12 after evidence-backed premise corrections. Fresh three-function C/context captures are byte-identical to the earlier captures; complete XML/MCP observations remain valid with process-dependent space constants distinguished from game addresses. All28 game MCP requests pass, with original bytes unchanged. The [current validation report](../reports/2026-10-21-native-type-contracts/validation.md) records the exact frontier. The new fixed-candidate local Remediation delta review is the remaining completion authority.

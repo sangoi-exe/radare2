@@ -109,14 +109,14 @@
       <addr space="const" offset="0x2" size="2" ref="0x224"/>
       <addr space="const" offset="0x2" size="4" ref="0x3e"/>
       <addr space="const" offset="0x2" size="4" ref="0x4e"/>
-      <addr space="const" offset="0x55ca1f9a9120" size="8" ref="0x98"/>
-      <addr space="const" offset="0x55ca1f9a9120" size="8" ref="0x9c"/>
-      <addr space="const" offset="0x55ca1f9a9120" size="8" ref="0xf2"/>
-      <addr space="const" offset="0x55ca1f9a9120" size="8" ref="0xf6"/>
-      <addr space="const" offset="0x55ca1f9a9120" size="8" ref="0x1cb"/>
-      <addr space="const" offset="0x55ca1f9a9120" size="8" ref="0x1cc"/>
-      <addr space="const" offset="0x55ca1f9a9120" size="8" ref="0x1cd"/>
-      <addr space="const" offset="0x55ca1f9a9120" size="8" ref="0x1ce"/>
+      <addr space="const" offset="0x6307bfb12cf0" size="8" ref="0x98"/>
+      <addr space="const" offset="0x6307bfb12cf0" size="8" ref="0x9c"/>
+      <addr space="const" offset="0x6307bfb12cf0" size="8" ref="0xf2"/>
+      <addr space="const" offset="0x6307bfb12cf0" size="8" ref="0xf6"/>
+      <addr space="const" offset="0x6307bfb12cf0" size="8" ref="0x1cb"/>
+      <addr space="const" offset="0x6307bfb12cf0" size="8" ref="0x1cc"/>
+      <addr space="const" offset="0x6307bfb12cf0" size="8" ref="0x1cd"/>
+      <addr space="const" offset="0x6307bfb12cf0" size="8" ref="0x1ce"/>
       <addr space="unique" offset="0x12300" size="4" ref="0xe2"/>
       <addr space="unique" offset="0x12400" size="2" ref="0xe6"/>
       <addr space="unique" offset="0x12800" size="1" ref="0xf1"/>

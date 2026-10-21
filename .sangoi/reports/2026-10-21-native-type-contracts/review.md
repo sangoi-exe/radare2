@@ -63,6 +63,6 @@ Native Claude plan files are allowed auxiliary artifacts. Separate scratch write
 
 Actual native responses and root analysis remain under `/home/lucas/.cache/codex/radare2/native-type-contract-2026-10-21/local-code-gate/`. The final disposition and this record are `bookkeeping memorialization`. Rejected optional/broader proposals remain `deferred observation`.
 
-## Next authorized action
+## Post-review current-user selection
 
-Request the current user's decision on the recommended material correction batch and shared-link policy. The plan is on hold, with lifecycle still Implementation under the registered DO_NOT_PROCEED transition. No implementation, new Gate or material plan revision is authorized while that decision is unresolved. After selection, use the existing compatible worker/reviewer paths and the resident remediation route; do not reinterpret this negative result as a pass.
+The user confirmed the recommended correction batch and per-function `afs`/MCP isolation in message `msg_01a15e6f-791f-7d33-b9a7-45a6538715c2` at `2026-10-21T09:28:46.248-03:00` (`America/Sao_Paulo`). The structured setter keeps its intentional shared-type behavior. The canonical plan is active in Remediation review, epoch2; the existing execution annex owns bounded Worker corrections. This later decision supersedes the pending-decision state described by the review above without changing its DO_NOT_PROCEED disposition. The next candidate requires its own registered Remediation delta review after implementation, validation and commit.

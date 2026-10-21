@@ -1,9 +1,9 @@
 0x00011140: RETF 
     (unique,0x41c00,4) = CALLOTHER 0x0, SS, SP
-    IP = LOAD 0x591c2747d1a0, (unique,0x41c00,4)
+    IP = LOAD ram[(unique,0x41c00,4)]
     SP = INT_ADD SP, 0x2
     (unique,0x41c00,4) = CALLOTHER 0x0, SS, SP
-    CS = LOAD 0x591c2747d1a0, (unique,0x41c00,4)
+    CS = LOAD ram[(unique,0x41c00,4)]
     SP = INT_ADD SP, 0x2
     EIP = CALLOTHER 0x0, CS, IP
     RETURN EIP

@@ -167,18 +167,18 @@
       <addr space="const" offset="0xfffe" size="2" ref="0x552"/>
       <addr space="const" offset="0xffff" size="2" ref="0x51c"/>
       <addr space="const" offset="0xffff" size="2" ref="0x51d"/>
-      <addr space="const" offset="0x591c2747d1a0" size="8" ref="0x1a9"/>
-      <addr space="const" offset="0x591c2747d1a0" size="8" ref="0x1ad"/>
-      <addr space="const" offset="0x591c2747d1a0" size="8" ref="0x23f"/>
-      <addr space="const" offset="0x591c2747d1a0" size="8" ref="0x243"/>
-      <addr space="const" offset="0x591c2747d1a0" size="8" ref="0x29e"/>
-      <addr space="const" offset="0x591c2747d1a0" size="8" ref="0x2a2"/>
-      <addr space="const" offset="0x591c2747d1a0" size="8" ref="0x4d7"/>
-      <addr space="const" offset="0x591c2747d1a0" size="8" ref="0x4d8"/>
-      <addr space="const" offset="0x591c2747d1a0" size="8" ref="0x4d9"/>
-      <addr space="const" offset="0x591c2747d1a0" size="8" ref="0x4da"/>
-      <addr space="const" offset="0x591c2747d1a0" size="8" ref="0x4db"/>
-      <addr space="const" offset="0x591c2747d1a0" size="8" ref="0x4dc"/>
+      <addr space="const" offset="0x5c8066c06cf0" size="8" ref="0x1a9"/>
+      <addr space="const" offset="0x5c8066c06cf0" size="8" ref="0x1ad"/>
+      <addr space="const" offset="0x5c8066c06cf0" size="8" ref="0x23f"/>
+      <addr space="const" offset="0x5c8066c06cf0" size="8" ref="0x243"/>
+      <addr space="const" offset="0x5c8066c06cf0" size="8" ref="0x29e"/>
+      <addr space="const" offset="0x5c8066c06cf0" size="8" ref="0x2a2"/>
+      <addr space="const" offset="0x5c8066c06cf0" size="8" ref="0x4d7"/>
+      <addr space="const" offset="0x5c8066c06cf0" size="8" ref="0x4d8"/>
+      <addr space="const" offset="0x5c8066c06cf0" size="8" ref="0x4d9"/>
+      <addr space="const" offset="0x5c8066c06cf0" size="8" ref="0x4da"/>
+      <addr space="const" offset="0x5c8066c06cf0" size="8" ref="0x4db"/>
+      <addr space="const" offset="0x5c8066c06cf0" size="8" ref="0x4dc"/>
       <addr space="unique" offset="0x12300" size="4" ref="0x199"/>
       <addr space="unique" offset="0x12300" size="4" ref="0x28e"/>
       <addr space="unique" offset="0x12500" size="2" ref="0x1a0"/>
