@@ -1,6 +1,6 @@
 # Intent Contract: native semantic type fidelity
 
-Status: active
+Status: on-hold
 Task mode: Doctrine
 Lifecycle phase: Implementation
 Strategy epoch: 1
@@ -79,8 +79,8 @@ High-level packages: native qualification representation/access semantics; host 
 
 The runtime exposes no `update_plan`. The one subordinate execution projection is `.sangoi/planning/2026-10-21-native-semantic-type-fidelity-microtasks.md`; it owns only current microtask footprints, dependencies, status and results. This contract remains the sole Scope, route, acceptance and lifecycle owner. Disposable task outputs belong below `/home/lucas/.cache/codex/radare2/native-semantic-type-fidelity-2026-10-21/`.
 
-Current-user decisions open: none for the selected route and first slice. Exact equivalent implementation choices remain with the lead/Workers; a newly required material boundary returns to the user.
+Current-user decision open: c2's shared function-record producer writes `cdecl` even when source syntax supplies no calling convention. Root verified that this producer serves ordinary functions and callbacks, and that removing the fabricated field changes ordinary-function effective defaults as well. The host x86/16 database does not determine the native near/far frame; neither its generic `cdecl` nor pointer width authorizes that choice. Decide whether to remove invented convention metadata at the causal producers and leave omission to the existing active analysis defaults, while requiring faithful admission of explicit conventions. No new default, near/far inference or convention-provenance subsystem is authorized by this pending question.
 Residual-risk acceptance: none.
 Plan audit: `/root/semantic_plan_audit` returned PROCEED with complete Intent Contract coverage and no material findings. The canonical baseline ref was correct; one transcription error in the inline brief was mechanically corrected during that audit. The registered transition enters active Implementation.
-Blocker: none.
-Next action: complete N2 native volatile access effects and T1 host namespace propagation, using the integrated N1 representation and H1 contextual parser; then close the dependent semantic/application and matching-runtime frontiers.
+Blocker: the material ordinary-function default consequence requires a current-user decision before dependent implementation. T1 source is preserved; its already admitted private rebuild/validation may finish, but no further implementation starts during this hold. One existing empty-struct display test also remains unresolved: the historical bare-tag path prints only the name, while the canonical qualified path has no measured layout. Do not invent an extent or expand empty-aggregate support to silence that result.
+Next action: obtain the convention-producer decision and resolve the bounded empty-struct display disposition, then resume T1 integration, flexible-member admission, signature application, bridge semantic conversion and matching-runtime qualification. N1–N4 are integrated native checkpoints, not final whole-task approval.
