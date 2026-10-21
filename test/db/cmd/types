@@ -18,28 +18,30 @@ char,20,0
 EOF
 RUN
 
-NAME=aaft mixed pointer spellings from parallel branches retain char double pointer
+NAME=aaft shipped strtol and parsed pointer types retain char double pointer
 FILE=malloc://512
 ARGS=-a x86 -b 64
 CMDS=<<EOF
 wx 554889e54883ec2085ff7424488b7df8e84b000000eb39 @ 0
-wx 488b7df8e837000000eb15 @ 0x30
+wx 488b75f8e837000000eb15 @ 0x30
 wx c9c3 @ 0x50
 wx c3 @ 0x60
 wx c3 @ 0x70
 af @ 0x60
 afn first @ 0x60
 af @ 0x70
-afn second @ 0x70
-"td int first(char **p);int second(char **p);"
-tk func.second.arg.0=char **,p
+afn strtol @ 0x70
+"td int first(char **p);"
+tk func.strtol.arg.1
 af @ 0
 aaft
 afv @ 0
 EOF
 EXPECT=<<EOF
+char **,endptr
 arg int64_t arg1 @ rdi
-var char ** p @ rbp-0x8
+arg int base @ rdx
+var char ** endptr @ rbp-0x8
 EOF
 RUN
 

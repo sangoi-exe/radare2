@@ -171,7 +171,7 @@ func.setenv.ret=int
 getopt=func
 func.getopt.args=3
 func.getopt.arg.0=int,argc
-func.getopt.arg.1=const char * *,argv
+func.getopt.arg.1=const char **,argv
 func.getopt.arg.2=const char *,optstring
 func.getopt.ret=int
 
@@ -482,28 +482,28 @@ func.imaxdiv.ret=imaxdiv_t
 strtoimax=func
 func.strtoimax.args=3
 func.strtoimax.arg.0=const char *,str
-func.strtoimax.arg.1=char * *,endptr
+func.strtoimax.arg.1=char **,endptr
 func.strtoimax.arg.2=int,base
 func.strtoimax.ret=intmax_t
 
 strtoumax=func
 func.strtoumax.args=3
 func.strtoumax.arg.0=const char *,str
-func.strtoumax.arg.1=char * *,endptr
+func.strtoumax.arg.1=char **,endptr
 func.strtoumax.arg.2=int,base
 func.strtoumax.ret=uintmax_t
 
 wcstoimax=func
 func.wcstoimax.args=3
 func.wcstoimax.arg.0=const,wchar_t*
-func.wcstoimax.arg.1=wchar_t* *,endptr
+func.wcstoimax.arg.1=wchar_t **,endptr
 func.wcstoimax.arg.2=int,base
 func.wcstoimax.ret=intmax_t
 
 wcstoumax=func
 func.wcstoumax.args=3
 func.wcstoumax.arg.0=const,wchar_t*
-func.wcstoumax.arg.1=wchar_t* *,endptr
+func.wcstoumax.arg.1=wchar_t **,endptr
 func.wcstoumax.arg.2=int,base
 func.wcstoumax.ret=uintmax_t
 
@@ -1664,25 +1664,25 @@ func.atoll.ret=long long
 strtod=func
 func.strtod.args=2
 func.strtod.arg.0=const char *,str
-func.strtod.arg.1=char * *,endptr
+func.strtod.arg.1=char **,endptr
 func.strtod.ret=double
 
 strtof=func
 func.strtof.args=2
 func.strtof.arg.0=const char *,str
-func.strtof.arg.1=char * *,endptr
+func.strtof.arg.1=char **,endptr
 func.strtof.ret=float
 
 strtold=func
 func.strtold.args=2
 func.strtold.arg.0=const char *,str
-func.strtold.arg.1=char * *,endptr
+func.strtold.arg.1=char **,endptr
 func.strtold.ret=long double
 
 strtol=func
 func.strtol.args=3
 func.strtol.arg.0=const char *,str
-func.strtol.arg.1=char * *,endptr
+func.strtol.arg.1=char **,endptr
 func.strtol.arg.2=int,base
 func.strtol.ret=long
 
@@ -1709,21 +1709,21 @@ func.atoll.ret=long long
 strtoll=func
 func.strtoll.args=3
 func.strtoll.arg.0=const char *,str
-func.strtoll.arg.1=char * *,endptr
+func.strtoll.arg.1=char **,endptr
 func.strtoll.arg.2=int,base
 func.strtoll.ret=long long
 
 strtoul=func
 func.strtoul.args=3
 func.strtoul.arg.0=const char *,str
-func.strtoul.arg.1=char * *,endptr
+func.strtoul.arg.1=char **,endptr
 func.strtoul.arg.2=int,base
 func.strtoul.ret=long
 
 strtoull=func
 func.strtoull.args=3
 func.strtoull.arg.0=const char *,str
-func.strtoull.arg.1=char * *,endptr
+func.strtoull.arg.1=char **,endptr
 func.strtoull.arg.2=int,base
 func.strtoull.ret=long long
 
@@ -2206,46 +2206,46 @@ func.ungetwc.ret=wint_t
 wcstod=func
 func.wcstod.args=2
 func.wcstod.arg.0=const wchar_t *,nptr
-func.wcstod.arg.1=wchar_t* *,endptr
+func.wcstod.arg.1=wchar_t **,endptr
 func.wcstod.ret=double
 
 wcstof=func
 func.wcstof.args=2
 func.wcstof.arg.0=const wchar_t *,nptr
-func.wcstof.arg.1=wchar_t* *,endptr
+func.wcstof.arg.1=wchar_t **,endptr
 func.wcstof.ret=float
 
 wcstold=func
 func.wcstold.args=2
 func.wcstold.arg.0=const wchar_t *,nptr
-func.wcstold.arg.1=wchar_t* *,endptr
+func.wcstold.arg.1=wchar_t **,endptr
 func.wcstold.ret=long double
 
 wcstol=func
 func.wcstol.args=3
 func.wcstol.arg.0=const wchar_t *,nptr
-func.wcstol.arg.1=wchar_t* *,endptr
+func.wcstol.arg.1=wchar_t **,endptr
 func.wcstol.arg.2=int,base
 func.wcstol.ret=long
 
 wcstoll=func
 func.wcstoll.args=3
 func.wcstoll.arg.0=const wchar_t *,nptr
-func.wcstoll.arg.1=wchar_t* *,endptr
+func.wcstoll.arg.1=wchar_t **,endptr
 func.wcstoll.arg.2=int,base
 func.wcstoll.ret=long long
 
 wcstoul=func
 func.wcstoul.args=3
 func.wcstoul.arg.0=const wchar_t *,nptr
-func.wcstoul.arg.1=wchar_t* *,endptr
+func.wcstoul.arg.1=wchar_t **,endptr
 func.wcstoul.arg.2=int,base
 func.wcstoul.ret=long
 
 wcstoull=func
 func.wcstoull.args=3
 func.wcstoull.arg.0=const wchar_t *,nptr
-func.wcstoull.arg.1=wchar_t* *,endptr
+func.wcstoull.arg.1=wchar_t **,endptr
 func.wcstoull.arg.2=int,base
 func.wcstoull.ret=long long
 
@@ -2370,7 +2370,7 @@ wcstok=func
 func.wcstok.args=3
 func.wcstok.arg.0=wchar_t *,s1
 func.wcstok.arg.1=const wchar_t *,s2
-func.wcstok.arg.2=wchar_t* *,ptr
+func.wcstok.arg.2=wchar_t **,ptr
 func.wcstok.ret=wchar_t*
 
 wmemchr=func
@@ -2463,7 +2463,7 @@ func.wcrtomb.ret=size_t
 mbsrtowcs=func
 func.mbsrtowcs.args=4
 func.mbsrtowcs.arg.0=wchar_t *,dst
-func.mbsrtowcs.arg.1=const char * *,src
+func.mbsrtowcs.arg.1=const char **,src
 func.mbsrtowcs.arg.2=size_t,len
 func.mbsrtowcs.arg.3=mbstate_t *,ps
 func.mbsrtowcs.ret=size_t
@@ -2471,7 +2471,7 @@ func.mbsrtowcs.ret=size_t
 wcsrtombs=func
 func.wcsrtombs.args=4
 func.wcsrtombs.arg.0=char *,dst
-func.wcsrtombs.arg.1=const wchar_t* *,src
+func.wcsrtombs.arg.1=const wchar_t **,src
 func.wcsrtombs.arg.2=size_t,len
 func.wcsrtombs.arg.3=mbstate_t *,ps
 func.wcsrtombs.ret=size_t
