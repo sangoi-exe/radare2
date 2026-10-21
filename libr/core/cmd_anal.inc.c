@@ -1089,7 +1089,7 @@ static RCoreHelpMessage help_msg_ahi = {
 static RCoreHelpMessage help_msg_aht = {
 	"Usage:", "aht[s] [addr|type]", "mark immediate as type offset (moved to aho)",
 	"ahts", " <offset>", "list all matching structure offsets",
-	"aht", " <struct.member>", "change immediate to structure offset",
+	"aht", " <type.member>", "change immediate to a member offset; qualify C tags as struct NAME.member",
 	"aht?", "", "show this help",
 	NULL
 };
@@ -12830,7 +12830,8 @@ static void cmd_anal_hint(RCore *core, const char *input) {
 			// r_anal_hint_set_opcode (a, core->addr, input + 2);
 			const char *off = NULL;
 			char *type = strdup (r_str_trim_head_ro (input + 2));
-			char *idx = strchr (type, ' ');
+			const char *member = R_STR_STARTSWITH_ANY (type, "struct ", "union ")? strchr (type, ' ') + 1: type;
+			char *idx = strchr (member, ' ');
 			if (idx) {
 				*idx++ = 0;
 				off = idx;

@@ -292,18 +292,20 @@ static bool parse_trailing_attributes(KVCParser *kvc) {
 	return parse_attributes (kvc);
 }
 
-static void apply_attributes(KVCParser *kvc, const char *type, const char *scope) {
+static void apply_attributes(KVCParser *kvc, const char *type, const char *scope, RTypeNamespace space) {
+	char *prefix = r_type_identifier_key ("", space);
 	KVCAttr *attr;
 	R_VEC_FOREACH (&kvc->attrs, attr) {
 		RStrs key = attr->key;
 		RStrs val = attr->value;
-		r_strbuf_appendf (kvc->sb, "%s.%s.@.", type, scope);
+		r_strbuf_appendf (kvc->sb, "%s%s.%s.@.", prefix, type, scope);
 		r_strbuf_append_n (kvc->sb, key.a, r_strs_len (key));
 		r_strbuf_append (kvc->sb, "=");
 		r_strbuf_append_n (kvc->sb, val.a, r_strs_len (val));
 		r_strbuf_append (kvc->sb, "\n");
 	}
 	RVecKVCAttr_clear (&kvc->attrs);
+	free (prefix);
 }
 
 static void trim_underscores(RStrs *t) {
@@ -506,16 +508,23 @@ static char *kvc_object_type(KVCParser *kvc, RTypeDecl *decl, const char *scope)
 
 static bool kvc_forward_declaration(KVCParser *kvc, const char *kind, const char *name) {
 	kvc_sync_types (kvc);
-	const char *existing = sdb_const_get (kvc->types, name, NULL);
+	char *key = r_type_identifier_key (name, R_TYPE_NAMESPACE_TAG);
+	Sdb *tags = r_type_namespace (kvc->types, R_TYPE_NAMESPACE_TAG, false);
+	const char *existing = tags? sdb_const_get (tags, name, NULL): NULL;
 	if (existing) {
-		bool existing_is_tag = !strcmp (existing, "struct") || !strcmp (existing, "union") || !strcmp (existing, "enum");
-		if (existing_is_tag && strcmp (existing, kind)) {
+		free (key);
+		if (strcmp (existing, kind)) {
 			kvc_error (kvc, "Conflicting aggregate tag");
 			return false;
 		}
 		return true;
 	}
-	r_strbuf_appendf (kvc->sb, "%s=%s\n", name, kind);
+	if (!key) {
+		kvc_error (kvc, "Cannot allocate aggregate identity");
+		return false;
+	}
+	r_strbuf_appendf (kvc->sb, "%s=%s\n", key, kind);
+	free (key);
 	return true;
 }
 
@@ -543,13 +552,8 @@ static bool emit_typedef_declaration(KVCParser *kvc, const char *prefix) {
 		r_type_decl_free (decl);
 		return false;
 	}
-	bool same_tag = decl->type->kind == R_TYPE_DECL_BASE
-		&& (r_str_startswith (type, "struct ") || r_str_startswith (type, "union "))
-		&& !strcmp (strchr (type, ' ') + 1, decl->name);
-	if (!same_tag) {
-		r_strbuf_appendf (kvc->sb, "typedef.%s=%s\n%s=typedef\n", decl->name, type, decl->name);
-		kvc_register_typedef (kvc, decl->name, type);
-	}
+	r_strbuf_appendf (kvc->sb, "typedef.%s=%s\n%s=typedef\n", decl->name, type, decl->name);
+	kvc_register_typedef (kvc, decl->name, type);
 	free (type);
 	r_type_decl_free (decl);
 	kvc_getch (kvc);
@@ -575,7 +579,7 @@ static char *lookahead_alias_after_brace(KVCParser *kvc, const char *anon_prefix
 	return r_str_newf ("%s_%d", anon_prefix, kvc->line);
 }
 
-static bool parse_struct_body(KVCParser *kvc, const char *type, const char *sn, bool is_typedef);
+static bool parse_struct_body(KVCParser *kvc, const char *type, const char *sn, bool is_typedef, RTypeNamespace space);
 
 static bool parse_typedef(KVCParser *kvc, const char *unused) {
 	skip_spaces (kvc);
@@ -612,7 +616,7 @@ static bool parse_typedef(KVCParser *kvc, const char *unused) {
 		}
 		kvc_getch (kvc);
 		char *name = has_tag? r_strs_tostring (tag): lookahead_alias_after_brace (kvc, is_union? "anon_union": "anon_struct");
-		bool res = parse_struct_body (kvc, kind, name, true);
+		bool res = parse_struct_body (kvc, kind, name, true, has_tag? R_TYPE_NAMESPACE_TAG: R_TYPE_NAMESPACE_ORDINARY);
 		free (name);
 		return res;
 	} else if (next && r_str_startswith (next, "enum")) {
@@ -635,16 +639,25 @@ static bool parse_typedef(KVCParser *kvc, const char *unused) {
 			skip_spaces (kvc);
 			char *tag_str = has_tag? r_strs_tostring (tag): strdup ("");
 			char *prefix = r_str_newf ("enum %s ", tag_str);
-			bool res = emit_typedef_declaration (kvc, prefix);
+			bool res = kvc_forward_declaration (kvc, "enum", tag_str)
+				&& emit_typedef_declaration (kvc, prefix);
 			free (prefix);
 			free (tag_str);
 			return res;
 		}
 		kvc_getch (kvc);
 		char *enum_tag = has_tag? r_strs_tostring (tag): lookahead_alias_after_brace (kvc, "anon_enum");
-		r_strbuf_appendf (kvc->sb, "%s=enum\n", enum_tag);
+		RTypeNamespace space = has_tag? R_TYPE_NAMESPACE_TAG: R_TYPE_NAMESPACE_ORDINARY;
+		if (has_tag && !kvc_forward_declaration (kvc, "enum", enum_tag)) {
+			free (enum_tag);
+			return false;
+		}
+		if (!has_tag) {
+			r_strbuf_appendf (kvc->sb, "%s=enum\n", enum_tag);
+		}
+		char *enum_key = r_type_identifier_key ("enum", space);
 		RStrBuf *enumstr = NULL;
-		apply_attributes (kvc, "enum", enum_tag);
+		apply_attributes (kvc, "enum", enum_tag, space);
 		ut64 value = 0;
 		bool closing = false;
 		while (!closing) {
@@ -655,6 +668,7 @@ static bool parse_typedef(KVCParser *kvc, const char *unused) {
 			if (!name_start) {
 				R_LOG_ERROR ("a");
 				free (enum_tag);
+				free (enum_key);
 				return false;
 			}
 			RStrs member_name = r_strs_new (name_start, kvc->s.a);
@@ -666,6 +680,7 @@ static bool parse_typedef(KVCParser *kvc, const char *unused) {
 				if (!val_start) {
 					R_LOG_ERROR ("a");
 					free (enum_tag);
+					free (enum_key);
 					return false;
 				}
 				member_value = r_strs_new (val_start, kvc->s.a);
@@ -680,20 +695,21 @@ static bool parse_typedef(KVCParser *kvc, const char *unused) {
 			} else {
 				kvc_error (kvc, "Expected , or } inside enum");
 				free (enum_tag);
+				free (enum_key);
 				return false;
 			}
 
 			char *mn = r_strs_tostring (member_name);
-			apply_attributes (kvc, "enum", enum_tag);
+			apply_attributes (kvc, "enum", enum_tag, space);
 			r_strf_var (full_scope, 512, "%s.%s", enum_tag, mn);
 			if (member_value.a) {
 				st64 nv = (st64)r_strs_tonum (member_value, 0, NULL);
-				r_strbuf_appendf (kvc->sb, "enum.%s=0x%" PFMT64x "\n", full_scope, nv);
-				r_strbuf_appendf (kvc->sb, "enum.%s.0x%" PFMT64x "=%s\n", enum_tag, nv, mn);
+				r_strbuf_appendf (kvc->sb, "%s.%s=0x%" PFMT64x "\n", enum_key, full_scope, nv);
+				r_strbuf_appendf (kvc->sb, "%s.%s.0x%" PFMT64x "=%s\n", enum_key, enum_tag, nv, mn);
 				value = nv;
 			} else {
-				r_strbuf_appendf (kvc->sb, "enum.%s=0x%" PFMT64x "\n", full_scope, (ut64)value);
-				r_strbuf_appendf (kvc->sb, "enum.%s.0x%" PFMT64x "=%s\n", enum_tag, (ut64)value, mn);
+				r_strbuf_appendf (kvc->sb, "%s.%s=0x%" PFMT64x "\n", enum_key, full_scope, (ut64)value);
+				r_strbuf_appendf (kvc->sb, "%s.%s.0x%" PFMT64x "=%s\n", enum_key, enum_tag, (ut64)value, mn);
 			}
 			if (enumstr) {
 				r_strbuf_appendf (enumstr, ",%s", mn);
@@ -705,7 +721,7 @@ static bool parse_typedef(KVCParser *kvc, const char *unused) {
 		}
 		if (enumstr) {
 			char *es = r_strbuf_drain (enumstr);
-			r_strbuf_appendf (kvc->sb, "enum.%s=%s\n", enum_tag, es);
+			r_strbuf_appendf (kvc->sb, "%s.%s=%s\n", enum_key, enum_tag, es);
 			free (es);
 		}
 		// After the closing '}', we expect the typedef alias:
@@ -714,14 +730,21 @@ static bool parse_typedef(KVCParser *kvc, const char *unused) {
 		if (!alias.a) {
 			kvc_error (kvc, "Missing alias in typedef enum");
 			free (enum_tag);
+			free (enum_key);
 			return false;
 		}
 		alias.b = kvc->s.a;
 		char *alias_str = r_strs_tostring (alias);
-		r_strbuf_appendf (kvc->sb, "typedef.%s=enum %s\n", alias_str, enum_tag);
-		r_strbuf_appendf (kvc->sb, "%s=enum\n", alias_str);
+		if (has_tag) {
+			r_strbuf_appendf (kvc->sb, "typedef.%s=enum %s\n", alias_str, enum_tag);
+			r_strbuf_appendf (kvc->sb, "%s=typedef\n", alias_str);
+			char *target = r_str_newf ("enum %s", enum_tag);
+			kvc_register_typedef (kvc, alias_str, target);
+			free (target);
+		}
 		skip_ws (kvc);
 		free (enum_tag);
+		free (enum_key);
 		free (alias_str);
 		return true;
 	} else {
@@ -758,12 +781,15 @@ static bool parse_struct(KVCParser *kvc, const char *type) {
 	}
 	kvc_getch (kvc);
 	char *sn = r_strs_tostring (struct_name);
-	bool res = parse_struct_body (kvc, type, sn, false);
+	bool res = parse_struct_body (kvc, type, sn, false, R_TYPE_NAMESPACE_TAG);
 	free (sn);
 	return res;
 }
 
-static bool parse_struct_body(KVCParser *kvc, const char *type, const char *sn, bool is_typedef) {
+static bool parse_struct_body(KVCParser *kvc, const char *type, const char *sn, bool is_typedef, RTypeNamespace space) {
+	if (space == R_TYPE_NAMESPACE_TAG && !kvc_forward_declaration (kvc, type, sn)) {
+		return false;
+	}
 	const bool is_union = !strcmp (type, "union");
 	RAnalBaseType *bt = r_anal_base_type_new (is_union
 		? R_ANAL_BASE_TYPE_KIND_UNION: R_ANAL_BASE_TYPE_KIND_STRUCT);
@@ -771,6 +797,8 @@ static bool parse_struct_body(KVCParser *kvc, const char *type, const char *sn, 
 		return false;
 	}
 	bt->name = strdup (sn);
+	bt->space = space;
+	char *tag_key = r_type_identifier_key (type, bt->space);
 	const char *pack_attr = kvc_attr (kvc, "pack");
 	const char *packed_attr = kvc_attr (kvc, "packed");
 	if (pack_attr) {
@@ -785,7 +813,7 @@ static bool parse_struct_body(KVCParser *kvc, const char *type, const char *sn, 
 	const char *aligned_attr = kvc_attr (kvc, "aligned");
 	int align = aligned_attr? R_MAX (1, atoi (aligned_attr)): 1;
 	free ((void *)aligned_attr);
-	apply_attributes (kvc, type, sn);
+	apply_attributes (kvc, type, sn, space);
 	int off = 0;
 	while (true) {
 		parse_attributes (kvc);
@@ -848,9 +876,11 @@ static bool parse_struct_body(KVCParser *kvc, const char *type, const char *sn, 
 		int member_off = kvc_layout_member (kvc, bt, member_type, count? count: 1, &off, &align);
 		kvc_basetype_add_member (bt, decl->name, member_type, member_off, count);
 		if (is_typedef && !is_union) {
-			r_strbuf_appendf (kvc->sb, "struct.%s.meta=0\n", scope);
+			r_strbuf_appendf (kvc->sb, "%s.%s.%s.meta=0\n", tag_key, sn, decl->name);
 		}
-		apply_attributes (kvc, type, scope);
+		char *member_key = r_str_newf ("%s.%s", sn, decl->name);
+		apply_attributes (kvc, type, member_key, space);
+		free (member_key);
 		free (scope);
 		free (member_type);
 		decl->type = outer;
@@ -861,6 +891,7 @@ static bool parse_struct_body(KVCParser *kvc, const char *type, const char *sn, 
 	}
 	if (kvc->error) {
 		r_anal_base_type_free (bt);
+		free (tag_key);
 		return false;
 	}
 	skip_ws (kvc);
@@ -869,19 +900,19 @@ static bool parse_struct_body(KVCParser *kvc, const char *type, const char *sn, 
 		if (!alias.a || alias.a == kvc->s.a) {
 			kvc_error (kvc, "Missing alias in aggregate typedef");
 			r_anal_base_type_free (bt);
+			free (tag_key);
 			return false;
 		}
 		alias.b = kvc->s.a;
 		char *alias_str = r_strs_tostring (alias);
-		bool distinct_alias = strcmp (alias_str, sn);
-		if (distinct_alias) {
+		if (space == R_TYPE_NAMESPACE_TAG) {
 			char *target = r_str_newf ("%s %s", type, sn);
 			r_strbuf_appendf (kvc->sb, "typedef.%s=%s\n", alias_str, target);
 			kvc_register_typedef (kvc, alias_str, target);
 			free (target);
 		}
 		kvc_basetype_emit (kvc, bt, align);
-		if (distinct_alias) {
+		if (space == R_TYPE_NAMESPACE_TAG) {
 			r_strbuf_appendf (kvc->sb, "%s=typedef\n", alias_str);
 		}
 		free (alias_str);
@@ -889,6 +920,7 @@ static bool parse_struct_body(KVCParser *kvc, const char *type, const char *sn, 
 	} else {
 		kvc_basetype_emit (kvc, bt, align);
 	}
+	free (tag_key);
 	return !kvc->error;
 }
 
@@ -900,12 +932,22 @@ static bool parse_enum(KVCParser *kvc, const char *name) {
 		return false;
 	}
 	enum_name.b = kvc->s.a;
-	char *en = r_strs_tostring (enum_name);
-	r_strbuf_appendf (kvc->sb, "%s=enum\n", en);
+	char *tag = r_strs_tostring (enum_name);
+	bool admitted = kvc_forward_declaration (kvc, "enum", tag);
+	char *en = admitted? strdup (tag): NULL;
+	free (tag);
+	if (!en) {
+		return false;
+	}
 	RStrBuf *enumstr = NULL;
-	apply_attributes (kvc, "enum", en);
+	apply_attributes (kvc, "enum", en, R_TYPE_NAMESPACE_TAG);
 	skip_spaces (kvc);
 	const char p0 = kvc_peek (kvc, 0);
+	if (p0 == ';') {
+		kvc_getch (kvc);
+		free (en);
+		return true;
+	}
 	if (p0 != '{') {
 		R_LOG_ERROR ("Expected { after '%s' at line %d in enum", en, kvc->line);
 		free (en);
@@ -949,16 +991,20 @@ static bool parse_enum(KVCParser *kvc, const char *name) {
 		}
 
 		char *mn = r_strs_tostring (member_name);
-		apply_attributes (kvc, "enum", en);
+		apply_attributes (kvc, "enum", en, R_TYPE_NAMESPACE_TAG);
 		r_strf_var (full_scope, 512, "%s.%s", en, mn);
 		if (member_value.a) {
 			st64 nv = (st64)r_strs_tonum (member_value, 0, NULL);
-			r_strbuf_appendf (kvc->sb, "enum.%s=0x%" PFMT64x "\n", full_scope, nv);
-			r_strbuf_appendf (kvc->sb, "enum.%s.0x%" PFMT64x "=%s\n", en, nv, mn);
+			char *key = r_type_identifier_key ("enum", R_TYPE_NAMESPACE_TAG);
+			r_strbuf_appendf (kvc->sb, "%s.%s=0x%" PFMT64x "\n", key, full_scope, nv);
+			r_strbuf_appendf (kvc->sb, "%s.%s.0x%" PFMT64x "=%s\n", key, en, nv, mn);
+			free (key);
 			value = nv;
 		} else {
-			r_strbuf_appendf (kvc->sb, "enum.%s=0x%" PFMT64x "\n", full_scope, (ut64)value);
-			r_strbuf_appendf (kvc->sb, "enum.%s.0x%" PFMT64x "=%s\n", en, (ut64)value, mn);
+			char *key = r_type_identifier_key ("enum", R_TYPE_NAMESPACE_TAG);
+			r_strbuf_appendf (kvc->sb, "%s.%s=0x%" PFMT64x "\n", key, full_scope, (ut64)value);
+			r_strbuf_appendf (kvc->sb, "%s.%s.0x%" PFMT64x "=%s\n", key, en, (ut64)value, mn);
+			free (key);
 		}
 		if (enumstr) {
 			r_strbuf_appendf (enumstr, ",%s", mn);
@@ -970,7 +1016,9 @@ static bool parse_enum(KVCParser *kvc, const char *name) {
 	}
 	if (enumstr) {
 		char *es = r_strbuf_drain (enumstr);
-		r_strbuf_appendf (kvc->sb, "enum.%s=%s\n", en, es);
+		char *key = r_type_identifier_key ("enum", R_TYPE_NAMESPACE_TAG);
+		r_strbuf_appendf (kvc->sb, "%s.%s=%s\n", key, en, es);
+		free (key);
 		free (es);
 	}
 	skip_ws (kvc);
@@ -1008,7 +1056,7 @@ static bool parse_function(KVCParser *kvc) {
 		return false;
 	}
 	r_strbuf_appendf (kvc->sb, "%s=func\n", decl->name);
-	apply_attributes (kvc, "func", decl->name);
+	apply_attributes (kvc, "func", decl->name, R_TYPE_NAMESPACE_ORDINARY);
 	emit_func_signature (kvc, decl->name, decl->type, is_static);
 	r_type_decl_free (decl);
 	skip_ws (kvc);

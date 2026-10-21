@@ -480,6 +480,7 @@ static RCoreHelpMessage help_detail2_pf = {
 	"pf.", "obj xxdz prev next size name", "define the obj format as xxdz",
 	"pf", " obj=xxdz prev next size name", "same as above",
 	"pf.", "plop ? (troll)mystruct", "use structure troll previously defined",
+	"pf.", "\"struct Alias\" q member", "define a format with its canonical tagged type name",
 	"pfj.", "plop @ 0x14", "apply format object at the given offset",
 	"pf", " 10xiz pointer length string", "print a size 10 array of the xiz struct with its field names",
 	"pf", " 5sqw string quad word", "print an array with sqw struct along with its field names",
@@ -2524,13 +2525,19 @@ static void cmd_print_format(RCore *core, const char *_input, const ut8 *block, 
 			_input += 2;
 			if (*_input == '.') {
 				_input++;
-				val = sdb_get (core->print->formats, _input, NULL);
+				char *name = strdup (_input);
+				if (*name == '"' || *name == '\'') {
+					r_str_unquote (name);
+					r_str_unescape (name);
+				}
+				val = sdb_const_get (core->print->formats, name, NULL);
 				if (val) {
 					r_cons_printf (core->cons, "%d\n", r_print_format_struct_size (core->print, val, mode, 0));
 				} else {
 					R_LOG_WARN ("Struct %s not defined", _input);
 					r_cons_cmd_help_match (core->cons, help_msg_pf, "pfs", 0, true);
 				}
+				free (name);
 			} else if (*_input == ' ') {
 			while (*_input == ' ' && *_input != '\0') {
 					_input++;
@@ -2684,9 +2691,13 @@ static void cmd_print_format(RCore *core, const char *_input, const ut8 *block, 
 				const char *key = sdbkv_key (kv);
 				const char *value = sdbkv_value (kv);
 				if (!strpbrk (value, "\r\n")) {
-					char *name = r_name_check (key)? NULL: r_name_filter_dup (key);
-					r_cons_printf (core->cons, "'pf.%s %s\n", name? name: key, value);
-					free (name);
+					if (r_name_check (key)) {
+						r_cons_printf (core->cons, "'pf.%s %s\n", key, value);
+					} else if (!strpbrk (key, "\r\n")) {
+						char *escaped = r_str_escape (key);
+						r_cons_printf (core->cons, "'pf.\"%s\" %s\n", escaped, value);
+						free (escaped);
+					}
 				}
 			}
 			/* delete a format */
@@ -2695,13 +2706,49 @@ static void cmd_print_format(RCore *core, const char *_input, const ut8 *block, 
 				sdb_free (core->print->formats);
 				core->print->formats = sdb_new0 ();
 			} else { // "pf-xxx"
-				sdb_unset (core->print->formats, input + 3, 0);
+				char *name = strdup (input + 3);
+				if (*name == '"' || *name == '\'') {
+					r_str_unquote (name);
+					r_str_unescape (name);
+				}
+				sdb_unset (core->print->formats, name, 0);
+				free (name);
 			}
 		} else {
 			char *name = strdup (input + (input[1]? 2: 1));
-			char *space = strchr (name, ' ');
-			char *eq = strchr (name, '=');
-			char *dot = strchr (name, '.');
+			bool quoted_name = *name == '"' || *name == '\'';
+			char *space = quoted_name? (char *)r_str_firstbut_escape (name, ' ', "\"'"): strchr (name, ' ');
+			char *eq = quoted_name? (char *)r_str_firstbut_escape (name, '=', "\"'"): strchr (name, '=');
+			char *dot = quoted_name? (char *)r_str_firstbut_escape (name, '.', "\"'"): strchr (name, '.');
+			if (quoted_name) {
+				char *end = name + strlen (name);
+				if (space && space < end) {
+					end = space;
+				}
+				if (eq && eq < end) {
+					end = eq;
+				}
+				if (dot && dot < end) {
+					end = dot;
+				}
+				char delimiter = *end;
+				*end = 0;
+				r_str_unquote (name);
+				r_str_unescape (name);
+				size_t length = strlen (name);
+				*end = delimiter;
+				size_t removed = end - (name + length);
+				memmove (name + length, end, strlen (end) + 1);
+				if (space) {
+					space -= removed;
+				}
+				if (eq) {
+					eq -= removed;
+				}
+				if (dot) {
+					dot -= removed;
+				}
+			}
 			if (dot) {
 				*dot = 0;
 			}
@@ -2729,7 +2776,7 @@ static void cmd_print_format(RCore *core, const char *_input, const ut8 *block, 
 			/* store a new format */
 			if (space && (!eq || space < eq)) {
 				*space++ = 0;
-				if (strchr (name, '.')) {
+				if (!quoted_name && strchr (name, '.')) {
 					R_LOG_ERROR ("Struct or fields name can not contain a dot (%s)", name);
 				} else {
 					// pf.foo=xxx
@@ -2738,12 +2785,12 @@ static void cmd_print_format(RCore *core, const char *_input, const ut8 *block, 
 				goto err_name;
 			}
 
-			if (!strchr (name, '.') && !sdb_const_get (core->print->formats, name, NULL)) {
+			if (!dot && !sdb_const_get (core->print->formats, name, NULL)) {
 				R_LOG_ERROR ("Cannot find '%s' format", name);
 				goto err_name;
 			}
 
-			char *delim = strchr (name, '.');
+			char *delim = dot;
 			if (delim) {
 				int len = delim - name;
 				if (len > 0) {

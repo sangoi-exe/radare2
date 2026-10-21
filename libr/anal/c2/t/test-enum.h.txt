@@ -1,11 +1,11 @@
-Foo=enum
-enum.Foo.FOO=0x1
-enum.Foo.0x1=FOO
-enum.Foo.BAR=0x2
-enum.Foo.0x2=BAR
-enum.Foo.LOW=0x3
-enum.Foo.0x3=LOW
-enum.Foo.COW=0x0
-enum.Foo.0x0=COW
-enum.Foo=FOO,BAR,LOW,COW
+tags/Foo=enum
+tags/enum.Foo.FOO=0x1
+tags/enum.Foo.0x1=FOO
+tags/enum.Foo.BAR=0x2
+tags/enum.Foo.0x2=BAR
+tags/enum.Foo.LOW=0x3
+tags/enum.Foo.0x3=LOW
+tags/enum.Foo.COW=0x0
+tags/enum.Foo.0x0=COW
+tags/enum.Foo=FOO,BAR,LOW,COW
 

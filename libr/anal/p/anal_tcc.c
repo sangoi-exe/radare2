@@ -45,9 +45,8 @@ static void __errorFunc(void *opaque, const char *msg) {
 typedef struct {
 	RAnal *anal;
 	TCCState *s1;
+	RTypeNamespace space;
 } LoadContext;
-
-extern int tcc_sym_push(TCCState *s1, char *typename, int typesize, int meta);
 
 /* parse C code and return it in key-value form */
 
@@ -55,53 +54,27 @@ static bool __typeLoad(void *p, const char *k, const char *v) {
 	if (!p) {
 		return false;
 	}
-	int btype = 0;
 	LoadContext *loader = (LoadContext *)p;
 	RAnal *anal = loader->anal;
-	TCCState *s1 = loader->s1;
-	// TCCState *s1 = NULL; // XXX THIS WILL MAKE IT CRASH
-	//r_cons_printf (cons, "tk %s=%s\n", k, v);
-	// TODO: Add unions support
-	if (!strncmp (v, "struct", 6) && strncmp (k, "struct.", 7)) {
-		// structure
-		btype = VT_STRUCT;
-		const char *typename = k;
-		int typesize = 0;
-		// TODO: Add typesize here
-		const char *value = sdb_const_getf (anal->sdb_types, NULL, "struct.%s", k);
-		char *members = value? strdup (value): NULL;
-		char *next, *ptr = members;
-		if (members) {
-			do {
-				char *name = sdb_anext (ptr, &next);
-				if (!name) {
-					break;
-				}
-				value = sdb_const_getf (anal->sdb_types, NULL, "struct.%s.%s", k, name);
-				char *subtype = value? strdup (value): NULL;
-				if (!subtype) {
-					break;
-				}
-				char *tmp = strchr (subtype, ',');
-				if (tmp) {
-					*tmp++ = 0;
-					tmp = strchr (tmp, ',');
-					if (tmp) {
-						*tmp++ = 0;
-					}
-					char *subname = tmp;
-					// TODO: Go recurse here
-					btype = sdb_num_getf (anal->sdb_types, NULL, "struct.%s.%s.meta", subtype, subname);
-					tcc_sym_push (s1, subtype, 0, btype);
-				}
-				free (subtype);
-				ptr = next;
-			} while (next);
-			free (members);
+	if (R_STR_CMP_ANY (v, "struct", "union", "enum")) {
+		RAnalBaseType *base = r_anal_get_base_type (anal, k, loader->space);
+		if (base) {
+			int meta = !strcmp (v, "struct")? VT_STRUCT: !strcmp (v, "union")? VT_UNION: VT_ENUM;
+			tcc_sym_push (loader->s1, base->name, base->size? base->size / 8: -1, meta, base->space == R_TYPE_NAMESPACE_TAG);
+			r_anal_base_type_free (base);
 		}
-		tcc_sym_push (s1, (char *)typename, typesize, btype);
 	}
 	return true;
+}
+
+static void load_type_context(RAnal *anal, TCCState *s1) {
+	LoadContext ctx = { .anal = anal, .s1 = s1 };
+	for (ctx.space = R_TYPE_NAMESPACE_ORDINARY; ctx.space <= R_TYPE_NAMESPACE_TAG; ctx.space++) {
+		Sdb *db = r_type_namespace (anal->sdb_types, ctx.space, false);
+		if (db) {
+			sdb_foreach (db, __typeLoad, &ctx);
+		}
+	}
 }
 static TCCState *new_tcc(RAnal *anal) {
 	TCCState *ts = tcc_new (anal->config->arch, anal->config->bits, anal->config->os);
@@ -128,8 +101,7 @@ static char *types_parse_text(RAnal *anal, const char *code) {
 	tcc_set_error_func (s1, (void *)error_msg, __errorFunc);
 
 	// load saved types from sdb into the tcc context
-	LoadContext ctx = {anal, s1};
-	sdb_foreach (anal->sdb_types, __typeLoad, (void *)&ctx);
+	load_type_context (anal, s1);
 
 	if (tcc_compile_string (s1, code) != 0) {
 		R_FREE (str);
@@ -153,8 +125,7 @@ static char *types_parse_file(RAnal *anal, const char *path, const char *dir) {
 	tcc_set_error_func (s1, (void *)error_msg, __errorFunc);
 
 	// load saved types from sdb into the tcc context
-	LoadContext ctx = {anal, s1};
-	sdb_foreach (anal->sdb_types, __typeLoad, (void *)&ctx);
+	load_type_context (anal, s1);
 
 	char *d = strdup (dir);
 	RList *dirs = r_str_split_list (d, ":", 0);

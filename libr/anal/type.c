@@ -8,30 +8,29 @@
 
 #define KSZ 256
 
-// XXX this function needs to be rewritten
-static char *is_type(char *type) {
-	char *name = NULL;
-	if ((name = strstr (type, "=type")) ||
-			(name = strstr (type, "=struct")) ||
-			(name = strstr (type, "=union")) ||
-			(name = strstr (type, "=enum")) ||
-			(name = strstr (type, "=typedef")) ||
-			(name = strstr (type, "=func"))) {
-		return name;
-	}
-	return NULL;
-}
-
 static char *get_type_data(Sdb *sdb_types, const char *type, const char *sname) {
 	const char *value = sdb_const_getf (sdb_types, NULL, "%s.%s", type, sname);
 	return value? strdup (value): NULL;
+}
+
+static bool merge_type_record(void *user, const char *key, const char *value) {
+	Sdb *types = user;
+	if (r_str_startswith (key, "tags/")) {
+		types = r_type_namespace (types, R_TYPE_NAMESPACE_TAG, true);
+		key += 5;
+	}
+	if (!types) {
+		return false;
+	}
+	sdb_set (types, key, value, 0);
+	return true;
 }
 
 static void sdb_concat_by_path(Sdb *s, const char *path) {
 	R_RETURN_IF_FAIL (s && path);
 	Sdb *db = sdb_new (0, path, 0);
 	if (db) {
-		sdb_merge (s, db);
+		sdb_foreach (db, merge_type_record, s);
 		sdb_close (db);
 		sdb_free (db);
 	}
@@ -44,7 +43,7 @@ static void load_types_db(RAnal *anal, Sdb *types, const char *name) {
 		Sdb *gd = sdb_new0 ();
 		if (gd) {
 			sdb_open_gperf (gd, gp);
-			sdb_merge (types, gd);
+			sdb_foreach (gd, merge_type_record, types);
 			sdb_close (gd);
 			sdb_free (gd);
 		}
@@ -170,6 +169,7 @@ R_API void r_anal_types_prepare(RAnal *anal) {
 	}
 	if (!merge) {
 		sdb_reset (anal->sdb_types);
+		sdb_reset (r_type_namespace (anal->sdb_types, R_TYPE_NAMESPACE_TAG, false));
 	}
 	load_types_from (anal, "types");
 	load_types_from (anal, "types-%s", arch);
@@ -224,6 +224,7 @@ R_API void r_anal_types_reload(RAnal *anal, const char *dir_prefix, const char *
 		os = "";
 	}
 	sdb_reset (anal->sdb_types);
+	sdb_reset (r_type_namespace (anal->sdb_types, R_TYPE_NAMESPACE_TAG, false));
 	load_types_from (anal, "types");
 	load_types_from (anal, "types-%s", arch);
 	load_types_from (anal, "types-%s", os);
@@ -260,29 +261,12 @@ R_API ut64 r_anal_type_bitsize(RAnal *anal, const char *type) {
 
 R_API void r_anal_remove_parsed_type(RAnal *anal, const char *name) {
 	R_RETURN_IF_FAIL (anal && name);
-	Sdb *TDB = anal->sdb_types;
-	SdbKv *kv;
-	SdbListIter *iter;
-	const char *type = sdb_const_get (TDB, name, 0);
-	if (!type) {
-		return;
+	char *key = NULL;
+	Sdb *db = r_type_base_db (anal->sdb_types, name, &key);
+	if (db) {
+		r_type_del (db, key);
 	}
-
-	// Create a subkey before the call to r_type_del (which leaves the type string invalid)
-	char *subkey = r_str_newf ("%s.%s.", type, name);
-	r_type_del (TDB, name);
-
-	// TODO: This loop should be optimized
-	SdbList *l = sdb_foreach_list (TDB, true);
-	size_t subkey_len = strlen (subkey);
-	ls_foreach (l, iter, kv) {
-		const char *key = sdbkv_key (kv);
-		if (!strncmp (key, subkey, subkey_len)) {
-			r_type_del (TDB, key);
-		}
-	}
-	ls_free (l);
-	free (subkey);
+	free (key);
 	r_anal_types_bump_dirty_epoch (anal);
 }
 
@@ -291,24 +275,35 @@ R_API void r_anal_save_parsed_type(RAnal *anal, const char *parsed) {
 	R_RETURN_IF_FAIL (anal && parsed);
 	r_anal_types_prepare (anal);
 
-	// First, if any parsed types exist, let's remove them.
-	char *type = strdup (parsed);
-	if (type) {
-		char *cur = type;
-		while (1) {
-			cur = is_type (cur);
-			if (!cur) {
-				break;
-			}
-			char *name = cur++;
-			*name = 0;
-			while (name > type && *(name - 1) != '\n') {
-				name--;
-			}
-			r_anal_remove_parsed_type (anal, name);
+	Sdb *incoming = sdb_new0 ();
+	sdb_query_lines (incoming, parsed);
+	RList *roots = r_type_get_roots (incoming);
+	RListIter *iter;
+	RTypeIdentity *identity;
+	r_list_foreach (roots, iter, identity) {
+		Sdb *db = r_type_namespace (anal->sdb_types, identity->space, false);
+		const char *kind = sdb_const_get (identity->db, identity->key, NULL);
+		const char *existing = db? sdb_const_get (db, identity->key, NULL): NULL;
+		if (identity->space == R_TYPE_NAMESPACE_TAG && existing && strcmp (existing, kind)) {
+			R_LOG_ERROR ("Conflicting aggregate tag: %s", identity->key);
+			r_list_free (roots);
+			sdb_free (incoming);
+			return;
 		}
-		free (type);
 	}
+	r_list_foreach (roots, iter, identity) {
+		const char *kind = sdb_const_get (identity->db, identity->key, NULL);
+		if (R_STR_CMP_ANY (kind, "struct", "union", "enum")
+				&& !sdb_const_getf (identity->db, NULL, "%s.%s", kind, identity->key)) {
+			continue;
+		}
+		Sdb *db = r_type_namespace (anal->sdb_types, identity->space, false);
+		if (db) {
+			r_type_del (db, identity->key);
+		}
+	}
+	r_list_free (roots);
+	sdb_free (incoming);
 
 	// Now add the type to sdb.
 	sdb_query_lines (anal->sdb_types, parsed);
@@ -354,17 +349,16 @@ R_API RList *r_anal_types_from_fcn(RAnal *anal, RAnalFunction *fcn) {
 	return type_used;
 }
 
-static RAnalBaseType *get_enum_type(RAnal *anal, const char *sname) {
-	R_RETURN_VAL_IF_FAIL (anal && sname, NULL);
+static RAnalBaseType *get_enum_type(Sdb *types, const char *sname) {
 
 	RAnalBaseType *base_type = r_anal_base_type_new (R_ANAL_BASE_TYPE_KIND_ENUM);
 	if (!base_type) {
 		return NULL;
 	}
-	const ut64 recorded = sdb_num_getf (anal->sdb_types, NULL, "type.%s.size", sname);
+	const ut64 recorded = sdb_num_getf (types, NULL, "type.%s.size", sname);
 	base_type->size = recorded? recorded: 32;
 
-	char *members = get_type_data (anal->sdb_types, "enum", sname);
+	char *members = get_type_data (types, "enum", sname);
 	if (!members) {
 		goto error;
 	}
@@ -376,7 +370,7 @@ static RAnalBaseType *get_enum_type(RAnal *anal, const char *sname) {
 
 	char *cur;
 	sdb_aforeach (cur, members) {
-		const char *value = sdb_const_getf (anal->sdb_types, NULL, "enum.%s.%s", sname, cur);
+		const char *value = sdb_const_getf (types, NULL, "enum.%s.%s", sname, cur);
 
 		if (!value) { // if nothing is found, ret NULL
 			goto error;
@@ -418,8 +412,7 @@ static void split_member_csv(char *values, const char **offset, const char **cou
 	}
 }
 
-static RAnalBaseType *get_composite_type(RAnal *anal, const char *sname, RAnalBaseTypeKind kind) {
-	R_RETURN_VAL_IF_FAIL (anal && sname, NULL);
+static RAnalBaseType *get_composite_type(Sdb *types, const char *sname, RAnalBaseTypeKind kind) {
 
 	RAnalBaseType *base_type = r_anal_base_type_new (kind);
 	if (!base_type) {
@@ -427,8 +420,8 @@ static RAnalBaseType *get_composite_type(RAnal *anal, const char *sname, RAnalBa
 	}
 
 	const char *kindstr = (kind == R_ANAL_BASE_TYPE_KIND_UNION)? "union": "struct";
-	base_type->size = sdb_num_getf (anal->sdb_types, NULL, "type.%s.size", sname);
-	char *sdb_members = get_type_data (anal->sdb_types, kindstr, sname);
+	base_type->size = sdb_num_getf (types, NULL, "type.%s.size", sname);
+	char *sdb_members = get_type_data (types, kindstr, sname);
 	if (!sdb_members) {
 		return base_type;
 	}
@@ -440,7 +433,7 @@ static RAnalBaseType *get_composite_type(RAnal *anal, const char *sname, RAnalBa
 
 	char *cur;
 	sdb_aforeach (cur, sdb_members) {
-		const char *value = sdb_const_getf (anal->sdb_types, NULL, "%s.%s.%s", kindstr, sname, cur);
+		const char *value = sdb_const_getf (types, NULL, "%s.%s.%s", kindstr, sname, cur);
 		char *values = value? strdup (value): NULL;
 
 		if (!values) {
@@ -506,16 +499,18 @@ static RAnalBaseType *get_atomic_type(RAnal *anal, const char *sname) {
 }
 
 // returns NULL if name is not found or any failure happened
-R_API RAnalBaseType *r_anal_get_base_type(RAnal *anal, const char *name) {
+R_API RAnalBaseType *r_anal_get_base_type(RAnal *anal, const char *name, RTypeNamespace space) {
 	R_RETURN_VAL_IF_FAIL (anal && name, NULL);
-
-	// a base type is saved under its C spelling; composites and typedefs still under the sanitized one
+	Sdb *types = r_type_namespace (anal->sdb_types, space, false);
+	if (!types) {
+		return NULL;
+	}
 	char *sname = strdup (name);
-	const char *type = sdb_const_get (anal->sdb_types, sname, NULL);
+	const char *type = sdb_const_get (types, sname, NULL);
 	if (!type) {
 		free (sname);
 		sname = r_str_sanitize_sdb_key (name);
-		type = sdb_const_get (anal->sdb_types, sname, NULL);
+		type = sname? sdb_const_get (types, sname, NULL): NULL;
 	}
 	if (!type) {
 		free (sname);
@@ -524,11 +519,11 @@ R_API RAnalBaseType *r_anal_get_base_type(RAnal *anal, const char *name) {
 
 	RAnalBaseType *base_type = NULL;
 	if (!strcmp (type, "struct")) {
-		base_type = get_composite_type (anal, sname, R_ANAL_BASE_TYPE_KIND_STRUCT);
+		base_type = get_composite_type (types, sname, R_ANAL_BASE_TYPE_KIND_STRUCT);
 	} else if (!strcmp (type, "enum")) {
-		base_type = get_enum_type (anal, sname);
+		base_type = get_enum_type (types, sname);
 	} else if (!strcmp (type, "union")) {
-		base_type = get_composite_type (anal, sname, R_ANAL_BASE_TYPE_KIND_UNION);
+		base_type = get_composite_type (types, sname, R_ANAL_BASE_TYPE_KIND_UNION);
 	} else if (!strcmp (type, "typedef")) {
 		base_type = get_typedef_type (anal, sname);
 	} else if (!strcmp (type, "type")) {
@@ -536,10 +531,10 @@ R_API RAnalBaseType *r_anal_get_base_type(RAnal *anal, const char *name) {
 	}
 
 	if (base_type) {
-		base_type->name = sname;
-	} else {
-		free (sname);
+		base_type->space = space;
+		base_type->name = strdup (sname);
 	}
+	free (sname);
 
 	return base_type;
 }
@@ -571,25 +566,30 @@ R_API char *r_anal_base_type_to_kv(const RAnalBaseType *type) {
 		return NULL;
 	}
 	char *sname = r_str_sanitize_sdb_key (type->name);
+	if (!sname) {
+		return NULL;
+	}
 	RStrBuf *sb = r_strbuf_new ("");
 	RStrBuf *list = r_strbuf_new ("");
-	r_strbuf_appendf (sb, "%s=%s\n", sname, kind);
+	char *prefix = r_type_identifier_key ("", type->space);
+	r_strbuf_appendf (sb, "%s%s=%s\n", prefix, sname, kind);
 	int i = 0;
 	RAnalTypeMember *member;
 	R_VEC_FOREACH (r_anal_base_type_members (type), member) {
 		char *mname = r_str_sanitize_sdb_key (member->name);
 		char *value = member_value_kv (member->type, member->offset, member->count);
-		r_strbuf_appendf (sb, "%s.%s.%s=%s\n", kind, sname, mname, value);
+		r_strbuf_appendf (sb, "%s%s.%s.%s=%s\n", prefix, kind, sname, mname, value);
 		r_strbuf_appendf (list, "%s%s", i++? ",": "", mname);
 		free (value);
 		free (mname);
 	}
 	char *lists = r_strbuf_drain (list);
-	r_strbuf_appendf (sb, "%s.%s=%s\n", kind, sname, lists);
+	r_strbuf_appendf (sb, "%s%s.%s=%s\n", prefix, kind, sname, lists);
 	if (type->size) {
-		r_strbuf_appendf (sb, "type.%s.size=%" PFMT64u "\n", sname, type->size);
+		r_strbuf_appendf (sb, "%stype.%s.size=%" PFMT64u "\n", prefix, sname, type->size);
 	}
 	free (lists);
+	free (prefix);
 	free (sname);
 	return r_strbuf_drain (sb);
 }
@@ -607,8 +607,11 @@ static void save_composite(const RAnal *anal, const RAnalBaseType *type) {
 		struct.name.paramN=type,8,0
 	*/
 	RVecAnalTypeMember *members = r_anal_base_type_members (type);
-	Sdb *db = anal->sdb_types;
+	Sdb *db = r_type_namespace (anal->sdb_types, type->space, true);
 	char *sname = r_str_sanitize_sdb_key (type->name);
+	if (!sname) {
+		return;
+	}
 	char *key = r_str_newf ("%s.%s", kind, sname);
 	char *old = sdb_get (db, key, 0);
 	if (old && RVecAnalTypeMember_empty (members)) {
@@ -724,10 +727,14 @@ static void save_enum(const RAnal *anal, const RAnalBaseType *type) {
 		enum.MyEnum.arg2=0x63
 		enum.MyEnum.argN=0x3
 	*/
+	Sdb *db = r_type_namespace (anal->sdb_types, type->space, true);
 	char *sname = r_str_sanitize_sdb_key (type->name);
-	sdb_set (anal->sdb_types, sname, "enum", 0);
+	if (!sname) {
+		return;
+	}
+	sdb_set (db, sname, "enum", 0);
 	if (type->size) {
-		sdb_num_setf (anal->sdb_types, type->size, 0, "type.%s.size", sname);
+		sdb_num_setf (db, type->size, 0, "type.%s.size", sname);
 	}
 
 	RStrBuf *arglist = r_strbuf_new ("");
@@ -744,14 +751,14 @@ static void save_enum(const RAnal *anal, const RAnalBaseType *type) {
 			break;
 		}
 		r_strf_var (param_val, KSZ, "0x%" PFMT32x, cas->val);
-		sdb_setf (anal->sdb_types, param_val, 0, "enum.%s.%s", sname, case_sname);
-		sdb_setf (anal->sdb_types, case_sname, 0, "enum.%s.0x%" PFMT32x, sname, cas->val);
+		sdb_setf (db, param_val, 0, "enum.%s.%s", sname, case_sname);
+		sdb_setf (db, case_sname, 0, "enum.%s.0x%" PFMT32x, sname, cas->val);
 		r_strbuf_appendf (arglist, (i++ == 0) ? "%s" : ",%s", case_sname);
 		free (case_sname);
 	}
 	// enum.name=arg1,arg2,argN
 	char *key = r_str_newf ("enum.%s", sname);
-	sdb_set_owned (anal->sdb_types, key, r_strbuf_drain (arglist), 0);
+	sdb_set_owned (db, key, r_strbuf_drain (arglist), 0);
 	free (key);
 
 	free (sname);
@@ -860,8 +867,29 @@ R_API RAnalBaseType *r_anal_base_type_new(RAnalBaseTypeKind kind) {
  */
 R_API void r_anal_save_base_type(const RAnal *anal, const RAnalBaseType *type) {
 	R_RETURN_IF_FAIL (anal && type && type->name);
-
-	// TODO, solve collisions, if there are 2 types with the same name and kind
+	if (type->space == R_TYPE_NAMESPACE_TAG) {
+		const char *kind = type->kind == R_ANAL_BASE_TYPE_KIND_STRUCT? "struct": type->kind == R_ANAL_BASE_TYPE_KIND_UNION? "union": type->kind == R_ANAL_BASE_TYPE_KIND_ENUM? "enum": NULL;
+		char *name = r_str_sanitize_sdb_key (type->name);
+		Sdb *db = r_type_namespace (anal->sdb_types, type->space, false);
+		const char *existing = name && db? sdb_const_get (db, name, NULL): NULL;
+		bool conflict = !kind || !name || (existing && strcmp (existing, kind));
+		free (name);
+		if (conflict) {
+			R_LOG_ERROR ("Conflicting aggregate tag: %s", type->name);
+			return;
+		}
+	}
+	char *name = type->kind == R_ANAL_BASE_TYPE_KIND_ATOMIC? atomic_type_key (type->name): r_str_sanitize_sdb_key (type->name);
+	Sdb *db = r_type_namespace (anal->sdb_types, type->space, false);
+	if (name && db && sdb_const_get (db, name, NULL)) {
+		bool forward = (type->kind == R_ANAL_BASE_TYPE_KIND_STRUCT || type->kind == R_ANAL_BASE_TYPE_KIND_UNION)
+			&& RVecAnalTypeMember_empty (r_anal_base_type_members (type))
+			&& sdb_const_getf (db, NULL, "%s.%s", type->kind == R_ANAL_BASE_TYPE_KIND_STRUCT? "struct": "union", name);
+		if (!forward) {
+			r_type_del (db, name);
+		}
+	}
+	free (name);
 
 	switch (type->kind) {
 	case R_ANAL_BASE_TYPE_KIND_STRUCT:

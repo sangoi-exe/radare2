@@ -328,6 +328,26 @@ static bool test_type_decl_visible_bindings(void) {
 	mu_end;
 }
 
+static bool test_type_decl_namespace_bindings(void) {
+	Sdb *types = sdb_new0 ();
+	Sdb *tags = sdb_ns (types, "tags", true);
+	sdb_set (tags, "T", "struct", 0);
+	RTypeDecl *decl = r_type_decl_parse ("int f(int (T))", R_TYPE_DECL_CONTEXT_NAMED, types, NULL);
+	mu_assert_notnull (decl, "a tag-only spelling is not an ordinary type binding");
+	RTypeDecl *param = r_list_first (decl->type->function.parameters);
+	mu_assert_eq (param->type->kind, R_TYPE_DECL_BASE, "tag identity does not turn a grouped ordinary parameter into a callback");
+	mu_assert_streq (param->name, "T", "the tag-only control remains a named scalar parameter");
+	r_type_decl_free (decl);
+	sdb_set (types, "T", "struct", 0);
+	decl = r_type_decl_parse ("int f(int (T))", R_TYPE_DECL_CONTEXT_NAMED, types, NULL);
+	mu_assert_notnull (decl, "ordinary named analysis aggregates are usable type bindings");
+	param = r_list_first (decl->type->function.parameters);
+	mu_assert_eq (param->type->kind, R_TYPE_DECL_FUNCTION, "an ordinary named aggregate participates in visible-type grouping");
+	r_type_decl_free (decl);
+	sdb_free (types);
+	mu_end;
+}
+
 static bool test_type_decl_prototype_bindings(void) {
 	Sdb *types = sdb_new0 ();
 	sdb_set (types, "T", "typedef", 0);
@@ -552,6 +572,7 @@ int all_tests(void) {
 	mu_run_test (test_type_decl_explicit_context);
 	mu_run_test (test_type_decl_parameter_context);
 	mu_run_test (test_type_decl_visible_bindings);
+	mu_run_test (test_type_decl_namespace_bindings);
 	mu_run_test (test_type_decl_prototype_bindings);
 	mu_run_test (test_type_decl_reject_malformed);
 	mu_run_test (test_type_decl_fundamental_specifiers);

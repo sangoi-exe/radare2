@@ -111,7 +111,7 @@ static bool borland_record(RAnal *anal, const char *name, int bits, const Helper
 			return false;
 		}
 	}
-	RAnalBaseType *type = r_anal_get_base_type (anal, name);
+	RAnalBaseType *type = r_anal_get_base_type (anal, name, R_TYPE_NAMESPACE_ORDINARY);
 	if (type) {
 		bool valid = type->kind == R_ANAL_BASE_TYPE_KIND_STRUCT && type->size == bits
 			&& RVecAnalTypeMember_length (&type->struct_data.members) == count;
@@ -144,7 +144,7 @@ typedef struct {
 } BorlandEnumCase;
 
 static bool borland_enum(RAnal *anal, const char *name, int bits, const BorlandEnumCase *cases, size_t count) {
-	RAnalBaseType *type = r_anal_get_base_type (anal, name);
+	RAnalBaseType *type = r_anal_get_base_type (anal, name, R_TYPE_NAMESPACE_ORDINARY);
 	size_t i;
 	if (type) {
 		bool valid = type->kind == R_ANAL_BASE_TYPE_KIND_ENUM && type->size == bits
@@ -181,7 +181,7 @@ static bool borland_type(RAnal *anal, const char *name) {
 			&& borland_record (anal, name, 32, members, R_ARRAY_SIZE (members));
 	}
 	if (!strcmp (name, "bool")) {
-		RAnalBaseType *boolean = r_anal_get_base_type (anal, "bool");
+		RAnalBaseType *boolean = r_anal_get_base_type (anal, "bool", R_TYPE_NAMESPACE_ORDINARY);
 		if (boolean) {
 			bool valid = boolean->kind == R_ANAL_BASE_TYPE_KIND_ATOMIC && boolean->size == 8
 				&& boolean->type && !strcmp (boolean->type, "b");

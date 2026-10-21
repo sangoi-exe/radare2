@@ -144,13 +144,20 @@ static inline Sym *sym_find(TCCState *s1, int v) {
 }
 
 // TODO: Add better way to store the meta information about the pushed type
-int tcc_sym_push(TCCState *s1, char *typename, int typesize, int meta) {
-	CType new_type = {
-		.ref = sym_malloc (s1),
-		.t = meta
-	};
-	Sym *sym = sym_push (s1, 0, &new_type, 0, 0);
-	return sym != NULL;
+int tcc_sym_push(TCCState *s1, const char *name, int typesize, int meta, bool tag) {
+	TokenSym *token = tok_alloc (s1, name, strlen (name));
+	if (!token) {
+		return false;
+	}
+	int v = tag? token->tok: s1->anon_sym++;
+	CType definition = { .t = meta == VT_STRUCT? TOK_STRUCT: meta == VT_UNION? TOK_UNION: TOK_ENUM };
+	Sym *aggregate = sym_push (s1, v | SYM_STRUCT, &definition, 0, typesize);
+	if (!aggregate || tag) {
+		return aggregate != NULL;
+	}
+	aggregate->v = token->tok;
+	CType type = { .t = meta | VT_TYPEDEF, .ref = aggregate };
+	return sym_push (s1, token->tok, &type, 0, 0) != NULL;
 }
 
 #if 0
@@ -640,6 +647,11 @@ add_tstr:
 	case VT_ENUM:
 	case VT_STRUCT:
 	case VT_UNION:
+		v = type->ref->v & ~SYM_STRUCT;
+		if (!(type->ref->v & SYM_STRUCT) && v < SYM_FIRST_ANOM) {
+			strcat2 (buf, buf_size, get_tok_str (s1, v, NULL));
+			break;
+		}
 		if (bt == VT_STRUCT) {
 			tstr = "struct";
 		} else if (bt == VT_UNION) {
@@ -652,6 +664,9 @@ add_tstr:
 		if (v < SYM_FIRST_ANOM) {
 			strcat2 (buf, buf_size, " ");
 			strcat2 (buf, buf_size, get_tok_str (s1, v, NULL));
+		} else {
+			snprintf (buf1, sizeof (buf1), " __anon_%u", v - SYM_FIRST_ANOM);
+			strcat2 (buf, buf_size, buf1);
 		}
 		break;
 	case VT_FUNC:
@@ -847,7 +862,6 @@ static void struct_decl(TCCState *s1, CType *type, int u, bool is_typedef) {
 	Sym *s, *ss, *ass, **ps;
 	AttributeDef ad;
 	const char *name = NULL;
-	bool autonamed = false;
 	STACK_NEW0 (CType, type1);
 	STACK_NEW0 (CType, btype);
 
@@ -870,9 +884,8 @@ static void struct_decl(TCCState *s1, CType *type, int u, bool is_typedef) {
 		}
 	} else {
 		v = s1->anon_sym++;
-		snprintf (buf, sizeof (buf), "%u", v - SYM_FIRST_ANOM);
+		snprintf (buf, sizeof (buf), "__anon_%u", v - SYM_FIRST_ANOM);
 		name = buf;
-		autonamed = true;
 	}
 	type1.t = a;
 	/* we put an undefined size for struct/union/enum */
@@ -886,6 +899,29 @@ static void struct_decl(TCCState *s1, CType *type, int u, bool is_typedef) {
 do_decl:
 	type->t = u;
 	type->ref = s;
+	const char *tag_kind = a == TOK_ENUM? "enum": a == TOK_UNION? "union": "struct";
+	bool ordinary_alias = is_typedef && v >= SYM_FIRST_ANOM;
+	char storage_key[STRING_MAX_SIZE + 6];
+	char storage_kind[16];
+	char storage_append[20];
+	char *key = r_type_identifier_key (name, R_TYPE_NAMESPACE_TAG);
+	if (!key) {
+		TCC_ERR ("cannot allocate tag identity");
+		return;
+	}
+	r_str_ncpy (storage_key, key, sizeof (storage_key));
+	free (key);
+	key = r_type_identifier_key (tag_kind, R_TYPE_NAMESPACE_TAG);
+	r_str_ncpy (storage_kind, key, sizeof (storage_kind));
+	free (key);
+	char append_kind[12];
+	snprintf (append_kind, sizeof (append_kind), "[+]%s", tag_kind);
+	key = r_type_identifier_key (append_kind, R_TYPE_NAMESPACE_TAG);
+	r_str_ncpy (storage_append, key, sizeof (storage_append));
+	free (key);
+	if (!ordinary_alias) {
+		tcc_appendf (s1, "%s=%s\n", storage_key, tag_kind);
+	}
 
 	if (s1->tok == '{') {
 		next (s1);
@@ -919,10 +955,15 @@ do_decl:
 				// TODO: use is_typedef here
 				if (strcmp (name, "{")) {
 					const char *varstr = get_tok_str (s1, v, NULL);
-					tcc_appendf (s1, "%s=enum\n", name);
-					tcc_appendf (s1, "[+]enum.%s=%s\n", name, varstr);
-					tcc_appendf (s1, "enum.%s.%s=0x%"PFMT64x "\n", name, varstr, iota);
-					tcc_appendf (s1, "enum.%s.0x%"PFMT64x "=%s\n", name, iota, varstr);
+					if (ordinary_alias) {
+						tcc_typedef_appendf (s1, "[+]enum.%%s=%s\n", varstr);
+						tcc_typedef_appendf (s1, "enum.%%s.%s=0x%"PFMT64x "\n", varstr, iota);
+						tcc_typedef_appendf (s1, "enum.%%s.0x%"PFMT64x "=%s\n", iota, varstr);
+					} else {
+						tcc_appendf (s1, "%s.%s=%s\n", storage_append, name, varstr);
+						tcc_appendf (s1, "%s.%s.%s=0x%"PFMT64x "\n", storage_kind, name, varstr, iota);
+						tcc_appendf (s1, "%s.%s.0x%"PFMT64x "=%s\n", storage_kind, name, iota, varstr);
+					}
 					// TODO: if token already defined throw an error
 					// if (varstr isInside (arrayOfvars)) { erprintf ("ERROR: DUP VAR IN ENUM\n"); }
 				}
@@ -949,11 +990,6 @@ do_decl:
 			prevbt = VT_INT32;
 			bit_pos = 0;
 			offset = 0;
-
-			const char *ctype = (a == TOK_UNION)? "union": "struct";
-			if (!is_typedef || !autonamed) {
-				tcc_appendf (s1, "%s=%s\n", name, ctype);
-			}
 
 			while (s1->tok != '}') {
 				if (!parse_btype (s1, &btype, &ad)) {
@@ -1069,19 +1105,14 @@ do_decl:
 						type_to_str (s1, b, sizeof (b), &type1, NULL);
 						{
 							int type_bt = type1.t & VT_BTYPE;
-							// eprintf("2: %s.%s = %s\n", ctype, name, varstr);
-							if (is_typedef && autonamed) {
-								tcc_typedef_appendf (s1, "[+]typedef.%%s.fields=%s\n", varstr);
-								tcc_typedef_appendf (s1, "typedef.%%s.%s.meta=%d\n", varstr, type_bt);
-								tcc_typedef_appendf (s1, "typedef.%%s.%s=%s,%d,%d\n", varstr, b, offset, (int)s1->arraysize);
+							if (ordinary_alias) {
+								tcc_typedef_appendf (s1, "[+]%s.%%s=%s\n", tag_kind, varstr);
+								tcc_typedef_appendf (s1, "%s.%%s.%s.meta=%d\n", tag_kind, varstr, type_bt);
+								tcc_typedef_appendf (s1, "%s.%%s.%s=%s,%d,%d\n", tag_kind, varstr, b, offset, (int)s1->arraysize);
 							} else {
-								tcc_appendf (s1, "[+]%s.%s=%s\n",
-									ctype, name, varstr);
-								tcc_appendf (s1, "%s.%s.%s.meta=%d\n",
-									ctype, name, varstr, type_bt);
-								/* compact form */
-								tcc_appendf (s1, "%s.%s.%s=%s,%d,%d\n",
-									ctype, name, varstr, b, offset, (int)s1->arraysize);
+								tcc_appendf (s1, "%s.%s=%s\n", storage_append, name, varstr);
+								tcc_appendf (s1, "%s.%s.%s.meta=%d\n", storage_kind, name, varstr, type_bt);
+								tcc_appendf (s1, "%s.%s.%s=%s,%d,%d\n", storage_kind, name, varstr, b, offset, (int)s1->arraysize);
 							}
 #if 0
 							eprintf ("%s.%s.%s.type=%s\n", ctype, name, varstr, b);
@@ -1091,10 +1122,13 @@ do_decl:
 							// (%s) field (%s) offset=%d array=%d", name, b, get_tok_str(v, NULL), offset, arraysize);
 							s1->arraysize = 0;
 							if (type1.t & VT_BITFIELD) {
-								tcc_appendf (s1, "%s.%s.%s.bitfield.pos=%d\n",
-									ctype, name, varstr, (type1.t >> VT_STRUCT_SHIFT) & 0x3f);
-								tcc_appendf (s1, "%s.%s.%s.bitfield.size=%d\n",
-									ctype, name, varstr, (type1.t >> (VT_STRUCT_SHIFT + 6)) & 0x3f);
+								if (ordinary_alias) {
+									tcc_typedef_appendf (s1, "%s.%%s.%s.bitfield.pos=%d\n", tag_kind, varstr, (type1.t >> VT_STRUCT_SHIFT) & 0x3f);
+								tcc_typedef_appendf (s1, "%s.%%s.%s.bitfield.size=%d\n", tag_kind, varstr, (type1.t >> (VT_STRUCT_SHIFT + 6)) & 0x3f);
+								} else {
+									tcc_appendf (s1, "%s.%s.%s.bitfield.pos=%d\n", storage_kind, name, varstr, (type1.t >> VT_STRUCT_SHIFT) & 0x3f);
+									tcc_appendf (s1, "%s.%s.%s.bitfield.size=%d\n", storage_kind, name, varstr, (type1.t >> (VT_STRUCT_SHIFT + 6)) & 0x3f);
+								}
 							}
 							// printf("\n");
 						}
@@ -1129,6 +1163,20 @@ do_decl:
 			/* store size and alignment */
 			s->c = (iota + maxalign - 1) & - maxalign;
 			s->r = maxalign;
+		}
+	}
+	if (s->c >= 0) {
+		ut64 bits;
+		if (r_mul_overflow ((ut64)s->c, (ut64)8, &bits)) {
+			TCC_ERR ("aggregate extent overflows");
+			return;
+		}
+		if (ordinary_alias) {
+			tcc_typedef_appendf (s1, "type.%%s.size=%"PFMT64u "\n", bits);
+		} else {
+			char *type_key = r_type_identifier_key ("type", R_TYPE_NAMESPACE_TAG);
+			tcc_appendf (s1, "%s.%s.size=%"PFMT64u "\n", type_key, name, bits);
+			free (type_key);
 		}
 	}
 }
@@ -1255,7 +1303,7 @@ basic_type1:
 			}
 			break;
 		case TOK_ENUM:
-			struct_decl (s1, &type1, VT_ENUM, (bool)(t & VT_ENUM));
+			struct_decl (s1, &type1, VT_ENUM, (bool)(t & VT_TYPEDEF));
 basic_type2:
 			u = type1.t;
 			type->ref = type1.ref;
@@ -1264,7 +1312,7 @@ basic_type2:
 			struct_decl (s1, &type1, VT_STRUCT, (bool)(t & VT_TYPEDEF));
 			goto basic_type2;
 		case TOK_UNION:
-			struct_decl (s1, &type1, VT_UNION, (bool)(t & VT_UNION));
+			struct_decl (s1, &type1, VT_UNION, (bool)(t & VT_TYPEDEF));
 			goto basic_type2;
 
 		/* type modifiers */
@@ -2964,10 +3012,18 @@ func_error1:
 					const char *alias = NULL;
 					char buf[500];
 					alias = get_tok_str (s1, v, NULL);
-					type_to_str (s1, buf, sizeof (buf), &sym->type, NULL);
-					tcc_appendf (s1, "%s=typedef\n", alias);
-					tcc_appendf (s1, "typedef.%s=%s\n", alias, buf);
-					tcc_typedef_alias_fields (s1, alias);
+					int kind = sym->type.t & VT_BTYPE;
+					bool anonymous = (kind == VT_STRUCT || kind == VT_UNION || kind == VT_ENUM)
+						&& (sym->type.ref->v & ~SYM_STRUCT) >= SYM_FIRST_ANOM;
+					if (anonymous) {
+						sym->type.ref->v = v;
+						tcc_appendf (s1, "%s=%s\n", alias, kind == VT_STRUCT? "struct": kind == VT_UNION? "union": "enum");
+						tcc_typedef_alias_fields (s1, alias);
+					} else {
+						type_to_str (s1, buf, sizeof (buf), &sym->type, NULL);
+						tcc_appendf (s1, "%s=typedef\n", alias);
+						tcc_appendf (s1, "typedef.%s=%s\n", alias, buf);
+					}
 				} else {
 					r = 0;
 					if ((type.t & VT_BTYPE) == VT_FUNC) {

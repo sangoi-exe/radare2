@@ -25,6 +25,17 @@ typedef enum {
 } RTypeKind;
 
 typedef enum {
+	R_TYPE_NAMESPACE_ORDINARY,
+	R_TYPE_NAMESPACE_TAG
+} RTypeNamespace;
+
+typedef struct {
+	Sdb * R_UNOWNED db;
+	char * R_OWNED key;
+	RTypeNamespace space;
+} RTypeIdentity;
+
+typedef enum {
 	R_TYPE_DECL_BASE,
 	R_TYPE_DECL_POINTER,
 	R_TYPE_DECL_ARRAY,
@@ -115,6 +126,16 @@ R_API bool r_type_decl_layout(Sdb * R_NONNULL TDB, const RTypeDeclNode * R_NONNU
 R_API bool r_type_get_layout(Sdb * R_NONNULL TDB, const char * R_NONNULL type, RTypeLayout * R_NONNULL layout);
 
 R_API bool r_type_set(Sdb *TDB, ut64 at, const char *field, ut64 val);
+// Tags share the native "tags" child map; ordinary names remain in TDB.
+R_API Sdb *r_type_namespace(Sdb * R_NONNULL TDB, RTypeNamespace space, bool create);
+// Native SDB query spelling for serialization, not a type spelling or a flat root key.
+R_API R_OWNED char *r_type_identifier_key(const char * R_NONNULL name, RTypeNamespace space);
+// Resolve one base declaration spelling, returning its selected map and owned key.
+R_API Sdb *r_type_base_db(Sdb * R_NONNULL TDB, const char * R_NONNULL name, char ** R_NONNULL key);
+// Render a stored root identity as an unambiguous type spelling.
+R_API R_OWNED char *r_type_identifier_name(const RTypeIdentity * R_NONNULL identity);
+R_API R_OWNED RList *r_type_get_roots(Sdb * R_NONNULL TDB);
+R_API void r_type_identity_free(RTypeIdentity *identity);
 R_API void r_type_del(Sdb *TDB, const char *name);
 R_API RTypeKind r_type_kind(Sdb *TDB, const char *name);
 R_API char *r_type_enum_member(Sdb *TDB, const char *name, const char *member, ut64 val);

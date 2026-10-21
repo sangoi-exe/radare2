@@ -345,11 +345,11 @@ static int init_phdr(ELFOBJ *eo) {
 			"PF_Write=2,PF_Write_Exec=3,PF_Read=4,PF_Read_Exec=5,PF_Read_Write=6,"
 			"PF_Read_Write_Exec=7};", 0);
 #if R_BIN_ELF64
-	sdb_set (eo->kv, "elf_phdr.format", "[4]E[4]Eqqqqqq (elf_p_type)type (elf_p_flags)flags"
+	sdb_set (eo->kv, "elf_phdr.format", "[4]E[4]Eqqqqqq (enum elf_p_type)type (enum elf_p_flags)flags"
 			" offset vaddr paddr filesz memsz align", 0);
 #else
-	sdb_set (eo->kv, "elf_phdr.format", "[4]Exxxxx[4]Ex (elf_p_type)type offset vaddr paddr"
-			" filesz memsz (elf_p_flags)flags align", 0);
+	sdb_set (eo->kv, "elf_phdr.format", "[4]Exxxxx[4]Ex (enum elf_p_type)type offset vaddr paddr"
+			" filesz memsz (enum elf_p_flags)flags align", 0);
 #endif
 	return true;
 	// Usage example:
@@ -411,14 +411,14 @@ static int init_shdr(ELFOBJ *eo) {
 	sdb_set (eo->kv, "elf_s_flags_64.cparse", "enum elf_s_flags_64 {SF64_None=0,SF64_Exec=1,"
 			"SF64_Alloc=2,SF64_Alloc_Exec=3,SF64_Write=4,SF64_Write_Exec=5,"
 			"SF64_Write_Alloc=6,SF64_Write_Alloc_Exec=7};", 0);
-	sdb_set (eo->kv, "elf_shdr.format", "x[4]E[8]Eqqqxxqq name (elf_s_type)type"
-			" (elf_s_flags_64)flags addr offset size link info addralign entsize", 0);
+	sdb_set (eo->kv, "elf_shdr.format", "x[4]E[8]Eqqqxxqq name (enum elf_s_type)type"
+			" (enum elf_s_flags_64)flags addr offset size link info addralign entsize", 0);
 #else
 	sdb_set (eo->kv, "elf_s_flags_32.cparse", "enum elf_s_flags_32 {SF32_None=0,SF32_Exec=1,"
 			"SF32_Alloc=2,SF32_Alloc_Exec=3,SF32_Write=4,SF32_Write_Exec=5,"
 			"SF32_Write_Alloc=6,SF32_Write_Alloc_Exec=7};", 0);
-	sdb_set (eo->kv, "elf_shdr.format", "x[4]E[4]Exxxxxxx name (elf_s_type)type"
-			" (elf_s_flags_32)flags addr offset size link info addralign entsize", 0);
+	sdb_set (eo->kv, "elf_shdr.format", "x[4]E[4]Exxxxxxx name (enum elf_s_type)type"
+			" (enum elf_s_flags_32)flags addr offset size link info addralign entsize", 0);
 #endif
 	return true;
 	// Usage example:
@@ -6782,15 +6782,15 @@ static void sdb_init_dtypes(ELFOBJ *eo) {
 
 static void sdb_init_fmt(ELFOBJ *eo) {
 	sdb_set (eo->kv, "elf_ident.format", "[4]z[1]E[1]E[1]E.::"
-			" magic (elf_class)class (elf_data)data (elf_hdr_version)version", 0);
+			" magic (enum elf_class)class (enum elf_data)data (enum elf_hdr_version)version", 0);
 
 #if R_BIN_ELF64
 	sdb_set (eo->kv, "elf_header.format", "?[2]E[2]E[4]EqqqxN2N2N2N2N2N2"
-			" (elf_ident)ident (elf_type)type (elf_machine)machine (elf_obj_version)version"
+			" (elf_ident)ident (enum elf_type)type (enum elf_machine)machine (enum elf_obj_version)version"
 			" entry phoff shoff flags ehsize phentsize phnum shentsize shnum shstrndx", 0);
 #else
 	sdb_set (eo->kv, "elf_header.format", "?[2]E[2]E[4]ExxxxN2N2N2N2N2N2"
-			" (elf_ident)ident (elf_type)type (elf_machine)machine (elf_obj_version)version"
+			" (elf_ident)ident (enum elf_type)type (enum elf_machine)machine (enum elf_obj_version)version"
 			" entry phoff shoff flags ehsize phentsize phnum shentsize shnum shstrndx", 0);
 #endif
 }

@@ -386,7 +386,7 @@ static bool tasm_check_complete_facts(RCore *core, BorlandProfileContext *ctx) {
 	mu_assert_eq (tasm_reference (core->anal, 0x5137, 0x48e2), R_ANAL_REF_TYPE_CALL, "real independent near CALL reference");
 	r_anal_op_free (op);
 	for (i = 0; i < R_ARRAY_SIZE (expected_records); i++) {
-		RAnalBaseType *type = r_anal_get_base_type (core->anal, expected_records[i].name);
+		RAnalBaseType *type = r_anal_get_base_type (core->anal, expected_records[i].name, R_TYPE_NAMESPACE_ORDINARY);
 		mu_assert_notnull (type, "all12 native descriptive partial layouts");
 		mu_assert_eq (type->kind, R_ANAL_BASE_TYPE_KIND_STRUCT, "native record kind");
 		mu_assert_eq (type->size, expected_records[i].size * 8, "full partial view size includes undefined gaps");
@@ -408,7 +408,7 @@ static bool tasm_check_complete_facts(RCore *core, BorlandProfileContext *ctx) {
 		{ "tasm31_ReplayRecord05Mask", 2, { { "compact_interpretation", 0x10 }, { "extension_callback", 0x20 } } }
 	};
 	for (i = 0; i < R_ARRAY_SIZE (enums); i++) {
-		RAnalBaseType *type = r_anal_get_base_type (core->anal, enums[i].name);
+		RAnalBaseType *type = r_anal_get_base_type (core->anal, enums[i].name, R_TYPE_NAMESPACE_ORDINARY);
 		mu_assert_notnull (type, "both established native enums");
 		mu_assert_eq (type->kind, R_ANAL_BASE_TYPE_KIND_ENUM, "native enum kind");
 		mu_assert_eq (type->size, 8, "one-byte numeric/mask domains");
@@ -651,17 +651,17 @@ static bool test_tasm_type_dependencies(void) {
 	const BorlandEnumCase independent_case[] = { { "user_owned_mask", 1 } };
 	mu_assert_true (borland_enum (core->anal, "tasm31_ReplayRecord05Mask", 8, independent_case, 1), "independent enum domain");
 	mu_assert_eq (borland_tasm31_profile (core->anal), 44, "type refusal is independent of established code functions");
-	RAnalBaseType *type = r_anal_get_base_type (core->anal, "tasm31_ReplayContext40Partial");
+	RAnalBaseType *type = r_anal_get_base_type (core->anal, "tasm31_ReplayContext40Partial", R_TYPE_NAMESPACE_ORDINARY);
 	mu_assert_eq (RVecAnalTypeMember_length (&type->struct_data.members), 1, "manual type fields retained");
 	mu_assert_streq (RVecAnalTypeMember_at (&type->struct_data.members, 0)->name, "user_owned_field", "manual type role retained");
 	r_anal_base_type_free (type);
-	type = r_anal_get_base_type (core->anal, "tasm31_ReplayRecord05Mask");
+	type = r_anal_get_base_type (core->anal, "tasm31_ReplayRecord05Mask", R_TYPE_NAMESPACE_ORDINARY);
 	mu_assert_eq (RVecAnalEnumCase_length (&type->enum_data.cases), 1, "manual enum retained");
 	mu_assert_streq (RVecAnalEnumCase_at (&type->enum_data.cases, 0)->name, "user_owned_mask", "manual enum meaning retained");
 	r_anal_base_type_free (type);
-	mu_assert_null (r_anal_get_base_type (core->anal, "tasm31_CallbackSnapshot48Partial"), "incompatible context stops dependent snapshot type");
-	mu_assert_null (r_anal_get_base_type (core->anal, "tasm31_FullReplayRecord46Partial"), "incompatible context stops dependent full record");
-	mu_assert_null (r_anal_get_base_type (core->anal, "tasm31_ExtendedReplayHeader50Partial"), "incompatible full record stops dependent extended header");
+	mu_assert_null (r_anal_get_base_type (core->anal, "tasm31_CallbackSnapshot48Partial", R_TYPE_NAMESPACE_ORDINARY), "incompatible context stops dependent snapshot type");
+	mu_assert_null (r_anal_get_base_type (core->anal, "tasm31_FullReplayRecord46Partial", R_TYPE_NAMESPACE_ORDINARY), "incompatible context stops dependent full record");
+	mu_assert_null (r_anal_get_base_type (core->anal, "tasm31_ExtendedReplayHeader50Partial", R_TYPE_NAMESPACE_ORDINARY), "incompatible full record stops dependent extended header");
 	mu_assert_null (r_flag_get (core->flags, "tasm31_initial_replay_context_storage"), "type refusal stops dependent context instance");
 	mu_assert_null (r_flag_get (core->flags, "tasm31_initial_snapshot_storage"), "type refusal stops dependent snapshot instance");
 	mu_assert_null (sdb_const_get (core->anal->sdb_types, "link.0001eb60", NULL), "type refusal adds no context object link");
@@ -918,7 +918,7 @@ static bool test_tasm_flag_contract_preservation(void) {
 			mu_assert_streq (r_meta_get_string (core->anal, R_META_TYPE_COMMENT, address), "manual contract annotation", "no dependent contract annotation on refusal");
 			if (scenario == 0) {
 				mu_assert_null (r_anal_get_function_at (core->anal, address), "conflicting result type stops function/signature creation");
-				RAnalBaseType *type = r_anal_get_base_type (core->anal, expected_contracts[contract].ret);
+				RAnalBaseType *type = r_anal_get_base_type (core->anal, expected_contracts[contract].ret, R_TYPE_NAMESPACE_ORDINARY);
 				mu_assert_eq (type->size, 8, "manual return type retained");
 				mu_assert_streq (RVecAnalTypeMember_at (&type->struct_data.members, 0)->name, "manual_field", "manual field retained");
 				r_anal_base_type_free (type);

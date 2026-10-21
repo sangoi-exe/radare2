@@ -127,7 +127,7 @@ static bool tlink51_label_admit(BorlandProfileContext *ctx, ut64 physical, const
 
 // The first query need not install types. An occupied inline type must still have precisely the canonical fields.
 static bool tlink51_inline_type_admit(RAnal *anal, const char *name, int length) {
-	RAnalBaseType *type = r_anal_get_base_type (anal, name);
+	RAnalBaseType *type = r_anal_get_base_type (anal, name, R_TYPE_NAMESPACE_ORDINARY);
 	if (!type) {
 		return !sdb_const_get (anal->sdb_types, name, NULL);
 	}

@@ -124,7 +124,7 @@ static bool profile_data_preflight(BorlandProfileContext *ctx, ut64 physical, in
 	if (!qualified) {
 		return false;
 	}
-	RAnalBaseType *layout = r_anal_get_base_type (anal, type);
+	RAnalBaseType *layout = r_anal_get_base_type (anal, type, R_TYPE_NAMESPACE_ORDINARY);
 	BorlandDataCheck check = {
 		.anal = anal, .address = address, .end = address + size, .type = type, .layout = layout,
 		.element_size = element_size

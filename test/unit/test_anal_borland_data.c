@@ -93,7 +93,7 @@ static int reference_type(RAnal *anal, ut64 from, ut64 to) {
 static bool test_data_types_and_equivalent_state(void) {
 	BorlandProfileContext ctx = local_data ();
 	mu_assert_true (selected_types (ctx.anal), "selected exact native types");
-	RAnalBaseType *startup = r_anal_get_base_type (ctx.anal, "StartupData70Partial");
+	RAnalBaseType *startup = r_anal_get_base_type (ctx.anal, "StartupData70Partial", R_TYPE_NAMESPACE_ORDINARY);
 	mu_assert_notnull (startup, "native startup record");
 	mu_assert_eq (startup->size, 560, "complete byte extent stored as bits");
 	mu_assert_eq (RVecAnalTypeMember_length (&startup->struct_data.members), 11, "only established members, no invented gap fields");
@@ -101,7 +101,7 @@ static bool test_data_types_and_equivalent_state(void) {
 	mu_assert_eq (member->offset, 27, "unaligned BYTE array offset");
 	mu_assert_eq (member->count, 43, "native array count");
 	r_anal_base_type_free (startup);
-	RAnalBaseType *xxv = r_anal_get_base_type (ctx.anal, "XxvInitialized296Partial");
+	RAnalBaseType *xxv = r_anal_get_base_type (ctx.anal, "XxvInitialized296Partial", R_TYPE_NAMESPACE_ORDINARY);
 	mu_assert_eq (xxv->size, 2368, "XXV full296-byte extent survives trailing gap");
 	mu_assert_eq (RVecAnalTypeMember_length (&xxv->struct_data.members), 4, "public labels do not create fields or extents");
 	r_anal_base_type_free (xxv);
@@ -203,8 +203,7 @@ static bool test_data_prototype_and_pointer_categories(void) {
 	local_free (&ctx);
 	ctx = local_data ();
 	mu_assert_true (selected_types (ctx.anal), "local types for pointer field");
-	sdb_set (ctx.anal->sdb_types, "function_pointer", "func", 0);
-	sdb_set (ctx.anal->sdb_types, "type.function_pointer", "func", 0);
+	mu_assert_true (r_anal_import_c_decls (ctx.anal, "typedef int (*function_pointer)(void);", NULL), "the crossing object has an actual native function-pointer declaration");
 	mu_assert_true (r_type_get_bitsize (ctx.anal->sdb_types, "function_pointer") > 8, "native function-pointer storage has object width");
 	r_anal_types_set_link (ctx.anal, "function_pointer", LOCAL_DATA - 1);
 	mu_assert_false (profile_data (&ctx, 32, 70, "StartupData70Partial"), "crossing function-pointer object is not exempted as a code prototype");

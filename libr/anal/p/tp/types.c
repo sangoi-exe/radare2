@@ -685,9 +685,7 @@ static const char *tp_skip_kind_prefix(const char *t) {
 			break;
 		}
 	}
-	t = r_str_skip_prefix (t, "struct ");
-	t = r_str_skip_prefix (t, "union ");
-	return r_str_skip_prefix (t, "enum ");
+	return t;
 }
 
 // follow typedef aliases to the underlying type name; the bound keeps cycles from hanging
@@ -898,7 +896,10 @@ static RAnalBaseType *tp_resolve_ptr_base(RAnal *anal, const char *ptr_type) {
 	if (!name) {
 		return NULL;
 	}
-	RAnalBaseType *bt = r_anal_get_base_type (anal, name);
+	char *key = NULL;
+	Sdb *db = r_type_base_db (anal->sdb_types, name, &key);
+	RAnalBaseType *bt = db? r_anal_get_base_type (anal, key, db == anal->sdb_types? R_TYPE_NAMESPACE_ORDINARY: R_TYPE_NAMESPACE_TAG): NULL;
+	free (key);
 	free (name);
 	if (bt && bt->kind != R_ANAL_BASE_TYPE_KIND_STRUCT && bt->kind != R_ANAL_BASE_TYPE_KIND_UNION) {
 		r_anal_base_type_free (bt);

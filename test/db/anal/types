@@ -57,7 +57,7 @@ afvt arg1 "struct Ctx *" @ 0
 aei
 aeim
 aaft
-tsc Ctx
+tsc struct Ctx
 EOF
 EXPECT=<<EOF
 struct Ctx {
@@ -89,8 +89,8 @@ aei
 aeim
 aaft
 aaft
-tsc Outer
-tsc Inner
+tsc struct Outer
+tsc struct Inner
 EOF
 EXPECT=<<EOF
 struct Outer {
@@ -126,8 +126,8 @@ aei
 aeim
 aaft
 aaft
-tsc Wrapper
-tsc Table
+tsc struct Wrapper
+tsc struct Table
 EOF
 EXPECT=<<EOF
 struct Wrapper {
@@ -163,7 +163,7 @@ aei
 aeim
 aaft
 aaft
-tsc Table
+tsc struct Table
 EOF
 EXPECT=<<EOF
 struct Table {
@@ -192,7 +192,7 @@ afvt arg1 "struct Ctx *" @ 0
 aei
 aeim
 aaft
-tsc Ctx
+tsc struct Ctx
 EOF
 EXPECT=<<EOF
 struct Ctx {
@@ -222,7 +222,7 @@ afvt arg1 "CtxAlias *" @ 0
 aei
 aeim
 aaft
-tsc Ctx
+tsc struct Ctx
 EOF
 EXPECT=<<EOF
 struct Ctx {
@@ -251,7 +251,7 @@ afvt arg1 "struct Big *" @ 0
 aei
 aeim
 aaft
-tsc Big
+tsc struct Big
 EOF
 EXPECT=<<EOF
 struct Big {
@@ -284,8 +284,8 @@ afvt arg1 "struct Outer *" @ 0
 aei
 aeim
 aaft
-tsc Outer
-tsc Inner
+tsc struct Outer
+tsc struct Inner
 EOF
 EXPECT=<<EOF
 struct Outer {
@@ -321,7 +321,7 @@ afvt arg_10h "struct Ctx *" @ 0
 aei
 aeim
 aaft
-tsc Ctx
+tsc struct Ctx
 EOF
 EXPECT=<<EOF
 struct Ctx {
@@ -350,7 +350,7 @@ afvt arg1 "struct Ctx *" @ 0
 aei
 aeim
 aaft
-tsc Ctx
+tsc struct Ctx
 EOF
 EXPECT=<<EOF
 struct Ctx {
@@ -379,7 +379,7 @@ afvt arg1 "struct Ctx *" @ 0
 aei
 aeim
 aaft
-tsc Ctx
+tsc struct Ctx
 EOF
 EXPECT=<<EOF
 struct Ctx {
@@ -410,7 +410,7 @@ afv-arg_10h @ 0
 aei
 aeim
 aaft
-tsc Ctx
+tsc struct Ctx
 EOF
 EXPECT=<<EOF
 struct Ctx {
@@ -439,7 +439,7 @@ afvt arg1 "struct Ctx *" @ 0
 aei
 aeim
 aaft
-tsc Ctx
+tsc struct Ctx
 EOF
 EXPECT=<<EOF
 struct Ctx {
@@ -468,7 +468,7 @@ afvt arg1 "struct Ctx *" @ 0
 aei
 aeim
 aaft
-tsc Ctx
+tsc struct Ctx
 EOF
 EXPECT=<<EOF
 struct Ctx {
@@ -497,7 +497,7 @@ afvt arg1 "struct Pair *" @ 0
 aei
 aeim
 aaft
-tsc Pair
+tsc struct Pair
 EOF
 EXPECT=<<EOF
 struct Pair {
@@ -527,7 +527,7 @@ afvt arg1 "struct Ctx *" @ 0
 aei
 aeim
 aaft
-tsc Ctx
+tsc struct Ctx
 EOF
 EXPECT=<<EOF
 struct Ctx {
@@ -556,7 +556,7 @@ afvt arg1 "struct Ctx *" @ 0
 aei
 aeim
 aaft
-tsc Ctx
+tsc struct Ctx
 EOF
 EXPECT=<<EOF
 struct Ctx {
@@ -586,8 +586,8 @@ afvt arg1 "struct Outer *" @ 0
 aei
 aeim
 aaft
-tsc Outer
-tsc Inner
+tsc struct Outer
+tsc struct Inner
 EOF
 EXPECT=<<EOF
 struct Outer {
@@ -622,7 +622,7 @@ afvt arg1 "struct Outer *" @ 0
 aei
 aeim
 aaft
-tsc Inner
+tsc struct Inner
 EOF
 EXPECT=<<EOF
 struct Inner {
@@ -653,7 +653,7 @@ afvt arg1 "struct Outer *" @ 0
 aei
 aeim
 aaft
-tsc Inner
+tsc struct Inner
 EOF
 EXPECT=<<EOF
 struct Inner {
@@ -683,8 +683,8 @@ afvt arg1 "struct Outer *" @ 0
 aei
 aeim
 aaft
-tsc Outer
-tsc Inner
+tsc struct Outer
+tsc struct Inner
 EOF
 EXPECT=<<EOF
 struct Outer {
@@ -719,7 +719,7 @@ afvt arg1 "struct Outer *" @ 0
 aei
 aeim
 aaft
-tsc Inner
+tsc struct Inner
 EOF
 EXPECT=<<EOF
 struct Inner {
@@ -752,7 +752,7 @@ afvt arg1 "struct Outer *" @ 0
 aei
 aeim
 aaft
-tsc Inner
+tsc struct Inner
 EOF
 EXPECT=<<EOF
 struct Inner {
@@ -783,7 +783,7 @@ afvt arg1 "struct Ctx *" @ 0
 aei
 aeim
 aaft
-tsc Ctx
+tsc struct Ctx
 EOF
 EXPECT=<<EOF
 struct Ctx {
@@ -812,7 +812,7 @@ afvt arg1 "struct Ctx *" @ 0
 aei
 aeim
 aaft
-tsc Ctx
+tsc struct Ctx
 EOF
 EXPECT=<<EOF
 struct Ctx {
@@ -842,7 +842,7 @@ afvt arg1 "struct Ctx *" @ 0
 aei
 aeim
 aaft
-tsc Ctx
+tsc struct Ctx
 EOF
 EXPECT=<<EOF
 struct Ctx {
@@ -871,7 +871,7 @@ afvt arg1 "struct Ctx *" @ 0
 aei
 aeim
 aaft
-tsc Ctx
+tsc struct Ctx
 EOF
 EXPECT=<<EOF
 struct Ctx {
@@ -902,7 +902,7 @@ afvt arg1 "struct Ctx *" @ 0
 aei
 aeim
 aaft
-tsc Ctx
+tsc struct Ctx
 EOF
 EXPECT=<<EOF
 struct Ctx {
@@ -933,7 +933,7 @@ afvt arg1 "struct Ctx *" @ 0
 aei
 aeim
 aaft
-tsc Ctx
+tsc struct Ctx
 EOF
 EXPECT=<<EOF
 struct Ctx {
@@ -962,7 +962,7 @@ afvt arg1 "struct Ctx *" @ 0
 aei
 aeim
 aaft
-tsc Ctx
+tsc struct Ctx
 EOF
 EXPECT=<<EOF
 struct Ctx {
@@ -991,7 +991,7 @@ afvt arg1 "union Cell *" @ 0
 aei
 aeim
 aaft
-tuc Cell
+tuc union Cell
 EOF
 EXPECT=<<EOF
 union Cell {
@@ -1019,7 +1019,7 @@ afvt arg1 "union Cell2 *" @ 0
 aei
 aeim
 aaft
-tuc Cell2
+tuc union Cell2
 EOF
 EXPECT=<<EOF
 union Cell2 {
@@ -1048,7 +1048,7 @@ afvt arg_8h "struct Ctx *" @ 0
 aei
 aeim
 aaft
-tsc Ctx
+tsc struct Ctx
 EOF
 EXPECT=<<EOF
 struct Ctx {
@@ -1079,8 +1079,8 @@ afvt arg1 "struct Outer *" @ 0
 aei
 aeim
 aaft
-tsc Outer
-tsc Inner
+tsc struct Outer
+tsc struct Inner
 EOF
 EXPECT=<<EOF
 struct Outer {
@@ -1114,7 +1114,7 @@ afvt arg1 "union Cell3 *" @ 0
 aei
 aeim
 aaft
-tuc Cell3
+tuc union Cell3
 EOF
 EXPECT=<<EOF
 union Cell3 {
@@ -1143,7 +1143,7 @@ afvt arg1 "struct Ctx *" @ 0
 aei
 aeim
 aaft
-tsc Ctx
+tsc struct Ctx
 EOF
 EXPECT=<<EOF
 struct Ctx {
@@ -1172,7 +1172,7 @@ afvt arg1 "struct Ctx *" @ 0
 aei
 aeim
 aaft
-tsc Ctx
+tsc struct Ctx
 EOF
 EXPECT=<<EOF
 struct Ctx {
@@ -1201,7 +1201,7 @@ afvt arg1 "struct Ctx *" @ 0
 aei
 aeim
 aaft
-tsc Ctx
+tsc struct Ctx
 EOF
 EXPECT=<<EOF
 struct Ctx {
@@ -1232,7 +1232,7 @@ afvt arg1 "struct Ctx *" @ 0
 aei
 aeim
 aaft
-tsc Ctx
+tsc struct Ctx
 EOF
 EXPECT=<<EOF
 struct Ctx {
@@ -1265,8 +1265,8 @@ afvt arg2 "struct B *" @ 0
 aei
 aeim
 aaft
-tsc C
-tsc B
+tsc struct C
+tsc struct B
 EOF
 EXPECT=<<EOF
 struct C {
@@ -1327,7 +1327,7 @@ afvt arg1 "struct Zed *" @ 0
 aei
 aeim
 aaft
-tsc Zed
+tsc struct Zed
 EOF
 EXPECT=<<EOF
 struct Zed {
@@ -1355,7 +1355,7 @@ afvt arg1 "struct Far *" @ 0
 aei
 aeim
 aaft
-tsc Far
+tsc struct Far
 EOF
 EXPECT=<<EOF
 struct Far {
@@ -1385,8 +1385,8 @@ afvt arg1 "struct Hz *" @ 0
 aei
 aeim
 aaft
-tk struct.Hz.x
-tk struct.Hz.tail
+tk tags/struct.Hz.x
+tk tags/struct.Hz.tail
 EOF
 EXPECT=<<EOF
 handle_t,8,0

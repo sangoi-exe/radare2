@@ -131,7 +131,7 @@ static bool test_simtower_production_complete_facts(void) {
 		{"XxvInitialized296Partial",4,{10,14,18,20},{4,4,2,2}}
 	};
 	for (i = 0; i < R_ARRAY_SIZE (layouts); i++) {
-		RAnalBaseType *layout = r_anal_get_base_type (core->anal, layouts[i].name);
+		RAnalBaseType *layout = r_anal_get_base_type (core->anal, layouts[i].name, R_TYPE_NAMESPACE_ORDINARY);
 		mu_assert_notnull (layout, "production-created partial native record");
 		mu_assert_eq (RVecAnalTypeMember_length (&layout->struct_data.members), layouts[i].count, "only source-established fields, no inferred gap/public extents");
 		int field;

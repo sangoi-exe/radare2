@@ -1090,15 +1090,17 @@ R_API int r_anal_var_count_locals(RAnalFunction *fcn) {
 
 static bool var_add_structure_fields_to_list(RAnal *a, RAnalVar *av, RList *list) {
 	Sdb *TDB = a->sdb_types;
-	const char *type_kind = sdb_const_get (TDB, av->type, 0);
+	char *base_key = NULL;
+	Sdb *db = r_type_base_db (TDB, av->type, &base_key);
+	const char *type_kind = db? sdb_const_get (db, base_key, 0): NULL;
 	if (type_kind && !strcmp (type_kind, "struct")) {
 		char *field_name, *new_name;
 		int field_n;
-		char *type_key = r_str_newf ("%s.%s", type_kind, av->type);
-		for (field_n = 0; (field_name = sdb_array_get (TDB, type_key, field_n, NULL)); field_n++) {
+		char *type_key = r_str_newf ("%s.%s", type_kind, base_key);
+		for (field_n = 0; (field_name = sdb_array_get (db, type_key, field_n, NULL)); field_n++) {
 			char *field_key = r_str_newf ("%s.%s", type_key, field_name);
 			ut64 field_offset = 0;
-			free (r_type_get_member (TDB, field_key, &field_offset, NULL));
+			free (r_type_get_member (db, field_key, &field_offset, NULL));
 			new_name = r_str_newf ("%s.%s", av->name, field_name);
 			RAnalVarField *field = R_NEW0 (RAnalVarField);
 			field->name = new_name;
@@ -1109,8 +1111,10 @@ static bool var_add_structure_fields_to_list(RAnal *a, RAnalVar *av, RList *list
 			free (field_name);
 		}
 		free (type_key);
+		free (base_key);
 		return true;
 	}
+	free (base_key);
 	ArrayTypeInfo array;
 	if (array_type_info (a, av->type, &array) && array.count >= 2 && array.count <= 256) {
 		const int count = array.count;

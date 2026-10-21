@@ -10,7 +10,7 @@
 
 #define check_kv(k, v)                                                         \
 	do {                                                                   \
-		char *value = sdb_get (anal->sdb_types, k, NULL);                    \
+		char *value = sdb_get (sdb_ns (anal->sdb_types, "tags", false), k, NULL); \
 		mu_assert_nullable_streq (value, v, "Wrong key - value pair"); \
 		free (value);                                                  \
 	} while (0)

@@ -163,7 +163,7 @@ static bool tp_global_field(TPState *tps, ut64 base, ut64 addr, const char *type
 		return false;
 	}
 	const char *owned = sdb_const_getf (anal->sdb, NULL, "global.layout.0x%" PFMT64x, base);
-	RAnalBaseType *bt = r_anal_get_base_type (anal, layout);
+	RAnalBaseType *bt = r_anal_get_base_type (anal, layout, R_TYPE_NAMESPACE_ORDINARY);
 	if (bt && (!owned || strcmp (owned, layout) || bt->kind != R_ANAL_BASE_TYPE_KIND_STRUCT)) {
 		r_anal_base_type_free (bt);
 		free (layout);

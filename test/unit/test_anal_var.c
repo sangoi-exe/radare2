@@ -453,7 +453,7 @@ static bool test_r_anal_var_struct_extent(void) {
 	RAnalVar *before = r_anal_function_set_var (fcn, -17, R_ANAL_VAR_KIND_BPV, "uint8_t", 1, false, "before");
 	r_anal_function_set_var (fcn, -1, R_ANAL_VAR_KIND_BPV, "uint8_t", 1, false, "interior");
 	RAnalVar *after = r_anal_function_set_var (fcn, 0, R_ANAL_VAR_KIND_BPV, "uint8_t", 1, false, "after");
-	r_anal_function_set_var (fcn, -16, R_ANAL_VAR_KIND_BPV, "Pair", 1, false, "record");
+	r_anal_function_set_var (fcn, -16, R_ANAL_VAR_KIND_BPV, "struct Pair", 1, false, "record");
 	mu_assert_null (r_anal_function_get_var_byname (fcn, "interior"), "ordinary sized aggregates retain interior ownership");
 	mu_assert_ptreq (r_anal_function_get_var_byname (fcn, "before"), before, "ordinary aggregates keep preceding variables");
 	mu_assert_ptreq (r_anal_function_get_var_byname (fcn, "after"), after, "ordinary aggregates keep endpoint variables");

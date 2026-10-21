@@ -616,6 +616,28 @@ bool test_r_anal_function_signature_parse_requires_a_named_function(void) {
 	mu_end;
 }
 
+bool test_r_anal_function_signature_prepared_tag_namespace(void) {
+	RAnal *anal = r_anal_new ();
+	anal->config->bits = 64;
+	r_anal_types_reload (anal, R2_PREFIX, NULL, NULL);
+	anal->opt.tparser = strdup ("tcc");
+	RAnalFunction *fcn = r_anal_create_function (anal, "tagged", 0x1000, R_ANAL_FCN_TYPE_FCN, NULL);
+	char *error = NULL;
+	RAnalFunctionSignaturePrepared *prepared = r_anal_function_signature_prepare (anal, "int tagged(struct Fresh *value)", &error);
+	mu_assert_notnull (prepared, "the selected TCC frontend prepares the actual tagged reference");
+	mu_assert_null (error, "the prepared tag declaration is admitted");
+	mu_assert_eq (r_type_kind (anal->sdb_types, "struct Fresh"), R_TYPE_INVALID, "preparation does not mutate the analysis tag namespace");
+	mu_assert_true (r_anal_function_signature_apply (anal, fcn, prepared, R_ANAL_SIGNATURE_APPLY_SHARED), "application retains the prepared child-namespace records");
+	mu_assert_eq (r_type_kind (anal->sdb_types, "struct Fresh"), R_TYPE_STRUCT, "the applied signature carries its introduced tag identity");
+	mu_assert_eq (r_type_kind (anal->sdb_types, "Fresh"), R_TYPE_INVALID, "application does not fabricate an ordinary tag alias");
+	char *param = r_type_func_args_type (anal->sdb_types, "tagged", 0);
+	mu_assert_streq (param, "struct Fresh *", "the applied parameter references the actual tag");
+	free (param);
+	r_anal_function_signature_prepared_free (prepared);
+	r_anal_free (anal);
+	mu_end;
+}
+
 bool test_r_anal_function_signature_visible_typedef(void) {
 	RAnal *anal = r_anal_new ();
 	char *error = NULL;
@@ -1565,13 +1587,15 @@ bool test_r_anal_function_get_signature_origin_of_a_zero_argument_prototype(void
 	RAnal *anal = r_anal_new ();
 	mu_assert_notnull (anal, "Couldn't create new RAnal");
 	r_anal_types_reload (anal, R2_PREFIX, NULL, NULL);
-	// the struct tag takes the shared kind key; the prototype is still there
+	// The ordinary prototype and same-spelling tag have separate owners.
 	char *error = NULL;
 	bool ok = r_anal_import_c_decls (anal,
 		"int foo (void);"
 		"struct foo { int x; };", &error);
 	mu_assert_true (ok, error? error: "seed a prototype whose name a struct also uses");
 	free (error);
+	mu_assert_eq (r_type_kind (anal->sdb_types, "foo"), R_TYPE_FUNCTION, "the tag does not replace the ordinary function root");
+	mu_assert_eq (r_type_kind (anal->sdb_types, "struct foo"), R_TYPE_STRUCT, "the same-spelling struct retains tag identity");
 
 	RAnalFunction *f = r_anal_create_function (anal, "foo", 0x5000, 0, NULL);
 	mu_assert_notnull (f, "Couldn't create function for the zero-argument test");
@@ -1816,6 +1840,7 @@ int all_tests(void) {
 	mu_run_test (test_r_anal_str_to_fcn_defaults_omitted_return_type);
 	mu_run_test (test_r_anal_function_signature_parse_requires_a_named_function);
 	mu_run_test (test_r_anal_function_signature_visible_typedef);
+	mu_run_test (test_r_anal_function_signature_prepared_tag_namespace);
 	mu_run_test (test_r_anal_function_signature_prototype_roundtrip);
 	mu_run_test (test_r_anal_function_set_signature_refuses_incomplete_fixed_snapshot);
 	mu_run_test (test_r_anal_function_signature_empty_list_specificity);

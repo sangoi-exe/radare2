@@ -3,9 +3,9 @@ FILE=--
 ARGS=-b 64
 CMDS=<<EOF
 'td struct rea_callbacks { void (*(*xDlSym)(void *ctx, void *handle, const char *name))(void); int (*next)(int n); };
-tk struct.rea_callbacks
-tk struct.rea_callbacks.xDlSym
-tk struct.rea_callbacks.next
+tk tags/struct.rea_callbacks
+tk tags/struct.rea_callbacks.xDlSym
+tk tags/struct.rea_callbacks.next
 tk~^func.rea_callbacks
 EOF
 EXPECT=<<EOF
@@ -35,9 +35,9 @@ ARGS=-b 64
 CMDS=<<EOF
 'td typedef int (*CB)(int x[4]); struct S { CB callback; char tail; };
 tk typedef.CB
-tk struct.S.callback
-tk struct.S.tail
-tk type.S.size
+tk tags/struct.S.callback
+tk tags/struct.S.tail
+tk tags/type.S.size
 EOF
 EXPECT=<<EOF
 func.CB *
@@ -53,12 +53,12 @@ ARGS=-b 64
 CMDS=<<EOF
 'td typedef int (*CB)(int x[4]); typedef CB CB2; struct S { CB2 callback; char tail; }; typedef int *Pointers[2]; struct PointerArrays {int *direct[2]; Pointers indirect; char tail;};
 tk typedef.CB2
-tk struct.S.callback
-tk struct.S.tail
-tk type.S.size
-tk struct.PointerArrays.indirect
-tk struct.PointerArrays.tail
-tk type.PointerArrays.size
+tk tags/struct.S.callback
+tk tags/struct.S.tail
+tk tags/type.S.size
+tk tags/struct.PointerArrays.indirect
+tk tags/struct.PointerArrays.tail
+tk tags/type.PointerArrays.size
 EOF
 EXPECT=<<EOF
 CB
@@ -76,10 +76,10 @@ FILE=--
 ARGS=-b 64
 CMDS=<<EOF
 'td union rea_callback_union { void*(*first)(int n); int (*second)(void); int value; };
-tk union.rea_callback_union
-tk union.rea_callback_union.first
-tk union.rea_callback_union.second
-tk union.rea_callback_union.value
+tk tags/union.rea_callback_union
+tk tags/union.rea_callback_union.first
+tk tags/union.rea_callback_union.second
+tk tags/union.rea_callback_union.value
 tk func.rea_callback_union.first.ret
 tk func.rea_callback_union.first.arg.0
 EOF
@@ -101,12 +101,12 @@ CMDS=<<EOF
 tk typedef.CB
 tss func.CB
 tss CB
-tk struct.F.cb
-tk struct.F.tail
-tss F
+tk tags/struct.F.cb
+tk tags/struct.F.tail
+tss struct F
 ttc CB
-tsc F
-ts F
+tsc struct F
+ts struct F
 EOF
 EXPECT=<<EOF
 func.CB far *
@@ -130,10 +130,10 @@ FILE=--
 ARGS=-a x86 -b 16
 CMDS=<<EOF
 'td typedef unsigned char BYTE;struct Layers {BYTE far * volatile near *p;BYTE far **q;};
-tk struct.Layers.p
-tk struct.Layers.q
-tss Layers
-tsc Layers
+tk tags/struct.Layers.p
+tk tags/struct.Layers.q
+tss struct Layers
+tsc struct Layers
 EOF
 EXPECT=<<EOF
 BYTE far * volatile near *,0,0

@@ -1693,34 +1693,17 @@ static void get_fieldlist_print_type(STpiStream *ss, void *type, char **name) {
 
 static void get_enum_print_type(STpiStream *ss, void *type, char **name) {
 	STypeInfo *ti = (STypeInfo *)type;
-	SType *t = NULL;
 	char *tmp_name = NULL;
-
-	ti->get_utype (ss, ti, (void **)&t);
-	if (t && t->type_data.leaf_type == eLF_SIMPLE_TYPE) { // BaseType
-		SLF_SIMPLE_TYPE *base_type = t->type_data.type_info;
-		tmp_name = strdup (base_type->type);
-		free_simple_type (t);
-	} else if (t) {
-		ti = &t->type_data;
-		if (ti->get_print_type) {
-			ti->get_print_type (ss, ti, &tmp_name);
-		}
-	}
-
+	ti->get_name (ss, ti, &tmp_name);
 	*name = r_str_newf ("enum %s", tmp_name? tmp_name: "");
-	free (tmp_name);
 }
 
 static void get_class_struct_print_type(STpiStream *ss, void *type, char **name) {
 	STypeInfo *ti = (STypeInfo *)type;
 	char *tmp_name = NULL;
 
-	ELeafType lt = ti->leaf_type;
 	ti->get_name (ss, ti, &tmp_name);
-
-	const char *tmp1 = (lt == eLF_CLASS)? "class": "struct";
-	*name = r_str_newf ("%s %s", tmp1, tmp_name? tmp_name: "");
+	*name = r_str_newf ("struct %s", tmp_name? tmp_name: "");
 }
 
 static void get_arglist_print_type(STpiStream *ss, void *type, char **name) {

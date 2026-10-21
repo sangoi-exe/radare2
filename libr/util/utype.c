@@ -7,16 +7,20 @@
 R_API bool r_type_set(Sdb *TDB, ut64 at, const char *field, ut64 val) {
 	const char *kind = sdb_const_getf (TDB, NULL, "link.%08" PFMT64x, at);
 	if (kind) {
-		const char *p = sdb_const_get (TDB, kind, NULL);
+		char *key = NULL;
+		Sdb *db = r_type_base_db (TDB, kind, &key);
+		const char *p = db? sdb_const_get (db, key, NULL): NULL;
 		if (p) {
-			char *v = r_str_newf ("%s.%s.%s", p, kind, field);
+			char *v = r_str_newf ("%s.%s.%s", p, key, field);
 			ut64 off = 0;
-			char *mtype = r_type_get_member (TDB, v, &off, NULL);
+			char *mtype = r_type_get_member (db, v, &off, NULL);
 			free (mtype);
 			free (v);
+			free (key);
 			eprintf ("wv 0x%08" PFMT64x " @ 0x%08" PFMT64x "\n", val, at + off);
 			return true;
 		}
+		free (key);
 		R_LOG_ERROR ("Invalid kind of type");
 	}
 	return false;
@@ -37,30 +41,107 @@ static char *type_unqualified(Sdb *types, const char *type) {
 	return text;
 }
 
-static const char *type_aggregate_prefixed(const char *R_NONNULL type, const char **R_NONNULL name) {
-	const char *kind = r_str_startswith (type, "struct")? "struct": r_str_startswith (type, "union")? "union": NULL;
-	if (kind) {
-		size_t klen = strlen (kind);
-		if (IS_WHITESPACE (type[klen])) {
-			*name = r_str_trim_head_ro (type + klen);
-			return R_STR_ISNOTEMPTY (*name)? kind: NULL;
-		}
+R_API Sdb *r_type_namespace(Sdb *TDB, RTypeNamespace space, bool create) {
+	R_RETURN_VAL_IF_FAIL (TDB, NULL);
+	if (space == R_TYPE_NAMESPACE_TAG) {
+		return sdb_ns (TDB, "tags", create);
 	}
-	return NULL;
+	return space == R_TYPE_NAMESPACE_ORDINARY? TDB: NULL;
+}
+
+R_API char *r_type_identifier_key(const char *name, RTypeNamespace space) {
+	R_RETURN_VAL_IF_FAIL (name, NULL);
+	if (space == R_TYPE_NAMESPACE_TAG) {
+		return r_str_newf ("tags/%s", name);
+	}
+	return space == R_TYPE_NAMESPACE_ORDINARY? strdup (name): NULL;
+}
+
+R_API Sdb *r_type_base_db(Sdb *TDB, const char *name, char **key) {
+	R_RETURN_VAL_IF_FAIL (TDB && name && key, NULL);
+	*key = NULL;
+	bool tagged = r_str_startswith (name, "struct ") || r_str_startswith (name, "union ") || r_str_startswith (name, "enum ");
+	if (!tagged && sdb_const_get (TDB, name, NULL)) {
+		*key = strdup (name);
+		return *key? TDB: NULL;
+	}
+	RTypeDecl *decl = r_type_decl_parse (name, R_TYPE_DECL_CONTEXT_ABSTRACT, TDB, NULL);
+	if (!decl || decl->name || decl->type->kind != R_TYPE_DECL_BASE) {
+		r_type_decl_free (decl);
+		return NULL;
+	}
+	const char *bare = decl->type->base.name;
+	const char *tag_kind = NULL;
+	if (r_str_startswith (bare, "struct ") || r_str_startswith (bare, "union ") || r_str_startswith (bare, "enum ")) {
+		tag_kind = r_str_startswith (bare, "struct ")? "struct": r_str_startswith (bare, "union ")? "union": "enum";
+		bare = strchr (bare, ' ') + 1;
+	}
+	Sdb *db = r_type_namespace (TDB, tag_kind? R_TYPE_NAMESPACE_TAG: R_TYPE_NAMESPACE_ORDINARY, false);
+	const char *kind = db? sdb_const_get (db, bare, NULL): NULL;
+	if (!kind || (tag_kind && strcmp (kind, tag_kind))) {
+		db = NULL;
+	} else {
+		*key = strdup (bare);
+	}
+	r_type_decl_free (decl);
+	return *key? db: NULL;
+}
+
+R_API char *r_type_identifier_name(const RTypeIdentity *identity) {
+	R_RETURN_VAL_IF_FAIL (identity && identity->db && identity->key, NULL);
+	const char *kind = sdb_const_get (identity->db, identity->key, NULL);
+	if (!kind) {
+		return NULL;
+	}
+	if (identity->space == R_TYPE_NAMESPACE_TAG) {
+		return R_STR_CMP_ANY (kind, "struct", "union", "enum")? r_str_newf ("%s %s", kind, identity->key): NULL;
+	}
+	return strdup (identity->key);
+}
+
+R_API void r_type_identity_free(RTypeIdentity *identity) {
+	if (identity) {
+		free (identity->key);
+		free (identity);
+	}
+}
+
+R_API RList *r_type_get_roots(Sdb *TDB) {
+	R_RETURN_VAL_IF_FAIL (TDB, NULL);
+	RList *roots = r_list_newf ((RListFree)r_type_identity_free);
+	if (!roots) {
+		return NULL;
+	}
+	RTypeNamespace space;
+	for (space = R_TYPE_NAMESPACE_ORDINARY; space <= R_TYPE_NAMESPACE_TAG; space++) {
+		Sdb *db = r_type_namespace (TDB, space, false);
+		SdbList *entries = db? sdb_foreach_list (db, true): NULL;
+		SdbListIter *iter;
+		SdbKv *kv;
+		ls_foreach (entries, iter, kv) {
+			if (R_STR_CMP_ANY (sdbkv_value (kv), "type", "struct", "union", "enum", "typedef", "func")) {
+				RTypeIdentity *identity = R_NEW0 (RTypeIdentity);
+				identity->db = db;
+				identity->key = strdup (sdbkv_key (kv));
+				identity->space = space;
+				if (!identity->key || !r_list_append (roots, identity)) {
+					r_type_identity_free (identity);
+					ls_free (entries);
+					r_list_free (roots);
+					return NULL;
+				}
+			}
+		}
+		ls_free (entries);
+	}
+	return roots;
 }
 
 R_API RTypeKind r_type_kind(Sdb *TDB, const char *name) {
 	R_RETURN_VAL_IF_FAIL (TDB && name, R_TYPE_INVALID);
-	RTypeDecl *decl = r_type_decl_parse (name, R_TYPE_DECL_CONTEXT_ABSTRACT, TDB, NULL);
-	if (!decl || decl->name || decl->type->kind != R_TYPE_DECL_BASE) {
-		r_type_decl_free (decl);
-		return R_TYPE_INVALID;
-	}
-	const char *bare = decl->type->base.name;
-	if (r_str_startswith (bare, "struct ") || r_str_startswith (bare, "union ") || r_str_startswith (bare, "enum ")) {
-		bare = strchr (bare, ' ') + 1;
-	}
-	const char *kind = sdb_const_get (TDB, bare, NULL);
+	char *key = NULL;
+	Sdb *db = r_type_base_db (TDB, name, &key);
+	const char *kind = db? sdb_const_get (db, key, NULL): NULL;
 	RTypeKind result = R_TYPE_INVALID;
 	if (kind) {
 		if (!strcmp (kind, "type")) {
@@ -77,7 +158,7 @@ R_API RTypeKind r_type_kind(Sdb *TDB, const char *name) {
 			result = R_TYPE_FUNCTION;
 		}
 	}
-	r_type_decl_free (decl);
+	free (key);
 	return result;
 }
 
@@ -117,20 +198,23 @@ R_API R_OWNED char *r_type_get_member(Sdb *TDB, const char *key, ut64 *offset, i
 
 R_API RList *r_type_get_enum(Sdb *TDB, const char *name) {
 	R_RETURN_VAL_IF_FAIL (TDB && name, NULL);
-	char *p, var[130];
+	char *p;
 	int n;
 
 	if (r_type_kind (TDB, name) != R_TYPE_ENUM) {
 		return NULL;
 	}
 	RList *res = r_list_newf ( (RListFree)r_type_enum_free);
-	snprintf (var, sizeof (var), "enum.%s", name);
-	for (n = 0; (p = sdb_array_get (TDB, var, n, NULL)); n++) {
+	char *key = NULL;
+	Sdb *db = r_type_base_db (TDB, name, &key);
+	char *var = r_str_newf ("enum.%s", key);
+	free (key);
+	for (n = 0; (p = sdb_array_get (db, var, n, NULL)); n++) {
 		RTypeEnum *member = R_NEW0 (RTypeEnum);
 		if (member) {
 			char *var2 = r_str_newf ("%s.%s", var, p);
 			if (var2) {
-				char *val = sdb_array_get (TDB, var2, 0, NULL);
+				char *val = sdb_array_get (db, var2, 0, NULL);
 				if (val) {
 					member->name = p;
 					member->val = val;
@@ -144,6 +228,7 @@ R_API RList *r_type_get_enum(Sdb *TDB, const char *name) {
 			}
 		}
 	}
+	free (var);
 	return res;
 }
 
@@ -160,12 +245,15 @@ R_API char *r_type_enum_member(Sdb *TDB, const char *name, const char *member, u
 	if (r_type_kind (TDB, name) != R_TYPE_ENUM) {
 		return NULL;
 	}
+	char *key = NULL;
+	Sdb *db = r_type_base_db (TDB, name, &key);
 	const char *res = member
-		? sdb_const_getf (TDB, NULL, "enum.%s.%s", name, member)
-		: sdb_const_getf (TDB, NULL, "enum.%s.0x%" PFMT64x, name, val);
+		? sdb_const_getf (db, NULL, "enum.%s.%s", key, member)
+		: sdb_const_getf (db, NULL, "enum.%s.0x%" PFMT64x, key, val);
 	if (!res) {
-		res = sdb_const_getf (TDB, NULL, "enum.%s.%" PFMT64d, name, val);
+		res = sdb_const_getf (db, NULL, "enum.%s.%" PFMT64d, key, val);
 	}
+	free (key);
 	return res? strdup (res): NULL;
 }
 
@@ -174,6 +262,8 @@ R_API char *r_type_enum_getbitfield(Sdb *TDB, const char *name, ut64 val) {
 	if (r_type_kind (TDB, name) != R_TYPE_ENUM) {
 		return NULL;
 	}
+	char *key = NULL;
+	Sdb *db = r_type_base_db (TDB, name, &key);
 	bool isFirst = true;
 	RStrBuf *sb = r_strbuf_newf ("0x%08" PFMT64x " : ", val);
 	int i;
@@ -182,7 +272,7 @@ R_API char *r_type_enum_getbitfield(Sdb *TDB, const char *name, ut64 val) {
 		if (! (val & n)) {
 			continue;
 		}
-		const char *res = sdb_const_getf (TDB, NULL, "enum.%s.0x%x", name, n);
+		const char *res = sdb_const_getf (db, NULL, "enum.%s.0x%x", key, n);
 		if (isFirst) {
 			isFirst = false;
 		} else {
@@ -194,6 +284,7 @@ R_API char *r_type_enum_getbitfield(Sdb *TDB, const char *name, ut64 val) {
 			r_strbuf_appendf (sb, "0x%x", n);
 		}
 	}
+	free (key);
 	return r_strbuf_drain (sb);
 }
 
@@ -308,33 +399,24 @@ static bool type_kind_is_aggregate(const char *R_NONNULL kind) {
 
 #define TYPE_CHAIN_MAX 32
 
-static const char *type_aggregate_kind(Sdb *TDB, const char *type, char **name) {
+static const char *type_aggregate_kind(Sdb *TDB, const char *type, char **name, Sdb **db) {
+	*db = r_type_base_db (TDB, type, name);
+	const char *kind = *db? sdb_const_get (*db, *name, NULL): NULL;
+	if (kind && type_kind_is_aggregate (kind)) {
+		return kind;
+	}
+	free (*name);
 	*name = NULL;
-	RTypeDecl *decl = r_type_decl_parse (type, R_TYPE_DECL_CONTEXT_ABSTRACT, TDB, NULL);
-	if (!decl || decl->name || decl->type->kind != R_TYPE_DECL_BASE) {
-		r_type_decl_free (decl);
-		return NULL;
-	}
-	const char *bare = decl->type->base.name;
-	const char *kind = type_aggregate_prefixed (bare, &bare);
-	if (!kind) {
-		const char *stored = sdb_const_get (TDB, bare, NULL);
-		kind = stored && type_kind_is_aggregate (stored)? stored: NULL;
-	}
-	if (kind) {
-		*name = strdup (bare);
-	}
-	r_type_decl_free (decl);
-	return kind;
+	return NULL;
 }
 
-static char *type_get_memb(Sdb *R_NONNULL TDB, const char *R_NONNULL kind, const char *R_NONNULL type, int offset, const char *R_NONNULL path) {
+static char *type_get_memb(Sdb *TDB, Sdb *db, const char *kind, const char *type, int offset, const char *path) {
 	int i, next_offset = 0;
 
 	if (offset < 0) {
 		return NULL;
 	}
-	const char *value = sdb_const_getf (TDB, NULL, "%s.%s", kind, type);
+	const char *value = sdb_const_getf (db, NULL, "%s.%s", kind, type);
 	char *members = value? strdup (value): NULL;
 	if (!members) {
 		return NULL;
@@ -344,7 +426,7 @@ static char *type_get_memb(Sdb *R_NONNULL TDB, const char *R_NONNULL kind, const
 	int nargs = r_str_split (members, ',');
 	for (i = 0; i < nargs; i++) {
 		const char *name = r_str_word_get0 (members, i);
-		const char *value = sdb_const_getf (TDB, NULL, "%s.%s.%s", kind, type, name);
+		const char *value = sdb_const_getf (db, NULL, "%s.%s.%s", kind, type, name);
 		char *subtype = value? strdup (value): NULL;
 		if (!subtype) {
 			break;
@@ -385,11 +467,12 @@ static char *type_get_memb(Sdb *R_NONNULL TDB, const char *R_NONNULL kind, const
 		if (offset > cur_offset && offset < member_end) {
 			const char *nested_type = r_str_word_get0 (subtype, 0);
 			char *nested_name = NULL;
-			const char *nested_kind = type_aggregate_kind (TDB, nested_type, &nested_name);
+			Sdb *nested_db = NULL;
+			const char *nested_kind = type_aggregate_kind (TDB, nested_type, &nested_name, &nested_db);
 			if (nested_kind) {
 				char *nested_path = r_str_newf ("%s.%s", path, name);
 				if (nested_path) {
-					res = type_get_memb (TDB, nested_kind, nested_name, offset - cur_offset, nested_path);
+					res = type_get_memb (TDB, nested_db, nested_kind, nested_name, offset - cur_offset, nested_path);
 					free (nested_path);
 				}
 				if (res) {
@@ -408,7 +491,12 @@ static char *type_get_memb(Sdb *R_NONNULL TDB, const char *R_NONNULL kind, const
 
 R_API char *r_type_get_struct_memb(Sdb *R_NONNULL TDB, const char *R_NONNULL type, int offset) {
 	R_RETURN_VAL_IF_FAIL (TDB && type, NULL);
-	return type_get_memb (TDB, "struct", type, offset, type);
+	char *name;
+	Sdb *db = NULL;
+	const char *kind = type_aggregate_kind (TDB, type, &name, &db);
+	char *member = kind? type_get_memb (TDB, db, kind, name, offset, type): NULL;
+	free (name);
+	return member;
 }
 
 // XXX this function is slow!
@@ -418,21 +506,21 @@ R_API RList *r_type_get_by_offset(Sdb *R_NONNULL TDB, ut64 offset) {
 	if (offset > ST32_MAX) {
 		return offtypes;
 	}
-	SdbList *ls = sdb_foreach_list (TDB, true);
-	SdbListIter *lsi;
-	SdbKv *kv;
-	ls_foreach (ls, lsi, kv) {
-		const char *kk = sdbkv_key (kv);
-		const char *vv = sdbkv_value (kv);
-		if (type_kind_is_aggregate (vv)
-			&& !r_str_startswith (kk, "struct.") && !r_str_startswith (kk, "union.")) {
-			char *res = type_get_memb (TDB, vv, kk, offset, kk);
+	RList *roots = r_type_get_roots (TDB);
+	RListIter *iter;
+	RTypeIdentity *identity;
+	r_list_foreach (roots, iter, identity) {
+		const char *kind = sdb_const_get (identity->db, identity->key, NULL);
+		if (type_kind_is_aggregate (kind)) {
+			char *name = r_type_identifier_name (identity);
+			char *res = name? type_get_memb (TDB, identity->db, kind, identity->key, offset, name): NULL;
+			free (name);
 			if (res) {
 				r_list_append (offtypes, res);
 			}
 		}
 	}
-	ls_free (ls);
+	r_list_free (roots);
 	return offtypes;
 }
 
@@ -491,7 +579,7 @@ R_API char *r_type_link_at(Sdb *TDB, ut64 addr) {
 }
 
 R_API int r_type_set_link(Sdb *TDB, const char *type, ut64 addr) {
-	if (sdb_const_get (TDB, type, 0) || r_type_get_bitsize (TDB, type)) {
+	if (r_type_kind (TDB, type) != R_TYPE_INVALID || r_type_get_bitsize (TDB, type)) {
 		sdb_setf (TDB, type, 0, "link.%08" PFMT64x, addr);
 		types_range_add (TDB, addr);
 		return true;
@@ -500,7 +588,7 @@ R_API int r_type_set_link(Sdb *TDB, const char *type, ut64 addr) {
 }
 
 R_API int r_type_link_offset(Sdb *TDB, const char *type, ut64 addr) {
-	if (sdb_const_get (TDB, type, 0)) {
+	if (r_type_kind (TDB, type) != R_TYPE_INVALID) {
 		sdb_setf (TDB, type, 0, "offset.%08" PFMT64x, addr);
 		return true;
 	}
@@ -516,7 +604,7 @@ R_API int r_type_unlink(Sdb *TDB, ut64 addr) {
 }
 
 static char *type_format(Sdb *TDB, const char *t, int depth);
-static char *type_format_base(Sdb *TDB, const char *t, int depth);
+static char *type_format_base(Sdb *TDB, Sdb *db, const char *t, int depth);
 
 static RTypeDecl *type_format_resolve(Sdb *db, const char *text, RTypeDeclNode **element, ut64 *elements) {
 	RTypeDecl *decl = r_type_decl_parse (text, R_TYPE_DECL_CONTEXT_ABSTRACT, db, NULL);
@@ -533,7 +621,7 @@ static RTypeDecl *type_format_resolve(Sdb *db, const char *text, RTypeDeclNode *
 			node = node->child;
 		}
 		const char *target = node->kind == R_TYPE_DECL_BASE? sdb_const_getf (db, NULL, "typedef.%s", node->base.name): NULL;
-		if (!target || !strcmp (target, "struct") || !strcmp (target, "union")) {
+		if (!target) {
 			*element = node;
 			return decl;
 		}
@@ -574,8 +662,8 @@ static char *type_format_repeat(const char *body, ut64 elements) {
 	return r_str_newf ("[%" PFMT64u "]%s", elements, body);
 }
 
-static char *fmt_struct_union(Sdb *db, char *var, bool is_typedef) {
-	char *fields = is_typedef? r_str_newf ("%s.fields", var): strdup (var);
+static char *fmt_struct_union(Sdb *types, Sdb *db, char *var) {
+	char *fields = strdup (var);
 	if (!fields) {
 		return NULL;
 	}
@@ -597,14 +685,14 @@ static char *fmt_struct_union(Sdb *db, char *var, bool is_typedef) {
 		char *text = r_type_get_member (db, key, &offset, &count);
 		RTypeDeclNode *element = NULL;
 		ut64 elements = 1;
-		RTypeDecl *decl = text? type_format_resolve (db, text, &element, &elements): NULL;
+		RTypeDecl *decl = text? type_format_resolve (types, text, &element, &elements): NULL;
 		RTypeLayout layout;
-		bool measured = text && r_type_get_layout (db, text, &layout);
+		bool measured = text && r_type_get_layout (types, text, &layout);
 		ut64 bytes = measured? layout.bits / 8: 0;
 		bool reference = element && (element->kind == R_TYPE_DECL_LVALUE_REFERENCE || element->kind == R_TYPE_DECL_RVALUE_REFERENCE);
 		if (reference) {
 			// Address formatting consumes target-sized slots; this does not define a reference ABI.
-			ut64 slot = sdb_num_get (db, "type.char *.size", NULL) / 8;
+			ut64 slot = sdb_num_get (types, "type.char *.size", NULL) / 8;
 			complete = slot && !r_mul_overflow (slot, elements, &bytes);
 		}
 		if (count > 0 && (r_mul_overflow (elements, (ut64)count, &elements) || r_mul_overflow (bytes, (ut64)count, &bytes))) {
@@ -629,12 +717,13 @@ static char *fmt_struct_union(Sdb *db, char *var, bool is_typedef) {
 			bool enumeration = false;
 			const char *base = element->kind == R_TYPE_DECL_BASE? element->base.name: NULL;
 			if (element->kind == R_TYPE_DECL_POINTER) {
-				body = type_pointer_format (db, element);
+				body = type_pointer_format (types, element);
 			} else if (reference) {
 				body = strdup ("p");
 			} else if (base) {
-				aggregate = type_aggregate_kind (db, base, &aggregate_name) != NULL;
-				enumeration = r_type_kind (db, base) == R_TYPE_ENUM;
+				Sdb *aggregate_db = NULL;
+				aggregate = type_aggregate_kind (types, base, &aggregate_name, &aggregate_db) != NULL;
+				enumeration = r_type_kind (types, base) == R_TYPE_ENUM;
 				if (aggregate) {
 					body = strdup ("?");
 				} else if (enumeration) {
@@ -642,7 +731,10 @@ static char *fmt_struct_union(Sdb *db, char *var, bool is_typedef) {
 				} else if (!strcmp (base, "char") && (count > 0 || decl->type->kind == R_TYPE_DECL_ARRAY)) {
 					body = strdup ("z");
 				} else {
-					body = type_format_base (db, base, 0);
+					char *base_key = NULL;
+					Sdb *base_db = r_type_base_db (types, base, &base_key);
+					body = base_db? type_format_base (types, base_db, base_key, 0): NULL;
+					free (base_key);
 				}
 			}
 			if (body && (elements > 1 || count > 0)) {
@@ -655,10 +747,7 @@ static char *fmt_struct_union(Sdb *db, char *var, bool is_typedef) {
 			} else {
 				r_strbuf_append (fmt, body);
 				if (aggregate || enumeration) {
-					const char *name = aggregate? aggregate_name: base;
-					if (enumeration && r_str_startswith (base, "enum ")) {
-						name = base + 5;
-					}
+					const char *name = base;
 					r_strbuf_appendf (names, "(%s)%s ", name, member);
 				} else {
 					r_strbuf_appendf (names, "%s ", member);
@@ -693,21 +782,21 @@ static char *fmt_struct_union(Sdb *db, char *var, bool is_typedef) {
 	return r_strbuf_drain (fmt);
 }
 
-static char *type_format_base(Sdb *TDB, const char *t, int depth) {
-	const char *kind = sdb_const_get (TDB, t, NULL);
+static char *type_format_base(Sdb *TDB, Sdb *db, const char *t, int depth) {
+	const char *kind = sdb_const_get (db, t, NULL);
 	if (!kind) {
 		return NULL;
 	}
 	if (!strcmp (kind, "type")) {
-		const char *fmt = sdb_const_getf (TDB, NULL, "type.%s", t);
+		const char *fmt = sdb_const_getf (db, NULL, "type.%s", t);
 		return fmt? strdup (fmt): NULL;
 	}
 	char var[130];
 	snprintf (var, sizeof (var), "%s.%s", kind, t);
 	if (!strcmp (kind, "struct")) {
-		return fmt_struct_union (TDB, var, false);
+		return fmt_struct_union (TDB, db, var);
 	} else if (!strcmp (kind, "union")) {
-		char *fmt = fmt_struct_union (TDB, var, false);
+		char *fmt = fmt_struct_union (TDB, db, var);
 		if (fmt) {
 			char *res = r_str_newf ("0%s", fmt);
 			free (fmt);
@@ -716,19 +805,6 @@ static char *type_format_base(Sdb *TDB, const char *t, int depth) {
 		return NULL;
 	}
 	if (!strcmp (kind, "typedef")) {
-		const char *type = sdb_const_getf (TDB, NULL, "typedef.%s", t);
-		if (type && !strcmp (type, "struct")) {
-			return fmt_struct_union (TDB, var, true);
-		}
-		if (type && !strcmp (type, "union")) {
-			char *fmt = fmt_struct_union (TDB, var, true);
-			if (fmt) {
-				char *res = r_str_newf ("0%s", fmt);
-				free (fmt);
-				return res;
-			}
-			return NULL;
-		}
 		// a typedef of a scalar formats as its target: typedef.size_t=uint64_t is a q
 		char *target = r_type_resolve_typedef (TDB, t);
 		char *fmt = target? type_format (TDB, target, depth + 1): NULL;
@@ -754,17 +830,14 @@ static char *type_format(Sdb *TDB, const char *t, int depth) {
 	} else if (element->kind == R_TYPE_DECL_LVALUE_REFERENCE || element->kind == R_TYPE_DECL_RVALUE_REFERENCE) {
 		fmt = strdup ("p");
 	} else if (element->kind == R_TYPE_DECL_BASE) {
-		const char *name = element->base.name;
-		const char *bare = NULL;
-		if (type_aggregate_prefixed (name, &bare)) {
-			RTypeLayout layout;
-			if (!r_type_decl_layout (TDB, element, &layout)) {
-				r_type_decl_free (decl);
-				return NULL;
-			}
-			name = bare;
+		char *key = NULL;
+		Sdb *db = r_type_base_db (TDB, element->base.name, &key);
+		const char *kind = db? sdb_const_get (db, key, NULL): NULL;
+		RTypeLayout layout;
+		if (kind && (db == TDB || !type_kind_is_aggregate (kind) || r_type_decl_layout (TDB, element, &layout))) {
+			fmt = type_format_base (TDB, db, key, depth);
 		}
-		fmt = type_format_base (TDB, name, depth);
+		free (key);
 	}
 	if (fmt && elements > 1) {
 		char *array = r_str_newf (*fmt == '0'? "[%" PFMT64u "]? (pf %s)": "%" PFMT64u "%s", elements, fmt);
@@ -780,75 +853,99 @@ R_API char *r_type_format(Sdb *TDB, const char *t) {
 	return type_format (TDB, t, 0);
 }
 
+static bool type_payload_record_owned(Sdb *db, const char *payload, const char *kind, const char *suffix, const char *members, int count) {
+	if (r_str_startswith (suffix, "@.")) {
+		return true;
+	}
+	if (!strcmp (kind, "func")) {
+		if (R_STR_CMP_ANY (suffix, "ret", "cc", "noreturn", "prototype", "args")) {
+			return true;
+		}
+		if (!r_str_startswith (suffix, "arg.") || !isdigit ((ut8)suffix[4])) {
+			return false;
+		}
+		suffix += 4;
+		while (isdigit ((ut8)*suffix)) {
+			suffix++;
+		}
+		return !*suffix;
+	}
+	int i;
+	for (i = 0; i < count; i++) {
+		const char *member = r_str_word_get0 (members, i);
+		size_t length = strlen (member);
+		if (!strncmp (suffix, member, length)) {
+			const char *metadata = suffix + length;
+			if (!*metadata || (*metadata == '.' && (R_STR_CMP_ANY (metadata + 1, "meta", "bitfield.pos", "bitfield.size") || r_str_startswith (metadata + 1, "@.")))) {
+				return true;
+			}
+		}
+		if (!strcmp (kind, "enum")) {
+			const char *value = sdb_const_getf (db, NULL, "%s.%s", payload, member);
+			if (value && !strcmp (suffix, value)) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
 R_API void r_type_del(Sdb *TDB, const char *name) {
-	r_strf_buffer (512);
-	if (strstr (name, ".arg.")) {
-		// ignore func argument definitions as they are not types
+	R_RETURN_IF_FAIL (TDB && name);
+	char *key = strdup (name);
+	if (!key) {
 		return;
 	}
-	if (r_str_endswith (name, ".include")) {
-		// ignore .include headers
+	const char *kind = sdb_const_get (TDB, key, NULL);
+	if (!kind || !R_STR_CMP_ANY (kind, "type", "struct", "union", "enum", "typedef", "func")) {
+		free (key);
 		return;
 	}
-	const char *kind = sdb_const_get (TDB, name, 0);
-	if (!kind) {
+	char *payload = r_str_newf ("%s.%s", kind, key);
+	char *metadata = r_str_newf ("type.%s.", key);
+	if (!payload || !metadata) {
+		free (metadata);
+		free (payload);
+		free (key);
 		return;
 	}
-	const char *comma = strchr (kind, ',');
-	if (comma) {
-		R_LOG_WARN ("Unexpected comma in kind (%s) for (%s)", kind, name);
+	size_t length = strlen (payload);
+	size_t metadata_length = strlen (metadata);
+	char *members = R_STR_CMP_ANY (kind, "struct", "union", "enum")? sdb_get (TDB, payload, NULL): NULL;
+	int count = members? r_str_split (members, ','): 0;
+	SdbList *entries = sdb_foreach_list (TDB, false);
+	RList *remove = r_list_new ();
+	SdbListIter *iter;
+	SdbKv *kv;
+	bool complete = entries && remove;
+	ls_foreach (entries, iter, kv) {
+		const char *entry = sdbkv_key (kv);
+		bool owned = !strcmp (entry, key) || !strcmp (entry, payload);
+		if (!owned && r_str_startswith (entry, metadata)) {
+			const char *suffix = entry + metadata_length;
+			owned = R_STR_CMP_ANY (suffix, "size", "align", "meta") || r_str_startswith (suffix, "@.");
+		}
+		if (!owned && !strncmp (entry, payload, length) && entry[length] == '.') {
+			owned = type_payload_record_owned (TDB, payload, kind, entry + length + 1, members, count);
+		}
+		if (owned && (!remove || !r_list_append (remove, (void *)entry))) {
+			complete = false;
+			break;
+		}
 	}
-	if (!strcmp (kind, "type")) {
-		sdb_unset (TDB, r_strf ("type.%s", name), 0);
-		sdb_unset (TDB, r_strf ("type.%s.size", name), 0);
-		sdb_unset (TDB, r_strf ("type.%s.meta", name), 0);
-		sdb_unset (TDB, name, 0);
-	} else if (!strcmp (kind, "struct") || !strcmp (kind, "union")) {
-		char *elements_key = r_str_newf ("%s.%s", kind, name);
-		int i, n = sdb_array_length (TDB, elements_key);
-		for (i = 0; i < n; i++) {
-			char *p = sdb_array_get (TDB, elements_key, i, NULL);
-			sdb_unset (TDB, r_strf ("%s.%s", elements_key, p), 0);
-			sdb_unset (TDB, r_strf ("%s.%s.meta", elements_key, p), 0);
-			free (p);
+	if (complete) {
+		RListIter *riter;
+		const char *entry;
+		r_list_foreach (remove, riter, entry) {
+			sdb_unset (TDB, entry, 0);
 		}
-		sdb_unset (TDB, elements_key, 0);
-		sdb_unsetf (TDB, 0, "type.%s.size", name);
-		sdb_unset (TDB, name, 0);
-		free (elements_key);
-	} else if (!strcmp (kind, "func")) {
-		int i, n = sdb_num_getf (TDB, NULL, "func.%s.args", name);
-		for (i = 0; i < n; i++) {
-			sdb_unset (TDB, r_strf ("func.%s.arg.%d", name, i), 0);
-		}
-		sdb_unset (TDB, r_strf ("func.%s.ret", name), 0);
-		sdb_unset (TDB, r_strf ("func.%s.cc", name), 0);
-		sdb_unset (TDB, r_strf ("func.%s.noreturn", name), 0);
-		sdb_unset (TDB, r_strf ("func.%s.prototype", name), 0);
-		sdb_unset (TDB, r_strf ("func.%s.args", name), 0);
-		sdb_unset (TDB, name, 0);
-	} else if (!strcmp (kind, "enum")) {
-		RList *list = r_type_get_enum (TDB, name);
-		RTypeEnum *member;
-		RListIter *iter;
-		r_list_foreach (list, iter, member) {
-			char *k = r_str_newf ("enum.%s.%s", name, member->name);
-			sdb_unset (TDB, k, 0);
-			free (k);
-			k = r_str_newf ("enum.%s.%s", name, member->val);
-			sdb_unset (TDB, k, 0);
-			free (k);
-		}
-		sdb_unset (TDB, name, 0);
-		r_list_free (list);
-	} else if (!strcmp (kind, "typedef")) {
-		char *buf = r_str_newf ("typedef.%s", name);
-		sdb_unset (TDB, buf, 0);
-		free (buf);
-		sdb_unset (TDB, name, 0);
-	} else {
-		R_LOG_WARN ("Unrecognized type kind \"%s\" for (%s)", kind, name);
 	}
+	r_list_free (remove);
+	ls_free (entries);
+	free (members);
+	free (metadata);
+	free (payload);
+	free (key);
 }
 
 // Strip leading __ prefix for type database lookup when the exact name
@@ -912,7 +1009,7 @@ R_API bool r_type_func_prototype_exist(Sdb *TDB, const char *func_name) {
 	const char *name = trim_lodashes (TDB, func_name);
 	const char *kind = sdb_const_get (TDB, name, 0);
 	// Argument recovery also writes func.*.args; only declarations have a kind or return type.
-	// struct stat overwrites stat=func, but the prototype under func.stat.* is still there
+	// Recovered prototypes can retain a return record independently of a declared function root.
 	return (kind && !strcmp (kind, "func")) || sdb_const_getf (TDB, NULL, "func.%s.ret", name);
 }
 

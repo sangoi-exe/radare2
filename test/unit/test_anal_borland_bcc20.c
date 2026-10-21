@@ -133,7 +133,7 @@ static bool bcc20_check_types(RCore *core) {
 	};
 	size_t i;
 	for (i = 0; i < R_ARRAY_SIZE (layouts); i++) {
-		RAnalBaseType *type = r_anal_get_base_type (core->anal, layouts[i].name);
+		RAnalBaseType *type = r_anal_get_base_type (core->anal, layouts[i].name, R_TYPE_NAMESPACE_ORDINARY);
 		mu_assert_notnull (type, "every source partial layout exists");
 		mu_assert_eq (type->kind, R_ANAL_BASE_TYPE_KIND_STRUCT, "native structured type owner");
 		mu_assert_eq (r_type_get_bitsize (core->anal->sdb_types, layouts[i].name), layouts[i].bits, "partial extent retains undefined bytes");
@@ -144,12 +144,12 @@ static bool bcc20_check_types(RCore *core) {
 		}
 		r_anal_base_type_free (type);
 	}
-	RAnalBaseType *nodes = r_anal_get_base_type (core->anal, "bcc20_NodeTag8");
+	RAnalBaseType *nodes = r_anal_get_base_type (core->anal, "bcc20_NodeTag8", R_TYPE_NAMESPACE_ORDINARY);
 	mu_assert_notnull (nodes, "separate BYTE node-tag domain");
 	mu_assert_eq (RVecAnalEnumCase_length (&nodes->enum_data.cases), 2, "only selected77/78 named");
 	mu_assert_eq (r_type_get_bitsize (core->anal->sdb_types, "bcc20_NodeTag8"), 8, "node tag is BYTE, not instruction WORD");
 	r_anal_base_type_free (nodes);
-	RAnalBaseType *requests = r_anal_get_base_type (core->anal, "bcc20_InstructionRequestTag16");
+	RAnalBaseType *requests = r_anal_get_base_type (core->anal, "bcc20_InstructionRequestTag16", R_TYPE_NAMESPACE_ORDINARY);
 	mu_assert_notnull (requests, "separate numeric instruction-request domain");
 	mu_assert_eq (RVecAnalEnumCase_length (&requests->enum_data.cases), 10, "all10 selected request tags");
 	mu_assert_eq (r_type_get_bitsize (core->anal->sdb_types, "bcc20_InstructionRequestTag16"), 16, "request tag remains WORD");
@@ -520,7 +520,7 @@ static bool test_bcc20_data_and_reference_preservation(void) {
 			mu_assert_eq (bcc20_ref (core->anal, 0x668a9, 0x543a6), R_ANAL_REF_TYPE_CODE, "manual same-pair reference not rewritten to DATA");
 			mu_assert_null (r_meta_get_string (core->anal, R_META_TYPE_COMMENT, 0x400900e9), "refused relation stops dependent raw-FAR annotation");
 		} else {
-			RAnalBaseType *type = r_anal_get_base_type (core->anal, "bcc20_InstructionDescriptor19Partial");
+			RAnalBaseType *type = r_anal_get_base_type (core->anal, "bcc20_InstructionDescriptor19Partial", R_TYPE_NAMESPACE_ORDINARY);
 			mu_assert_eq (RVecAnalTypeMember_length (&type->struct_data.members), 1, "manual partial type not replaced");
 			mu_assert_streq (RVecAnalTypeMember_at (&type->struct_data.members, 0)->name, "user_owned", "manual field role retained");
 			r_anal_base_type_free (type);

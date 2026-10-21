@@ -109,6 +109,7 @@ static void parse_enum(const RAnal *anal, STpiStream *ss, SType *type, RList *ty
 	if (!base_type) {
 		return;
 	}
+	base_type->space = R_TYPE_NAMESPACE_TAG;
 
 	char *name = NULL;
 	type_info->get_name (ss, type_info, &name);
@@ -187,6 +188,7 @@ static void parse_structure(const RAnal *anal, STpiStream *ss, SType *type, RLis
 	if (!base_type) {
 		return;
 	}
+	base_type->space = R_TYPE_NAMESPACE_TAG;
 
 	char *name = NULL;
 	type_info->get_name (ss, type_info, &name);

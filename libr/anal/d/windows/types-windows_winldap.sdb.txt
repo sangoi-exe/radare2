@@ -1,14 +1,14 @@
 ### winldap.h ###
 
-l_timeval=struct
-struct.l_timeval=tv_sec,tv_usec
-struct.l_timeval.tv_sec=LONG,0,0
-struct.l_timeval.tv_usec=LONG,4,0
+tags/l_timeval=struct
+tags/struct.l_timeval=tv_sec,tv_usec
+tags/struct.l_timeval.tv_sec=LONG,0,0
+tags/struct.l_timeval.tv_usec=LONG,4,0
 
 
 
 LDAP_TIMEVAL=typedef
-typedef.LDAP_TIMEVAL=l_timeval
+typedef.LDAP_TIMEVAL=struct l_timeval
 
 
 

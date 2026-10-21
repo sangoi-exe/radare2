@@ -149,7 +149,7 @@ static bool bcc_check_types(RAnal *anal, const BccExpectedRecord *records, size_
 	size_t i;
 	for (i = 0; i < record_count; i++) {
 		const BccExpectedRecord *fact = &records[i];
-		RAnalBaseType *type = r_anal_get_base_type (anal, fact->name);
+		RAnalBaseType *type = r_anal_get_base_type (anal, fact->name, R_TYPE_NAMESPACE_ORDINARY);
 		mu_assert_notnull (type, fact->name);
 		mu_assert_eq (type->kind, R_ANAL_BASE_TYPE_KIND_STRUCT, "native named partial record");
 		mu_assert_eq (type->size, fact->size * 8, "source partial envelope");
@@ -167,7 +167,7 @@ static bool bcc_check_types(RAnal *anal, const BccExpectedRecord *records, size_
 	}
 	for (i = 0; i < enum_count; i++) {
 		const BccExpectedEnum *fact = &enums[i];
-		RAnalBaseType *type = r_anal_get_base_type (anal, fact->name);
+		RAnalBaseType *type = r_anal_get_base_type (anal, fact->name, R_TYPE_NAMESPACE_ORDINARY);
 		mu_assert_notnull (type, fact->name);
 		mu_assert_eq (type->kind, R_ANAL_BASE_TYPE_KIND_ENUM, "distinct native enum domain");
 		mu_assert_eq (type->size, 16, "source WORD domain");
@@ -289,7 +289,7 @@ static bool test_bcc45_original(void) {
 	mu_assert_true (bcc_check_data (&ctx, 0x1751c, 104, "bcc45_FarStorage16 [26]", "bcc45_obj_source_callbacks26"), "object callbacks");
 	mu_assert_true (bcc_check_data (&ctx, 0xa7c50, 0x72, "uint16_t [57]", "bcc45_asm_callback_switch_words"), "separate callback switch data");
 	mu_assert_eq (bcc_ref (core->anal, profile_mapped (&ctx, 0xa7c98, 2, false), profile_mapped (&ctx, 0xa7b6a, 1, true)), R_ANAL_REF_TYPE_DATA, "current tag0039 cell joins native literal branch");
-	RAnalBaseType *pending = r_anal_get_base_type (core->anal, "bcc45_PendingEntry9");
+	RAnalBaseType *pending = r_anal_get_base_type (core->anal, "bcc45_PendingEntry9", R_TYPE_NAMESPACE_ORDINARY);
 	mu_assert_notnull (pending, "pending descriptive type only");
 	mu_assert_eq (pending->size, 72, "nine-byte pending layout");
 	r_anal_base_type_free (pending);
@@ -427,7 +427,7 @@ static bool test_bcc_independent_data_and_bindings(void) {
 				mu_assert_eq (bcc_ref (core->anal, address + 2, handler), 0, "refused type/link/data adds no dependent DATA join");
 			}
 			if (!scenario) {
-				RAnalBaseType *type = r_anal_get_base_type (core->anal, type_name);
+				RAnalBaseType *type = r_anal_get_base_type (core->anal, type_name, R_TYPE_NAMESPACE_ORDINARY);
 				mu_assert_eq (RVecAnalTypeMember_length (&type->struct_data.members), 1, "independent type members retained");
 				mu_assert_streq (RVecAnalTypeMember_at (&type->struct_data.members, 0)->name, "user_owned_field", "independent type role retained");
 				r_anal_base_type_free (type);
@@ -471,7 +471,7 @@ static bool test_bcc_independent_enums(void) {
 		const BorlandEnumCase independent[] = { { "user_owned_code", 0x1234 } };
 		mu_assert_true (borland_enum (core->anal, name, 16, independent, R_ARRAY_SIZE (independent)), "independent enum setup");
 		mu_assert_eq (version? borland_bcc45_profile (core->anal): borland_bcc31_profile (core->anal), version? 36: 28, "enum conflict is independent of whole-body facts");
-		RAnalBaseType *type = r_anal_get_base_type (core->anal, name);
+		RAnalBaseType *type = r_anal_get_base_type (core->anal, name, R_TYPE_NAMESPACE_ORDINARY);
 		mu_assert_notnull (type, "independent enum retained");
 		mu_assert_eq (type->kind, R_ANAL_BASE_TYPE_KIND_ENUM, "independent enum kind retained");
 		mu_assert_eq (RVecAnalEnumCase_length (&type->enum_data.cases), 1, "independent enum not expanded or replaced");
@@ -481,7 +481,7 @@ static bool test_bcc_independent_enums(void) {
 		r_anal_base_type_free (type);
 		if (!version) {
 			mu_assert_null (r_flag_get (core->flags, "bcc31_JE_JNE_inverse_codes"), "conflicted enum suppresses dependent data label");
-			mu_assert_null (r_anal_get_base_type (core->anal, "bcc31_Event16Partial"), "conflicted enum suppresses dependent record");
+			mu_assert_null (r_anal_get_base_type (core->anal, "bcc31_Event16Partial", R_TYPE_NAMESPACE_ORDINARY), "conflicted enum suppresses dependent record");
 		}
 		r_core_free (core);
 	}

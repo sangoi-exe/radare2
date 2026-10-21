@@ -3535,6 +3535,19 @@ static bool function_signature_record_matches(Sdb *types, const RAnalFunctionSig
 	}
 	ls_free (records);
 	free (prefix);
+	Sdb *prepared_tags = r_type_namespace (prepared->types, R_TYPE_NAMESPACE_TAG, false);
+	Sdb *tags = r_type_namespace (types, R_TYPE_NAMESPACE_TAG, false);
+	if (matches && prepared_tags) {
+		SdbList *tag_records = sdb_foreach_list (prepared_tags, false);
+		ls_foreach (tag_records, iter, record) {
+			const char *existing = tags? sdb_const_get (tags, sdbkv_key (record), NULL): NULL;
+			if (!existing || strcmp (existing, sdbkv_value (record))) {
+				matches = false;
+				break;
+			}
+		}
+		ls_free (tag_records);
+	}
 	return matches;
 }
 
@@ -3656,6 +3669,13 @@ R_API bool r_anal_function_signature_apply(RAnal *anal, RAnalFunction *fcn, cons
 	}
 	ls_free (records);
 	free (prefix);
+	if (ok) {
+		char *children = sdb_querys (prepared->types, NULL, 0, "***");
+		if (children) {
+			ok = r_strbuf_append (&output, children);
+			free (children);
+		}
+	}
 	if (ok) {
 		r_anal_save_parsed_type (anal, r_strbuf_get (&output));
 		char *effective = function_signature_type_name (anal, fcn);

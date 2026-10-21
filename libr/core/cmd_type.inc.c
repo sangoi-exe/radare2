@@ -435,9 +435,12 @@ static ut32 type_bytesize(RAnal *anal, const char *type, ut32 fallback) {
 }
 
 static void add_type_fields_to_json(RCore *core, PJ *pj, const char *struct_name, const char *type_name) {
-	const char *value = sdb_const_getf (core->anal->sdb_types, NULL, "%s.%s", type_name, struct_name);
+	char *base_key = NULL;
+	Sdb *db = r_type_base_db (core->anal->sdb_types, struct_name, &base_key);
+	const char *value = db? sdb_const_getf (db, NULL, "%s.%s", type_name, base_key): NULL;
 	char *members = value? strdup (value): NULL;
 	if (!members) {
+		free (base_key);
 		return;
 	}
 	pj_k (pj, "fields");
@@ -448,10 +451,10 @@ static void add_type_fields_to_json(RCore *core, PJ *pj, const char *struct_name
 		if (R_STR_ISEMPTY (member_name)) {
 			continue;
 		}
-		char *key = r_str_newf ("%s.%s.%s", type_name, struct_name, member_name);
+		char *key = r_str_newf ("%s.%s.%s", type_name, base_key, member_name);
 		ut64 offset = 0;
 		int count = 0;
-		char *type = r_type_get_member (core->anal->sdb_types, key, &offset, &count);
+		char *type = r_type_get_member (db, key, &offset, &count);
 		free (key);
 		if (!type) {
 			continue;
@@ -475,11 +478,14 @@ static void add_type_fields_to_json(RCore *core, PJ *pj, const char *struct_name
 	}
 	pj_end (pj);
 	free (members);
+	free (base_key);
 }
 
 static void showFormat(RCore *core, const char *name, int mode) {
 	r_core_return_code (core, R_CMD_RC_SUCCESS);
-	const char *isenum = sdb_const_get (core->anal->sdb_types, name, 0);
+	char *key = NULL;
+	Sdb *db = r_type_base_db (core->anal->sdb_types, name, &key);
+	const char *isenum = db? sdb_const_get (db, key, 0): NULL;
 	if (isenum && !strcmp (isenum, "enum")) {
 		R_LOG_INFO ("Type is an enum");
 	} else {
@@ -492,7 +498,7 @@ static void showFormat(RCore *core, const char *name, int mode) {
 				pj_ks (pj, "name", name);
 				pj_ks (pj, "format", fmt);
 
-				const char *typeinfo = sdb_const_get (core->anal->sdb_types, name, 0);
+				const char *typeinfo = db? sdb_const_get (db, key, 0): NULL;
 				if (typeinfo && (!strcmp (typeinfo, "struct") || !strcmp (typeinfo, "union"))) {
 					add_type_fields_to_json (core, pj, name, typeinfo);
 				}
@@ -506,7 +512,13 @@ static void showFormat(RCore *core, const char *name, int mode) {
 						R_LOG_ERROR ("Cannot export a multiline type format");
 						r_core_return_code (core, R_CMD_RC_FAILURE);
 					} else if (mode) {
-						r_cons_printf (core->cons, "'pf.%s %s\n", name, fmt);
+						if (strchr (name, ' ')) {
+							char *escaped = r_str_escape (name);
+							r_cons_printf (core->cons, "'pf.\"%s\" %s\n", escaped, fmt);
+							free (escaped);
+						} else {
+							r_cons_printf (core->cons, "'pf.%s %s\n", name, fmt);
+						}
 					} else {
 						r_cons_printf (core->cons, "'pf %s\n", fmt);
 					}
@@ -517,10 +529,15 @@ static void showFormat(RCore *core, const char *name, int mode) {
 			}
 			free (fmt);
 		} else {
-			R_LOG_ERROR ("Cannot find '%s' type", name);
+			if (db) {
+				R_LOG_ERROR ("Formatting/layout unavailable for type '%s'", name);
+			} else {
+				R_LOG_ERROR ("Cannot find '%s' type", name);
+			}
 			r_core_return_code (core, R_CMD_RC_FAILURE);
 		}
 	}
+	free (key);
 }
 
 R_API char *r_core_slurp(RCore *core, const char *path, size_t *len) {
@@ -731,17 +748,7 @@ static void cmd_type_edit(RCore *core, const char *typename, const char *c_cmd) 
 }
 
 static bool stdifstruct(void *user, const char *k, const char *v) {
-	Sdb *TDB = (Sdb *)user;
-	if (!strcmp (v, "struct") && !r_str_startswith (k, "typedef")) {
-		return true;
-	}
-	if (!strcmp (v, "typedef")) {
-		const char *type = sdb_const_getf (TDB, NULL, "typedef.%s", k);
-		if (type && r_str_startswith (type, "struct")) {
-			return true;
-		}
-	}
-	return false;
+	return !strcmp (v, "struct");
 }
 
 static bool stdifunion(void *p, const char *k, const char *v) {
@@ -756,18 +763,43 @@ static bool stdifany(void *p, const char *k, const char *v) {
 	return R_STR_CMP_ANY (v, "struct", "union", "enum", "type", "typedef");
 }
 
+static RList *type_roots_filter(Sdb *TDB, SdbForeachCallback filter) {
+	RList *roots = r_type_get_roots (TDB);
+	RListIter *iter, *next;
+	RTypeIdentity *identity;
+	r_list_foreach_safe (roots, iter, next, identity) {
+		const char *kind = sdb_const_get (identity->db, identity->key, NULL);
+		if (!filter (identity->db, identity->key, kind)) {
+			r_list_delete (roots, iter);
+		}
+	}
+	return roots;
+}
+
 static void types_remove_glob(RCore *core, SdbForeachCallback filter, const char *arg) {
 	Sdb *TDB = core->anal->sdb_types;
 	RList *names = r_list_newf (free);
-	SdbList *l = sdb_foreach_list_filter (TDB, filter, true);
-	SdbListIter *it;
-	SdbKv *kv;
+	RList *l = type_roots_filter (TDB, filter);
+	RListIter *it;
+	RTypeIdentity *identity;
 	char *args = strdup (arg);
-	RList *patterns = r_str_split_list (args, " ", 0);
+	RList *words = r_str_split_list (args, " ", 0);
+	RList *patterns = r_list_newf (free);
+	RListIter *word_iter;
+	char *word;
+	r_list_foreach (words, word_iter, word) {
+		if (R_STR_CMP_ANY (word, "struct", "union", "enum") && word_iter->n) {
+			r_list_append (patterns, r_str_newf ("%s %s", word, (char *)word_iter->n->data));
+			word_iter = word_iter->n;
+		} else {
+			r_list_append (patterns, strdup (word));
+		}
+	}
+	r_list_free (words);
 	RListIter *pit;
 	char *pattern;
-	ls_foreach (l, it, kv) {
-		const char *name = sdbkv_key (kv);
+	r_list_foreach (l, it, identity) {
+		char *name = r_type_identifier_name (identity);
 		r_list_foreach (patterns, pit, pattern) {
 			if (strchr (pattern, '*')) {
 				if (r_str_glob (name, pattern)) {
@@ -779,8 +811,9 @@ static void types_remove_glob(RCore *core, SdbForeachCallback filter, const char
 				break;
 			}
 		}
+		free (name);
 	}
-	ls_free (l);
+	r_list_free (l);
 	r_list_free (patterns);
 	free (args);
 	char *name;
@@ -802,65 +835,54 @@ static int print_struct_union_list_json(RCore *core, Sdb *TDB, SdbForeachCallbac
 	if (!pj) {
 		return 0;
 	}
-	SdbList *l = sdb_foreach_list_filter (TDB, filter, true);
-	SdbListIter *it;
-	SdbKv *kv;
+	RList *l = type_roots_filter (TDB, filter);
+	RListIter *it;
+	RTypeIdentity *identity;
 	pj_a (pj);
-	ls_foreach (l, it, kv) {
-		const char *k = sdbkv_key (kv);
+	r_list_foreach (l, it, identity) {
+		const char *k = identity->key;
 		if (R_STR_ISEMPTY (k)) {
 			continue;
 		}
 		pj_o (pj);
-		pj_ks (pj, "name", k);
-		char *fmt = r_type_format (TDB, k);
+		char *name = r_type_identifier_name (identity);
+		pj_ks (pj, "name", name);
+		char *fmt = r_type_format (TDB, name);
 		if (fmt) {
 			r_str_trim (fmt);
 			pj_ks (pj, "format", fmt);
 			free (fmt);
 		}
-		const char *typeinfo = sdb_const_get (TDB, k, 0);
+		const char *typeinfo = sdb_const_get (identity->db, k, 0);
 		if (typeinfo && (!strcmp (typeinfo, "struct") || !strcmp (typeinfo, "union"))) {
-			add_type_fields_to_json (core, pj, k, typeinfo);
+			add_type_fields_to_json (core, pj, name, typeinfo);
 		}
+		free (name);
 		pj_end (pj);
 	}
 	pj_end (pj);
 
 	r_cons_println (core->cons, pj_string (pj));
 	pj_free (pj);
-	ls_free (l);
+	r_list_free (l);
 	return 1;
 }
 
-static ut64 struct_type_size(RAnal *anal, const char *name, const char *kind) {
-	if (!strcmp (kind, "typedef")) {
-		const char *type = sdb_const_getf (anal->sdb_types, NULL, "typedef.%s", name);
-		if (R_STR_ISNOTEMPTY (type)) {
-			return r_anal_type_bitsize (anal, type) / 8;
-		}
-	}
-	return r_anal_type_bitsize (anal, name) / 8;
-}
-
 static void print_structs_by_size(RCore *core, Sdb *TDB, ut64 size) {
-	SdbList *l = sdb_foreach_list_filter (TDB, stdifstruct, true);
+	RList *l = type_roots_filter (TDB, stdifstruct);
 	if (!l) {
 		return;
 	}
-	SdbListIter *it;
-	SdbKv *kv;
-	ls_foreach (l, it, kv) {
-		const char *name = sdbkv_key (kv);
-		const char *kind = sdbkv_value (kv);
-		if (R_STR_ISEMPTY (name) || !kind) {
-			continue;
-		}
-		if (struct_type_size (core->anal, name, kind) == size) {
+	RListIter *it;
+	RTypeIdentity *identity;
+	r_list_foreach (l, it, identity) {
+		char *name = r_type_identifier_name (identity);
+		if (r_anal_type_bitsize (core->anal, name) / 8 == size) {
 			r_cons_println (core->cons, name);
 		}
+		free (name);
 	}
-	ls_free (l);
+	r_list_free (l);
 }
 
 static bool type_expand_function_refs(Sdb *db, RTypeDeclNode **slot, int depth) {
@@ -962,21 +984,20 @@ static char *type_c_declaration(Sdb *db, const char *type, const char *name, int
 // Rename to char *RAnal.type_to_c() {}
 static void print_struct_union_in_c_format(RCore *core, Sdb *TDB, SdbForeachCallback filter, const char *arg, bool multiline) {
 	char *name = NULL;
-	SdbKv *kv;
-	SdbListIter *iter;
-	SdbList *l = sdb_foreach_list_filter (TDB, filter, true);
+	RTypeIdentity *identity;
+	RListIter *iter;
+	RList *l = type_roots_filter (TDB, filter);
 	const char *space = "";
 	bool match = false;
 
 	RStrBuf *sb = r_strbuf_new ("");
 
-	ls_foreach (l, iter, kv) {
-		if (name && !strcmp (sdbkv_value (kv), name)) {
-			continue;
-		}
+	r_list_foreach (l, iter, identity) {
+		Sdb *db = identity->db;
+		const char *kind = sdb_const_get (db, identity->key, NULL);
 		free (name);
 		int n;
-		name = strdup (sdbkv_key (kv));
+		name = r_type_identifier_name (identity);
 		if (name && (arg && *arg)) {
 			if (!strcmp (arg, name)) {
 				match = true;
@@ -984,16 +1005,20 @@ static void print_struct_union_in_c_format(RCore *core, Sdb *TDB, SdbForeachCall
 				continue;
 			}
 		}
-		r_strbuf_appendf (sb, "%s %s {%s", sdbkv_value (kv), name, multiline? "\n": "");
-		const bool is_struct = !strcmp (sdbkv_value (kv), "struct");
+		if (identity->space == R_TYPE_NAMESPACE_TAG) {
+			r_strbuf_appendf (sb, "%s {%s", name, multiline? "\n": "");
+		} else {
+			r_strbuf_appendf (sb, "typedef %s {%s", kind, multiline? "\n": "");
+		}
+		const bool is_struct = !strcmp (kind, "struct");
 		ut64 run = 0;
-		char *p, *var = r_str_newf ("%s.%s", sdbkv_value (kv), name);
-		for (n = 0; (p = sdb_array_get (TDB, var, n, NULL)); n++) {
+		char *p, *var = r_str_newf ("%s.%s", kind, identity->key);
+		for (n = 0; (p = sdb_array_get (db, var, n, NULL)); n++) {
 			char *var2 = r_str_newf ("%s.%s", var, p);
 			if (var2) {
 				ut64 moff = 0;
 				int arrnum = 0;
-				char *val = r_type_get_member (TDB, var2, &moff, &arrnum);
+				char *val = r_type_get_member (db, var2, &moff, &arrnum);
 				if (val) {
 					RTypeLayout layout;
 					bool measured = r_type_get_layout (TDB, val, &layout);
@@ -1017,7 +1042,7 @@ static void print_struct_union_in_c_format(RCore *core, Sdb *TDB, SdbForeachCall
 					}
 					// Check for metadata attributes for this field
 					RStrBuf *attrs_sb = r_strbuf_new ("");
-					SdbList *all_keys = sdb_foreach_list (TDB, true);
+					SdbList *all_keys = sdb_foreach_list (db, true);
 					SdbListIter *attr_iter;
 					SdbKv *attr_kv;
 					char *attr_prefix = r_str_newf ("%s.@.", var2);
@@ -1050,7 +1075,11 @@ static void print_struct_union_in_c_format(RCore *core, Sdb *TDB, SdbForeachCall
 			free (p);
 		}
 		free (var);
-		r_strbuf_append (sb, "};\n");
+		if (identity->space == R_TYPE_NAMESPACE_TAG) {
+			r_strbuf_append (sb, "};\n");
+		} else {
+			r_strbuf_appendf (sb, "} %s;\n", name);
+		}
 		space = "";
 		if (match) {
 			break;
@@ -1060,7 +1089,7 @@ static void print_struct_union_in_c_format(RCore *core, Sdb *TDB, SdbForeachCall
 	r_cons_print (core->cons, s);
 	free (s);
 	free (name);
-	ls_free (l);
+	r_list_free (l);
 }
 
 typedef struct type_xref_t {
@@ -1217,9 +1246,9 @@ static void append_xrefs_to_strbuf(RCore *core, RStrBuf *sb, RList *xrefs, bool 
 
 static void print_struct_union_with_offsets(RCore *core, Sdb *TDB, SdbForeachCallback filter, const char *arg) {
 	char *name = NULL;
-	SdbKv *kv;
-	SdbListIter *iter;
-	SdbList *l = sdb_foreach_list_filter (TDB, filter, true);
+	RTypeIdentity *identity;
+	RListIter *iter;
+	RList *l = type_roots_filter (TDB, filter);
 	bool match = false;
 	bool use_color = r_config_get_i (core->config, "scr.color") > 0;
 	bool show_xrefs = r_config_get_b (core->config, "types.xrefs");
@@ -1238,13 +1267,12 @@ static void print_struct_union_with_offsets(RCore *core, Sdb *TDB, SdbForeachCal
 
 	RStrBuf *sb = r_strbuf_new ("");
 
-	ls_foreach (l, iter, kv) {
-		if (name && !strcmp (sdbkv_value (kv), name)) {
-			continue;
-		}
+	r_list_foreach (l, iter, identity) {
+		Sdb *db = identity->db;
+		const char *kind = sdb_const_get (db, identity->key, NULL);
 		free (name);
 		int n;
-		name = strdup (sdbkv_key (kv));
+		name = r_type_identifier_name (identity);
 		if (name && (arg && *arg)) {
 			if (!strcmp (arg, name)) {
 				match = true;
@@ -1257,15 +1285,15 @@ static void print_struct_union_with_offsets(RCore *core, Sdb *TDB, SdbForeachCal
 			append_xrefs_to_strbuf (core, sb, type_xrefs, use_color);
 			r_list_free (type_xrefs);
 		}
-		r_strbuf_appendf (sb, "%s0x%08x%s %s %s%s%s {\n", color_addr, 0, color_reset, sdbkv_value (kv), color_name, name, color_reset);
+		r_strbuf_appendf (sb, "%s0x%08x%s %s%s%s%s%s {\n", color_addr, 0, color_reset, identity->space == R_TYPE_NAMESPACE_TAG? "": kind, identity->space == R_TYPE_NAMESPACE_TAG? "": " ", color_name, name, color_reset);
 		ut64 known_end = r_anal_type_bitsize (core->anal, name) / 8;
-		char *p, *var = r_str_newf ("%s.%s", sdbkv_value (kv), name);
-		for (n = 0; (p = sdb_array_get (TDB, var, n, NULL)); n++) {
+		char *p, *var = r_str_newf ("%s.%s", kind, identity->key);
+		for (n = 0; (p = sdb_array_get (db, var, n, NULL)); n++) {
 			char *var2 = r_str_newf ("%s.%s", var, p);
 			if (var2) {
 				ut64 moff = 0;
 				int arrnum = 0;
-				char *val = r_type_get_member (TDB, var2, &moff, &arrnum);
+				char *val = r_type_get_member (db, var2, &moff, &arrnum);
 				if (val) {
 					char *declaration = type_c_declaration (TDB, val, p, arrnum);
 					if (declaration) {
@@ -1304,14 +1332,14 @@ static void print_struct_union_with_offsets(RCore *core, Sdb *TDB, SdbForeachCal
 	r_cons_print (core->cons, s);
 	free (s);
 	free (name);
-	ls_free (l);
+	r_list_free (l);
 }
 
 static void print_enum_with_offsets(RCore *core, Sdb *TDB, const char *arg) {
 	char *name = NULL;
-	SdbKv *kv;
-	SdbListIter *iter;
-	SdbList *l = sdb_foreach_list (TDB, true);
+	RTypeIdentity *identity;
+	RListIter *iter;
+	RList *l = type_roots_filter (TDB, stdifenum);
 	bool match = false;
 	bool use_color = r_config_get_i (core->config, "scr.color") > 0;
 	bool show_xrefs = r_config_get_b (core->config, "types.xrefs");
@@ -1329,48 +1357,38 @@ static void print_enum_with_offsets(RCore *core, Sdb *TDB, const char *arg) {
 	}
 
 	RStrBuf *sb = r_strbuf_new ("");
-	ls_foreach (l, iter, kv) {
-		if (!strcmp (sdbkv_value (kv), "enum")) {
-			if (!name || strcmp (sdbkv_value (kv), name)) {
-				free (name);
-				name = strdup (sdbkv_key (kv));
-				if (name && (arg && *arg)) {
-					if (!strcmp (arg, name)) {
-						match = true;
-					} else {
-						continue;
-					}
-				}
-				if (show_xrefs) {
-					RList *type_xrefs = collect_type_xrefs (core, name);
-					append_xrefs_to_strbuf (core, sb, type_xrefs, use_color);
-					r_list_free (type_xrefs);
-				}
-				r_strbuf_appendf (sb, "%s0x%08x%s enum %s%s%s {\n", color_addr, 0, color_reset, color_name, name, color_reset);
-				RList *list = r_type_get_enum (TDB, name);
-				if (list && !r_list_empty (list)) {
-					RListIter *liter;
-					RTypeEnum *member;
-					r_list_foreach (list, liter, member) {
-						r_strbuf_appendf (sb, "%s0x%08x%s   %s%s%s = %s%s%s;\n",
-							color_addr, (ut32)r_num_math (NULL, member->val), color_reset,
-							color_name, member->name, color_reset,
-							color_num, member->val, color_reset);
-					}
-				}
-				r_list_free (list);
-				r_strbuf_appendf (sb, "%s0x00000000%s };\n", color_addr, color_reset);
-				if (match) {
-					break;
-				}
+	r_list_foreach (l, iter, identity) {
+		free (name);
+		name = r_type_identifier_name (identity);
+		if (R_STR_ISNOTEMPTY (arg)) {
+			if (strcmp (arg, name)) {
+				continue;
 			}
+			match = true;
+		}
+		if (show_xrefs) {
+			RList *type_xrefs = collect_type_xrefs (core, name);
+			append_xrefs_to_strbuf (core, sb, type_xrefs, use_color);
+			r_list_free (type_xrefs);
+		}
+		r_strbuf_appendf (sb, "%s0x%08x%s %s%s%s%s {\n", color_addr, 0, color_reset, identity->space == R_TYPE_NAMESPACE_TAG? "": "enum ", color_name, name, color_reset);
+		RList *list = r_type_get_enum (TDB, name);
+		RListIter *liter;
+		RTypeEnum *member;
+		r_list_foreach (list, liter, member) {
+			r_strbuf_appendf (sb, "%s0x%08x%s   %s%s%s = %s%s%s;\n", color_addr, (ut32)r_num_math (NULL, member->val), color_reset, color_name, member->name, color_reset, color_num, member->val, color_reset);
+		}
+		r_list_free (list);
+		r_strbuf_appendf (sb, "%s0x00000000%s };\n", color_addr, color_reset);
+		if (match) {
+			break;
 		}
 	}
 	char *s = r_strbuf_drain (sb);
 	r_cons_print (core->cons, s);
 	free (s);
 	free (name);
-	ls_free (l);
+	r_list_free (l);
 }
 
 static bool stdifbasictype(void *p, const char *k, const char *v) {
@@ -1596,7 +1614,9 @@ static void print_func_with_offsets(RCore *core, Sdb *TDB, const char *arg) {
 static void print_type_view(RCore *core, const char *arg) {
 	Sdb *TDB = core->anal->sdb_types;
 	if (arg && *arg) {
-		const char *type_kind = sdb_const_get (TDB, arg, 0);
+		char *key = NULL;
+		Sdb *db = r_type_base_db (TDB, arg, &key);
+		const char *type_kind = db? sdb_const_get (db, key, 0): NULL;
 		if (type_kind) {
 			if (!strcmp (type_kind, "struct")) {
 				print_struct_union_with_offsets (core, TDB, stdifstruct, arg);
@@ -1619,6 +1639,7 @@ static void print_type_view(RCore *core, const char *arg) {
 		} else {
 			R_LOG_ERROR ("Type not found: %s", arg);
 		}
+		free (key);
 	} else {
 		print_struct_union_with_offsets (core, TDB, stdifstruct, NULL);
 		print_struct_union_with_offsets (core, TDB, stdifunion, NULL);
@@ -1650,22 +1671,19 @@ static void print_enum_list_json(RCore *core, Sdb *TDB, const char *name) {
 		pj_end (pj);
 	} else {
 		char *n = NULL;
-		SdbKv *kv;
-		SdbListIter *iter;
-		SdbList *l = sdb_foreach_list (TDB, true);
+		RTypeIdentity *identity;
+		RListIter *iter;
+		RList *l = type_roots_filter (TDB, stdifenum);
 		pj_o (pj);
-		ls_foreach (l, iter, kv) {
-			if (!strcmp (sdbkv_value (kv), "enum")
-					&& (!n || strcmp (sdbkv_value (kv), n))) {
-				free (n);
-				n = strdup (sdbkv_key (kv));
-				pj_k (pj, n);
-				enum_members_to_json (pj, TDB, n);
-			}
+		r_list_foreach (l, iter, identity) {
+			free (n);
+			n = r_type_identifier_name (identity);
+			pj_k (pj, n);
+			enum_members_to_json (pj, TDB, n);
 		}
 		pj_end (pj);
 		free (n);
-		ls_free (l);
+		r_list_free (l);
 	}
 	r_cons_printf (core->cons, "%s\n", pj_string (pj));
 	pj_free (pj);
@@ -1677,15 +1695,12 @@ static void print_enum_by_num(RCore *core, Sdb *TDB, ut64 value, char mode) {
 		pj = r_core_pj_new (core);
 		pj_a (pj);
 	}
-	SdbList *l = sdb_foreach_list (TDB, true);
+	RList *l = type_roots_filter (TDB, stdifenum);
 	if (l) {
-		SdbKv *kv;
-		SdbListIter *iter;
-		ls_foreach (l, iter, kv) {
-			if (strcmp (sdbkv_value (kv), "enum")) {
-				continue;
-			}
-			const char *enum_name = sdbkv_key (kv);
+		RTypeIdentity *identity;
+		RListIter *iter;
+		r_list_foreach (l, iter, identity) {
+			char *enum_name = r_type_identifier_name (identity);
 			RList *list = r_type_get_enum (TDB, enum_name);
 			if (list) {
 				RListIter *miter;
@@ -1709,8 +1724,9 @@ static void print_enum_by_num(RCore *core, Sdb *TDB, ut64 value, char mode) {
 				}
 				r_list_free (list);
 			}
+			free (enum_name);
 		}
-		ls_free (l);
+		r_list_free (l);
 	}
 	if (pj) {
 		pj_end (pj);
@@ -1721,51 +1737,55 @@ static void print_enum_by_num(RCore *core, Sdb *TDB, ut64 value, char mode) {
 
 static void print_enum_in_c_format(RCore *core, Sdb *TDB, const char *arg, bool multiline) {
 	char *name = NULL;
-	SdbKv *kv;
-	SdbListIter *iter;
-	SdbList *l = sdb_foreach_list (TDB, true);
+	RTypeIdentity *identity;
+	RListIter *iter;
+	RList *l = type_roots_filter (TDB, stdifenum);
 	const char *separator = "";
 	bool match = false;
-	ls_foreach (l, iter, kv) {
-		if (!strcmp (sdbkv_value (kv), "enum")) {
-			if (!name || strcmp (sdbkv_value (kv), name)) {
-				free (name);
-				name = strdup (sdbkv_key (kv));
-				if (name && (arg && *arg)) {
-					if (!strcmp (arg, name)) {
-						match = true;
-					} else {
-						continue;
-					}
-				}
-				r_cons_printf (core->cons, "%s %s {%s", sdbkv_value (kv), name, multiline? "\n": "");
-				{
-					RList *list = r_type_get_enum (TDB, name);
-					if (list && !r_list_empty (list)) {
-						RListIter *iter;
-						RTypeEnum *member;
-						separator = multiline? "\t": "";
-						r_list_foreach (list, iter, member) {
-							r_cons_printf (core->cons, "%s%s = %" PFMT64u, separator, member->name, r_num_math (NULL, member->val));
-							separator = multiline? ",\n\t": ", ";
-						}
-					}
-					r_list_free (list);
-				}
-				r_cons_println (core->cons, multiline? "\n};": "};");
-				if (match) {
-					break;
-				}
+	r_list_foreach (l, iter, identity) {
+		free (name);
+		name = r_type_identifier_name (identity);
+		if (R_STR_ISNOTEMPTY (arg)) {
+			if (strcmp (arg, name)) {
+				continue;
 			}
+			match = true;
+		}
+		if (identity->space == R_TYPE_NAMESPACE_TAG) {
+			r_cons_printf (core->cons, "%s {%s", name, multiline? "\n": "");
+		} else {
+			r_cons_printf (core->cons, "typedef enum {%s", multiline? "\n": "");
+		}
+		RList *list = r_type_get_enum (TDB, name);
+		RListIter *member_iter;
+		RTypeEnum *member;
+		separator = multiline? "\t": "";
+		r_list_foreach (list, member_iter, member) {
+			r_cons_printf (core->cons, "%s%s = %" PFMT64u, separator, member->name, r_num_math (NULL, member->val));
+			separator = multiline? ",\n\t": ", ";
+		}
+		r_list_free (list);
+		if (identity->space == R_TYPE_NAMESPACE_TAG) {
+			r_cons_println (core->cons, multiline? "\n};": "};");
+		} else {
+			r_cons_printf (core->cons, "%s} %s;\n", multiline? "\n": "", name);
+		}
+		if (match) {
+			break;
 		}
 	}
 	free (name);
-	ls_free (l);
+	r_list_free (l);
 }
 
 static bool printkey_cb(void *user, const char *k, const char *v) {
 	RCore *core = (RCore *)user;
 	r_cons_println (core->cons, k);
+	return true;
+}
+
+static bool show_format_cb(void *user, const char *name, const char *kind) {
+	showFormat (user, name, 1);
 	return true;
 }
 
@@ -1882,7 +1902,7 @@ static bool stdiffunc(void *p, const char *k, const char *v) {
 static bool sdbdeletelink(void *p, const char *k, const char *v) {
 	RCore *core = (RCore *)p;
 	if (r_str_startswith (k, "link.")) {
-		r_type_del (core->anal->sdb_types, k);
+		sdb_unset (core->anal->sdb_types, k, 0);
 	}
 	return true;
 }
@@ -1972,9 +1992,6 @@ static bool print_typelist_json_cb(void *p, const char *k, const char *v) {
 
 static void print_keys(RCore *core, SdbForeachCallback filter, SdbForeachCallback printfn_cb, bool json) {
 	Sdb *tdb = core->anal->sdb_types;
-	SdbList *l = sdb_foreach_list_filter (tdb, filter, true);
-	SdbListIter *it;
-	SdbKv *kv;
 
 	PJ *pj = NULL;
 	TypePrintCtx ctx = { .core = core, .pj = NULL };
@@ -1984,19 +2001,26 @@ static void print_keys(RCore *core, SdbForeachCallback filter, SdbForeachCallbac
 		pj_ka (pj, "types");
 		ctx.pj = pj;
 	}
-	ls_foreach (l, it, kv) {
-		const char *k = sdbkv_key (kv);
-		const char *v = sdbkv_value (kv);
-		if (R_STR_ISEMPTY (k)) {
-			continue;
-		}
-		if (v) {
-			if (json) {
-				printfn_cb (&ctx, k, v);
-			} else {
-				printfn_cb (core, k, v);
+	RTypeNamespace space;
+	for (space = R_TYPE_NAMESPACE_ORDINARY; space <= R_TYPE_NAMESPACE_TAG; space++) {
+		Sdb *db = r_type_namespace (tdb, space, false);
+		SdbList *l = db? sdb_foreach_list_filter (db, filter, true): NULL;
+		SdbListIter *it;
+		SdbKv *kv;
+		ls_foreach (l, it, kv) {
+			const char *k = sdbkv_key (kv);
+			const char *v = sdbkv_value (kv);
+			if (R_STR_ISEMPTY (k) || !v) {
+				continue;
+			}
+			RTypeIdentity identity = { .db = db, .key = (char *)k, .space = space };
+			char *name = printfn_cb == print_typelist_r_cb? r_type_identifier_key (k, space): r_type_identifier_name (&identity);
+			if (name) {
+				printfn_cb (json? (void *)&ctx: (void *)core, name, v);
+				free (name);
 			}
 		}
+		ls_free (l);
 	}
 	if (pj) {
 		pj_end (pj);
@@ -2005,7 +2029,6 @@ static void print_keys(RCore *core, SdbForeachCallback filter, SdbForeachCallbac
 		r_cons_println (core->cons, s);
 		free (s);
 	}
-	ls_free (l);
 }
 
 static void typesList(RCore *core, int mode) {
@@ -2128,7 +2151,6 @@ R_API void r_core_link_stroff(RCore *core, RAnalFunction *fcn) {
 	bool ioCache = r_config_get_b (core->config, "io.cache");
 	int stack_fd = -1;
 	bool resolved = false;
-	const char *varpfx;
 	int dbg_follow = r_config_get_i (core->config, "dbg.follow");
 	Sdb *TDB = core->anal->sdb_types;
 	RReg *reg = r_reg_clone (core->anal->reg);
@@ -2234,18 +2256,14 @@ R_API void r_core_link_stroff(RCore *core, RAnalFunction *fcn) {
 			char *dlink = r_type_link_at (TDB, dst_addr);
 			//TODO: Handle register based arg for struct offset propgation
 			if (vlink && var && var->kind != 'r') {
-				if (r_type_kind (TDB, vlink) == R_TYPE_UNION) {
-					varpfx = "union";
-				} else {
-					varpfx = "struct";
-				}
-				// if a var addr matches with struct , change it's type and name
-				// var int local_e0h --> var struct foo
-				if (strcmp (var->name , vlink) && !resolved) {
+				char *name = NULL;
+				Sdb *db = r_type_base_db (TDB, vlink, &name);
+				if (db && strcmp (var->name, name) && !resolved) {
 					resolved = true;
-					r_anal_var_set_type (core->anal, var, varpfx);
-					r_anal_var_rename (core->anal, var, vlink);
+					r_anal_var_set_type (core->anal, var, vlink);
+					r_anal_var_rename (core->anal, var, name);
 				}
+				free (name);
 			} else if (slink) {
 				set_offset_hint (core, &aop, slink, src_addr, at - ret, src_imm);
 			} else if (dlink) {
@@ -2360,13 +2378,7 @@ static int cmd_type(void *data, const char *input) {
 			if (input[2] == ' ') {
 				showFormat (core, r_str_trim_head_ro (input + 2), 1);
 			} else {
-				SdbList *l = sdb_foreach_list_filter (TDB, stdifunion, true);
-				SdbListIter *it;
-				SdbKv *kv;
-				ls_foreach (l, it, kv) {
-					showFormat (core, sdbkv_key (kv), 1);
-				}
-				ls_free (l);
+				print_keys (core, stdifunion, show_format_cb, false);
 			}
 			break;
 		case '.': // "tu."
@@ -2449,22 +2461,25 @@ static int cmd_type(void *data, const char *input) {
 			break;
 		case ' ': { // "tcc "
 			const char *type = r_str_trim_head_ro (input + 1);
-			const char *name = type ? strchr (type, '.') : NULL;
-			if (name && type) {
-				name++; // skip the '.'
-				if (r_str_startswith (type, "struct")) {
-					r_core_callf (core, "tsc %s", name);
-				} else if (r_str_startswith (type, "union")) {
-					r_core_callf (core, "tuc %s", name);
-				} else if (r_str_startswith (type, "enum")) {
-					r_core_callf (core, "tec %s", name);
-				} else if (r_str_startswith (type, "typedef")) {
-					r_core_callf (core, "ttc %s", name);
-				} else if (r_str_startswith (type, "func")) {
-					r_core_callf (core, "tfc %s", name);
-				} else {
-					R_LOG_ERROR ("unk");
-				}
+			switch (r_type_kind (TDB, type)) {
+			case R_TYPE_STRUCT:
+				print_struct_union_in_c_format (core, TDB, stdifstruct, type, true);
+				break;
+			case R_TYPE_UNION:
+				print_struct_union_in_c_format (core, TDB, stdifunion, type, true);
+				break;
+			case R_TYPE_ENUM:
+				print_enum_in_c_format (core, TDB, type, true);
+				break;
+			case R_TYPE_TYPEDEF:
+				r_core_callf (core, "ttc %s", type);
+				break;
+			case R_TYPE_FUNCTION:
+				printFunctionTypeC (core, type);
+				break;
+			default:
+				R_LOG_ERROR ("Unknown type: %s", type);
+				break;
 			}
 			break;
 		}
@@ -2495,13 +2510,7 @@ static int cmd_type(void *data, const char *input) {
 			if (input[2] == ' ') {
 				showFormat (core, r_str_trim_head_ro (input + 2), 1);
 			} else {
-				SdbList *l = sdb_foreach_list_filter (TDB, stdifstruct, true);
-				SdbListIter *it;
-				SdbKv *kv;
-				ls_foreach (l, it, kv) {
-					showFormat (core, sdbkv_key (kv), 1);
-				}
-				ls_free (l);
+				print_keys (core, stdifstruct, show_format_cb, false);
 			}
 			break;
 		case '.': // "ts."
@@ -2627,7 +2636,7 @@ static int cmd_type(void *data, const char *input) {
 			break;
 		}
 		char *name = temp ? strdup (temp + 1): NULL;
-		char *member_name = name ? strchr (name, ' '): NULL;
+		char *member_name = name? strchr (r_str_startswith (name, "enum ")? name + 5: name, ' '): NULL;
 
 		if (member_name) {
 			*member_name++ = 0;
@@ -2708,21 +2717,7 @@ static int cmd_type(void *data, const char *input) {
 			}
 			break;
 		case '\0': {
-			char *name = NULL;
-			SdbKv *kv;
-			SdbListIter *iter;
-			SdbList *l = sdb_foreach_list (TDB, true);
-			ls_foreach (l, iter, kv) {
-				if (!strcmp (sdbkv_value (kv), "enum")) {
-					if (!name || strcmp (sdbkv_value (kv), name)) {
-						free (name);
-						name = strdup (sdbkv_key (kv));
-						r_cons_println (core->cons, name);
-					}
-				}
-			}
-			free (name);
-			ls_free (l);
+			print_keys (core, stdifenum, printkey_cb, false);
 			break;
 		}
 		case '?':
@@ -2804,7 +2799,11 @@ static int cmd_type(void *data, const char *input) {
 				const char *dbpath = input + 3;
 				if (r_file_exists (dbpath)) {
 					Sdb *db_tmp = sdb_new (0, dbpath, 0);
-					sdb_merge (TDB, db_tmp);
+					char *records = sdb_querys (db_tmp, NULL, 0, "*");
+					if (records) {
+						r_anal_save_parsed_type (core->anal, records);
+						free (records);
+					}
 					sdb_close (db_tmp);
 					sdb_free (db_tmp);
 				}
@@ -2823,6 +2822,7 @@ static int cmd_type(void *data, const char *input) {
 					char *out = r_anal_cparse (core->anal, tmp, &errmsg);
 					if (out) {
 						sdb_reset (TDB);
+						sdb_reset (r_type_namespace (TDB, R_TYPE_NAMESPACE_TAG, false));
 					}
 					save_parsed_type_result (core, out, errmsg);
 					free (tmp);
@@ -3019,8 +3019,7 @@ static int cmd_type(void *data, const char *input) {
 				}
 			}
 			r_str_trim (type);
-			char *tmp = sdb_get (TDB, type, 0);
-			if (R_STR_ISNOTEMPTY (tmp)) {
+			if (r_type_kind (TDB, type) != R_TYPE_INVALID) {
 				r_anal_types_set_link (core->anal, type, addr);
 				RList *fcns = r_anal_get_functions_in (core->anal, core->addr);
 				if (r_list_length (fcns) > 1) {
@@ -3032,7 +3031,6 @@ static int cmd_type(void *data, const char *input) {
 					R_LOG_ERROR ("Cannot find any function here");
 				}
 				r_list_free (fcns);
-				free (tmp);
 			} else {
 				R_LOG_ERROR ("unknown type %s", type);
 			}
@@ -3109,6 +3107,10 @@ static int cmd_type(void *data, const char *input) {
 			if (type_begin) {
 				r_str_trim (type_begin);
 				const char *type_end = r_str_rchr (type_begin, NULL, ' ');
+				RTypeLayout layout;
+				if (type_end && (r_type_kind (TDB, type_begin) != R_TYPE_INVALID || r_type_get_layout (TDB, type_begin, &layout))) {
+					type_end = NULL;
+				}
 				int type_len = (type_end)
 					? (int)(type_end - type_begin)
 					: strlen (type_begin);
@@ -3180,6 +3182,7 @@ static int cmd_type(void *data, const char *input) {
 				r_cons_cmd_help_match (core->cons, help_msg_t, "t-*", 0, true);
 			} else {
 				sdb_reset (TDB);
+				sdb_reset (r_type_namespace (TDB, R_TYPE_NAMESPACE_TAG, false));
 			}
 		} else {
 			const char *arg = r_str_trim_head_ro (input + 1);

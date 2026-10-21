@@ -324,7 +324,7 @@ static void r_bin_mdmp_init_parsing(struct r_bin_mdmp_obj *obj) {
 #if 0
 	/* TODO: Flag dependent thus not fully implemented */
 	sdb_set (obj->kv, "mdmp_context.format", "[4]B "
-		"(mdmp_context_flags)ContextFlags", 0);
+		"(enum mdmp_context_flags)ContextFlags", 0);
 #endif
 
 	sdb_set (obj->kv, "mdmp_vs_fixedfileinfo.format", "ddddddddddddd "
@@ -377,7 +377,7 @@ static bool r_bin_mdmp_init_hdr(struct r_bin_mdmp_obj *obj) {
 	sdb_num_set (obj->kv, "mdmp_header.offset", 0, 0);
 	sdb_set (obj->kv, "mdmp_header.format", "[4]zddddt[8]B Signature "
 		"Version NumberOfStreams StreamDirectoryRVA CheckSum "
-		"TimeDateStamp (mdmp_type)Flags", 0);
+		"TimeDateStamp (enum mdmp_type)Flags", 0);
 
 	return true;
 }
@@ -648,8 +648,8 @@ static bool r_bin_mdmp_init_directory_entry(struct r_bin_mdmp_obj *obj, struct m
 		}
 
 		sdb_set (obj->kv, "mdmp_exception.format", "[4]E[4]Eqqdd[15]q "
-							   "(mdmp_exception_code)ExceptionCode "
-							   "(mdmp_exception_flags)ExceptionFlags "
+							   "(enum mdmp_exception_code)ExceptionCode "
+							   "(enum mdmp_exception_flags)ExceptionFlags "
 							   "ExceptionRecord ExceptionAddress "
 							   "NumberParameters __UnusedAlignment "
 							   "ExceptionInformation",
@@ -675,11 +675,11 @@ static bool r_bin_mdmp_init_directory_entry(struct r_bin_mdmp_obj *obj, struct m
 		sdb_num_set (obj->kv, "mdmp_system_info.offset", entry->location.rva, 0);
 		/* TODO: We need E as a byte! */
 		sdb_set (obj->kv, "mdmp_system_info.format", "[2]EwwbBddd[4]Ed[2]Ew[2]q "
-			"(mdmp_processor_architecture)ProcessorArchitecture "
+			"(enum mdmp_processor_architecture)ProcessorArchitecture "
 			"ProcessorLevel ProcessorRevision NumberOfProcessors "
-			"(mdmp_product_type)ProductType "
-			"MajorVersion MinorVersion BuildNumber (mdmp_platform_id)PlatformId "
-			"CsdVersionRva (mdmp_suite_mask)SuiteMask Reserved2 ProcessorFeatures", 0);
+			"(enum mdmp_product_type)ProductType "
+			"MajorVersion MinorVersion BuildNumber (enum mdmp_platform_id)PlatformId "
+			"CsdVersionRva (enum mdmp_suite_mask)SuiteMask Reserved2 ProcessorFeatures", 0);
 
 		break;
 	case THREAD_EX_LIST_STREAM:
@@ -865,7 +865,7 @@ static bool r_bin_mdmp_init_directory_entry(struct r_bin_mdmp_obj *obj, struct m
 		sdb_num_set (obj->kv, "mdmp_misc_info.offset",
 			entry->location.rva, 0);
 		sdb_set (obj->kv, "mdmp_misc_info.format", "d[4]Bdtttddddd "
-			"SizeOfInfo (mdmp_misc1_flags)Flags1 ProcessId "
+			"SizeOfInfo (enum mdmp_misc1_flags)Flags1 ProcessId "
 			"ProcessCreateTime ProcessUserTime ProcessKernelTime "
 			"ProcessorMaxMhz ProcessorCurrentMhz "
 			"ProcessorMhzLimit ProcessorMaxIdleState "
@@ -879,9 +879,9 @@ static bool r_bin_mdmp_init_directory_entry(struct r_bin_mdmp_obj *obj, struct m
 
 		sdb_set (obj->kv, "mdmp_memory_info.format",
 			"qq[4]Edq[4]E[4]E[4]Ed BaseAddress AllocationBase "
-			"(mdmp_page_protect)AllocationProtect __Alignment1 RegionSize "
-			"(mdmp_mem_state)State (mdmp_page_protect)Protect "
-			"(mdmp_mem_type)Type __Alignment2", 0);
+			"(enum mdmp_page_protect)AllocationProtect __Alignment1 RegionSize "
+			"(enum mdmp_mem_state)State (enum mdmp_page_protect)Protect "
+			"(enum mdmp_mem_type)Type __Alignment2", 0);
 		sdb_num_set (obj->kv, "mdmp_memory_info_list.offset",
 			entry->location.rva, 0);
 		sdb_set (obj->kv, "mdmp_memory_info_list.format",
@@ -1031,7 +1031,7 @@ static bool r_bin_mdmp_init_directory(struct r_bin_mdmp_obj *obj) {
 	sdb_num_set (obj->kv, "mdmp_directory.offset",
 			obj->hdr->stream_directory_rva, 0);
 	sdb_set (obj->kv, "mdmp_directory.format", "[4]E? "
-			"(mdmp_stream_type)StreamType "
+			"(enum mdmp_stream_type)StreamType "
 			"(mdmp_location_descriptor)Location", 0);
 
 	ut64 rvadir = obj->hdr->stream_directory_rva;

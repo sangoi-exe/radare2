@@ -4,9 +4,9 @@
 
 #define TYPE_LAYOUT_MAX_DEPTH 64
 
-static bool type_layout_node(Sdb *db, const RTypeDeclNode *node, RTypeLayout *layout, const char **chain, int depth);
+static bool type_layout_node(Sdb *db, const RTypeDeclNode *node, RTypeLayout *layout, RTypeIdentity *chain, int depth);
 
-static bool type_layout_text(Sdb *db, const char *text, RTypeLayout *layout, const char **chain, int depth) {
+static bool type_layout_text(Sdb *db, const char *text, RTypeLayout *layout, RTypeIdentity *chain, int depth) {
 	RTypeDecl *decl = r_type_decl_parse (text, R_TYPE_DECL_CONTEXT_ABSTRACT, db, NULL);
 	bool ok = decl && !decl->name && type_layout_node (db, decl->type, layout, chain, depth);
 	r_type_decl_free (decl);
@@ -37,7 +37,7 @@ static const char *type_signed_primitive(const char *name) {
 	return NULL;
 }
 
-static bool type_layout_aggregate(Sdb *db, const char *name, const char *kind, RTypeLayout *layout, const char **chain, int depth) {
+static bool type_layout_aggregate(Sdb *types, Sdb *db, const char *name, const char *kind, RTypeLayout *layout, RTypeIdentity *chain, int depth) {
 	const ut64 recorded = sdb_num_getf (db, NULL, "type.%s.size", name);
 	const ut64 pack = sdb_const_getf (db, NULL, "%s.%s.@.packed", kind, name)? 1: sdb_num_getf (db, NULL, "%s.%s.@.pack", kind, name);
 	layout->align = sdb_num_getf (db, NULL, "%s.%s.@.aligned", kind, name);
@@ -65,7 +65,7 @@ static bool type_layout_aggregate(Sdb *db, const char *name, const char *kind, R
 		ut64 explicit_align = sdb_num_getf (db, NULL, "%s.@.aligned", key);
 		free (key);
 		RTypeLayout field = { 0 };
-		bool measured = text && type_layout_text (db, text, &field, chain, depth + 1);
+		bool measured = text && type_layout_text (types, text, &field, chain, depth + 1);
 		free (text);
 		if (!measured) {
 			if (recorded) {
@@ -91,10 +91,49 @@ static bool type_layout_aggregate(Sdb *db, const char *name, const char *kind, R
 	if (recorded) {
 		layout->bits = recorded;
 	}
-	return ok;
+	return ok && layout->bits != 0;
 }
 
-static bool type_layout_node(Sdb *db, const RTypeDeclNode *node, RTypeLayout *layout, const char **chain, int depth) {
+static bool type_layout_base(Sdb *types, Sdb *db, const char *name, RTypeLayout *layout, RTypeIdentity *chain, int depth) {
+	const char *kind = sdb_const_get (db, name, NULL);
+	int i;
+	for (i = 0; i < depth; i++) {
+		if (chain[i].db == db && chain[i].key && !strcmp (chain[i].key, name)) {
+			layout->bits = sdb_num_getf (db, NULL, "type.%s.size", name);
+			layout->align = type_natural_alignment (layout->bits);
+			return layout->bits != 0;
+		}
+	}
+	chain[depth] = (RTypeIdentity){ .db = db, .key = (char *)name };
+	if (kind && (!strcmp (kind, "struct") || !strcmp (kind, "union"))) {
+		return type_layout_aggregate (types, db, name, kind, layout, chain, depth);
+	}
+	if (kind && !strcmp (kind, "typedef")) {
+		const char *target = sdb_const_getf (db, NULL, "typedef.%s", name);
+		RTypeDecl *decl = target? r_type_decl_parse (target, R_TYPE_DECL_CONTEXT_ABSTRACT, types, NULL): NULL;
+		bool ok = decl && !decl->name && type_layout_node (types, decl->type, layout, chain, depth + 1);
+		ut64 recorded = sdb_num_getf (db, NULL, "type.%s.size", name);
+		if (ok && recorded && decl->type->kind == R_TYPE_DECL_BASE) {
+			layout->bits = recorded;
+		}
+		r_type_decl_free (decl);
+		return ok;
+	}
+	if (!kind || (strcmp (kind, "type") && strcmp (kind, "enum"))) {
+		return false;
+	}
+	layout->bits = sdb_num_getf (db, NULL, "type.%s.size", name);
+	if (!layout->bits && !strcmp (kind, "enum")) {
+		layout->bits = sdb_num_get (types, "type.int.size", NULL);
+	}
+	layout->align = sdb_num_getf (db, NULL, "type.%s.align", name);
+	if (!layout->align) {
+		layout->align = type_natural_alignment (layout->bits);
+	}
+	return layout->bits != 0;
+}
+
+static bool type_layout_node(Sdb *db, const RTypeDeclNode *node, RTypeLayout *layout, RTypeIdentity *chain, int depth) {
 	if (depth >= TYPE_LAYOUT_MAX_DEPTH) {
 		return false;
 	}
@@ -113,7 +152,7 @@ static bool type_layout_node(Sdb *db, const RTypeDeclNode *node, RTypeLayout *la
 		return layout->bits && layout->align;
 	}
 	if (node->kind == R_TYPE_DECL_ARRAY) {
-		chain[depth] = NULL;
+		chain[depth] = (RTypeIdentity){ 0 };
 		if (!type_layout_node (db, node->child, layout, chain, depth + 1)) {
 			return false;
 		}
@@ -130,77 +169,28 @@ static bool type_layout_node(Sdb *db, const RTypeDeclNode *node, RTypeLayout *la
 	if (node->kind != R_TYPE_DECL_BASE) {
 		return false;
 	}
-	const char *name = node->base.name;
-	const char *tag_kind = NULL;
-	if (r_str_startswith (name, "struct ")) {
-		tag_kind = "struct";
-	} else if (r_str_startswith (name, "union ")) {
-		tag_kind = "union";
-	} else if (r_str_startswith (name, "enum ")) {
-		tag_kind = "enum";
+	char *key = NULL;
+	Sdb *selected = r_type_base_db (db, node->base.name, &key);
+	if (!selected) {
+		const char *primitive = type_signed_primitive (node->base.name);
+		selected = primitive? r_type_base_db (db, primitive, &key): NULL;
 	}
-	if (tag_kind) {
-		name = strchr (name, ' ') + 1;
-	}
-	const char *kind = sdb_const_get (db, name, NULL);
-	if (tag_kind && (!kind || strcmp (kind, tag_kind))) {
-		return false;
-	}
-	int i;
-	for (i = 0; i < depth; i++) {
-		if (chain[i] && !strcmp (chain[i], name)) {
-			// A recorded aggregate width remains authoritative even for a self-naming record.
-			layout->bits = sdb_num_getf (db, NULL, "type.%s.size", name);
-			layout->align = type_natural_alignment (layout->bits);
-			return layout->bits != 0;
-		}
-	}
-	chain[depth] = name;
-	const char *primitive = kind? NULL: type_signed_primitive (name);
-	if (primitive) {
-		// Signedness does not change the primitive width; exact database entries win.
-		name = primitive;
-		kind = sdb_const_get (db, name, NULL);
-	}
-	if (kind && (!strcmp (kind, "struct") || !strcmp (kind, "union"))) {
-		return type_layout_aggregate (db, name, kind, layout, chain, depth);
-	}
-	if (kind && !strcmp (kind, "typedef")) {
-		const char *target = sdb_const_getf (db, NULL, "typedef.%s", name);
-		RTypeDecl *decl = target? r_type_decl_parse (target, R_TYPE_DECL_CONTEXT_ABSTRACT, db, NULL): NULL;
-		bool ok = decl && !decl->name && type_layout_node (db, decl->type, layout, chain, depth + 1);
-		ut64 recorded = sdb_num_getf (db, NULL, "type.%s.size", name);
-		if (ok && recorded && decl->type->kind == R_TYPE_DECL_BASE) {
-			layout->bits = recorded;
-		}
-		r_type_decl_free (decl);
-		return ok;
-	}
-	if (!kind || (strcmp (kind, "type") && strcmp (kind, "enum"))) {
-		return false;
-	}
-	layout->bits = sdb_num_getf (db, NULL, "type.%s.size", name);
-	if (!layout->bits && !strcmp (kind, "enum")) {
-		layout->bits = sdb_num_get (db, "type.int.size", NULL);
-	}
-	layout->align = sdb_num_getf (db, NULL, "type.%s.align", name);
-	if (!layout->align) {
-		layout->align = type_natural_alignment (layout->bits);
-	}
-	return layout->bits != 0;
+	bool ok = selected && type_layout_base (db, selected, key, layout, chain, depth);
+	free (key);
+	return ok;
 }
 
 R_API bool r_type_decl_layout(Sdb *db, const RTypeDeclNode *type, RTypeLayout *layout) {
 	R_RETURN_VAL_IF_FAIL (db && type && layout, false);
 	*layout = (RTypeLayout){ 0 };
-	const char *chain[TYPE_LAYOUT_MAX_DEPTH] = { 0 };
+	RTypeIdentity chain[TYPE_LAYOUT_MAX_DEPTH] = { 0 };
 	return type_layout_node (db, type, layout, chain, 0);
 }
 
 R_API bool r_type_get_layout(Sdb *db, const char *type, RTypeLayout *layout) {
 	R_RETURN_VAL_IF_FAIL (db && type && layout, false);
 	*layout = (RTypeLayout){ 0 };
-	const char *chain[TYPE_LAYOUT_MAX_DEPTH] = { 0 };
+	RTypeIdentity chain[TYPE_LAYOUT_MAX_DEPTH] = { 0 };
 	return type_layout_text (db, type, layout, chain, 0);
 }
 

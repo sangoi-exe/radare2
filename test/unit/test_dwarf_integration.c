@@ -73,7 +73,7 @@ static bool test_parse_dwarf_types(void) {
 	r_anal_dwarf_process_info (anal, &ctx);
 
 	const char *value = NULL;
-	Sdb *sdb = anal->sdb_types;
+	Sdb *sdb = sdb_ns (anal->sdb_types, "tags", false);
 	check_kv ("_cairo_status", "enum");
 	check_kv ("enum._cairo_status.0x0", "CAIRO_STATUS_SUCCESS");
 	check_kv ("enum._cairo_status.CAIRO_STATUS_SUCCESS", "0x0");
@@ -144,12 +144,12 @@ static bool test_dwarf_function_parsing_cpp(void) {
 	const char *value = NULL;
 	check_kv ("Mammal", "fcn");
 	check_kv ("fcn.Mammal.addr", "0x401300");
-	check_kv ("fcn.Mammal.sig", "void Mammal(Mammal * this);");
+	check_kv ("fcn.Mammal.sig", "void Mammal(struct Mammal * this);");
 	check_kv ("fcn.Dog::walk__.addr", "0x401380");
-	check_kv ("fcn.Dog::walk__.sig", "int Dog::walk()(Dog * this);");
+	check_kv ("fcn.Dog::walk__.sig", "int Dog::walk()(struct Dog * this);");
 	check_kv ("fcn.Dog::walk__.name", "Dog::walk()");
 	check_kv ("fcn.Mammal::walk__.args", "this");
-	check_kv ("fcn.Mammal::walk__.arg.0", "this,b,-8,Mammal *");
+	check_kv ("fcn.Mammal::walk__.arg.0", "this,b,-8,struct Mammal *");
 	check_kv ("fcn.Mammal::walk__.vars", NULL);
 
 	check_kv ("main", "fcn");

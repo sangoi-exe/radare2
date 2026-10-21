@@ -532,6 +532,7 @@ R_API void r_anal_purge(RAnal *anal) {
 	r_interval_tree_fini (&anal->meta);
 	r_interval_tree_init (&anal->meta, r_meta_item_free);
 	sdb_reset (anal->sdb_types);
+	sdb_reset (r_type_namespace (anal->sdb_types, R_TYPE_NAMESPACE_TAG, false));
 	sdb_reset (anal->sdb_zigns);
 	sdb_reset (anal->sdb_classes);
 	sdb_reset (anal->sdb_classes_attrs);

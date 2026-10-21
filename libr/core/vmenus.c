@@ -25,6 +25,7 @@ typedef struct {
 	char *curname;
 	char *curfmt;
 	const char *optword;
+	RTypeNamespace space;
 } RCoreVisualTypes;
 
 static int copyuntilch(char *dst, char *src, int ch) {
@@ -928,8 +929,13 @@ static bool sdbforcb(void *p, const char *k, const char *v) {
 	char *color_sel = vt->core->cons->context->pal.prompt;
 	RCons *cons = vt->core->cons;
 	if (vt->optword) {
+		char *key = NULL;
+		Sdb *db = r_type_base_db (vt->core->anal->sdb_types, vt->optword, &key);
+		if (!db) {
+			return true;
+		}
 		if (!strcmp (vt->type, "struct")) {
-			char *s = r_str_newf ("struct.%s.", vt->optword);
+			char *s = r_str_newf ("struct.%s.", key);
 			/* enum */
 			if (!strncmp (s, k, strlen (s))) {
 				if (vt->t_idx == vt->t_ctr) {
@@ -950,7 +956,7 @@ static bool sdbforcb(void *p, const char *k, const char *v) {
 			}
 			free (s);
 		} else {
-			char *s = r_str_newf ("%s.", vt->optword);
+			char *s = r_str_newf ("%s.%s.", vt->type, key);
 			/* enum */
 			if (!strncmp (s, k, strlen (s))) {
 				if (!strstr (k, ".0x")) {
@@ -973,6 +979,7 @@ static bool sdbforcb(void *p, const char *k, const char *v) {
 			}
 			free (s);
 		}
+		free (key);
 	} else if (!strcmp (v, vt->type)) {
 		if (!strcmp (vt->type, "type")) {
 			char *fmt = getformat (vt, k);
@@ -992,19 +999,22 @@ static bool sdbforcb(void *p, const char *k, const char *v) {
 			}
 			free (fmt);
 		} else {
+			RTypeIdentity identity = { .db = r_type_namespace (vt->core->anal->sdb_types, vt->space, false), .key = (char *)k, .space = vt->space };
+			char *name = r_type_identifier_name (&identity);
 			if (vt->t_idx == vt->t_ctr) {
 				free (vt->curname);
-				vt->curname = strdup (k);
+				vt->curname = strdup (name);
 				free (vt->curfmt);
 				vt->curfmt = strdup (v);
 				pre = ">";
 			}
 			if (use_color && *pre == '>') {
 				r_cons_printf (cons, "%s %s %s\n"Color_RESET, color_sel,
-					(vt->t_idx == vt->t_ctr)?  ">": " ", k);
+					(vt->t_idx == vt->t_ctr)?  ">": " ", name);
 			} else {
-				r_cons_printf (cons, " %s %s\n", (vt->t_idx == vt->t_ctr)?  ">": " ", k);
+				r_cons_printf (cons, " %s %s\n", (vt->t_idx == vt->t_ctr)?  ">": " ", name);
 			}
+			free (name);
 		}
 		vt->t_ctr ++;
 	}
@@ -1060,7 +1070,21 @@ R_API int r_core_visual_types(RCore *core) {
 			vt.t_ctr = 0;
 			vt.type = opts[h_opt];
 			vt.optword = optword;
-			sdb_foreach (core->anal->sdb_types, sdbforcb, &vt);
+			if (optword) {
+				char *key = NULL;
+				Sdb *db = r_type_base_db (core->anal->sdb_types, optword, &key);
+				if (db) {
+					sdb_foreach (db, sdbforcb, &vt);
+				}
+				free (key);
+			} else {
+				for (vt.space = R_TYPE_NAMESPACE_ORDINARY; vt.space <= R_TYPE_NAMESPACE_TAG; vt.space++) {
+					Sdb *db = r_type_namespace (core->anal->sdb_types, vt.space, false);
+					if (db) {
+						sdb_foreach (db, sdbforcb, &vt);
+					}
+				}
+			}
 		}
 
 		r_cons_visual_flush (core->cons);

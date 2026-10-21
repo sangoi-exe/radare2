@@ -89,8 +89,10 @@ static bool test_move_family(void) {
 		mu_assert_eq (fcn->dirty_epoch, epoch, "rerun does not reapply signature");
 		r_anal_function_signature_free (sig);
 	}
-	RAnalBaseType *type = r_anal_get_base_type (core->anal, "FarAddress16");
+	RAnalBaseType *type = r_anal_get_base_type (core->anal, "FarAddress16", R_TYPE_NAMESPACE_ORDINARY);
 	mu_assert_notnull (type, "native record type");
+	mu_assert_eq (type->space, R_TYPE_NAMESPACE_ORDINARY, "FarAddress16 remains an ordinary named analysis view");
+	mu_assert_null (r_anal_get_base_type (core->anal, "FarAddress16", R_TYPE_NAMESPACE_TAG), "the profile does not fabricate a historical C tag");
 	mu_assert_eq (type->size, 32, "four-byte record");
 	RAnalTypeMember *member = RVecAnalTypeMember_at (&type->struct_data.members, 1);
 	mu_assert_streq (member->name, "selector", "selector field");
@@ -376,7 +378,7 @@ static bool test_remaining_helper_contracts(void) {
 			mu_assert_eq (fcn->meta.stack_pop, 8, "actual RETF8 callee pop");
 		}
 		if (i == 2) {
-			RAnalBaseType *type = r_anal_get_base_type (core->anal, "FarPointerCompareAnalysisState9");
+			RAnalBaseType *type = r_anal_get_base_type (core->anal, "FarPointerCompareAnalysisState9", R_TYPE_NAMESPACE_ORDINARY);
 			mu_assert_notnull (type, "analysis tuple type");
 			mu_assert_eq (type->size, 72, "exact nine-byte tuple");
 			mu_assert_eq (r_type_get_bitsize (core->anal->sdb_types, "bool"), 8, "one-byte boolean storage");

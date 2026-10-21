@@ -43,7 +43,7 @@ static int r_bin_te_init_hdr(struct r_bin_te_obj_t *bin) {
 	"TE_IMAGE_SUBSYSTEM_EFI_ROM=13, TE_IMAGE_SUBSYSTEM_XBOX=14};", 0);
 	sdb_num_set (bin->kv, "te_header.offset", 0, 0);
 	sdb_set (bin->kv, "te_header.format", "[2]z[2]Eb[1]Ewxxq"
-		" Signature (te_machine)Machine NumberOfSections (te_subsystem)Subsystem StrippedSize AddressOfEntryPoint BaseOfCode ImageBase", 0);
+		" Signature (enum te_machine)Machine NumberOfSections (enum te_subsystem)Subsystem StrippedSize AddressOfEntryPoint BaseOfCode ImageBase", 0);
 	sdb_num_set (bin->kv, "te_directory1_header.offset", 24, 0);
 	sdb_set (bin->kv, "te_directory1_header.format", "xx"
 		" VirtualAddress Size", 0);

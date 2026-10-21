@@ -1585,50 +1585,55 @@ R_API void r_core_autocomplete(RCore *core, RLineCompletion *completion, RLineBu
 			}
 		}
 	} else if (!strncmp (buf->data, "t ", 2) || !strncmp (buf->data, "t- ", 3)) {
-		SdbList *l = sdb_foreach_list (core->anal->sdb_types, true);
-		SdbListIter *iter;
-		SdbKv *kv;
+		RList *l = r_type_get_roots (core->anal->sdb_types);
+		RListIter *iter;
+		RTypeIdentity *identity;
 		int chr = (buf->data[1] == ' ')? 2: 3;
-		ls_foreach (l, iter, kv) {
+		r_list_foreach (l, iter, identity) {
 			int len = strlen (buf->data + chr);
-			if (!len || !strncmp (buf->data + chr, sdbkv_key (kv), len)) {
-				if (R_STR_CMP_ANY (sdbkv_value (kv), "type", "enum", "struct")) {
-					r_line_completion_push (completion, sdbkv_key (kv));
+			char *name = r_type_identifier_name (identity);
+			if (name && (!len || !strncmp (buf->data + chr, name, len))) {
+				if (R_STR_CMP_ANY (sdb_const_get (identity->db, identity->key, NULL), "type", "enum", "struct")) {
+					r_line_completion_push (completion, name);
 				}
 			}
+			free (name);
 		}
-		ls_free (l);
+		r_list_free (l);
 	} else if ((!strncmp (buf->data, "te ", 3))) {
-		SdbList *l = sdb_foreach_list (core->anal->sdb_types, true);
-		SdbListIter *iter;
-		SdbKv *kv;
+		RList *l = r_type_get_roots (core->anal->sdb_types);
+		RListIter *iter;
+		RTypeIdentity *identity;
 		int chr = 3;
-		ls_foreach (l, iter, kv) {
+		r_list_foreach (l, iter, identity) {
 			int len = strlen (buf->data + chr);
-			if (!len || !strncmp (buf->data + chr, sdbkv_key (kv), len)) {
-				if (!strcmp (sdbkv_value (kv), "enum")) {
-					r_line_completion_push (completion, sdbkv_key (kv));
+			char *name = r_type_identifier_name (identity);
+			if (name && (!len || !strncmp (buf->data + chr, name, len))) {
+				if (!strcmp (sdb_const_get (identity->db, identity->key, NULL), "enum")) {
+					r_line_completion_push (completion, name);
 				}
 			}
+			free (name);
 		}
-		ls_free (l);
+		r_list_free (l);
 	} else if (buf->data[0] == '$') {
 		autocomplete_alias (completion, core->rcmd, buf->data + 1, false);
 	} else if (R_STR_STARTSWITH_ANY (buf->data, "ts ", "ta ", "tp ", "tl ", "tpx ", "tss ", "ts* ")) {
-		SdbList *l = sdb_foreach_list (core->anal->sdb_types, true);
-		SdbListIter *iter;
-		SdbKv *kv;
+		RList *l = r_type_get_roots (core->anal->sdb_types);
+		RListIter *iter;
+		RTypeIdentity *identity;
 		int chr = (buf->data[2] == ' ')? 3: 4;
-		ls_foreach (l, iter, kv) {
+		r_list_foreach (l, iter, identity) {
 			int len = strlen (buf->data + chr);
-			const char *key = sdbkv_key (kv);
-			if (!len || !strncmp (buf->data + chr, key, len)) {
-				if (!strncmp (sdbkv_value (kv), "struct", strlen ("struct") + 1)) {
-					r_line_completion_push (completion, key);
+			char *name = r_type_identifier_name (identity);
+			if (name && (!len || !strncmp (buf->data + chr, name, len))) {
+				if (!strcmp (sdb_const_get (identity->db, identity->key, NULL), "struct")) {
+					r_line_completion_push (completion, name);
 				}
 			}
+			free (name);
 		}
-		ls_free (l);
+		r_list_free (l);
 	} else if (r_str_startswith (buf->data, "zo ") || r_str_startswith (buf->data, "zoz ")) {
 		if (core->anal->zign_path && core->anal->zign_path[0]) {
 			char *zignpath = r_file_abspath (core->anal->zign_path);

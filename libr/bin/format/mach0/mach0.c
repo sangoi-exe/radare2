@@ -277,88 +277,88 @@ static void init_sdb_formats(struct MACH0_(obj_t) * mo) {
 		"{S_ATTR_PURE_INSTRUCTIONS=0x800000ULL, S_ATTR_NO_TOC=0x400000ULL, S_ATTR_STRIP_STATIC_SYMS=0x200000ULL, S_ATTR_NO_DEAD_STRIP=0x100000ULL, S_ATTR_LIVE_SUPPORT=0x080000ULL, S_ATTR_SELF_MODIFYING_CODE=0x040000ULL, S_ATTR_DEBUG=0x020000ULL, S_ATTR_SOME_INSTRUCTIONS=0x000004ULL, S_ATTR_EXT_RELOC=0x000002ULL, S_ATTR_LOC_RELOC=0x000001ULL};",
 		0);
 	sdb_set (kv, "mach0_header.format", "xxx[4]Edd[4]B "
-		"magic cputype cpusubtype (mach0_header_filetype)filetype ncmds sizeofcmds (mach0_header_flags)flags",
+		"magic cputype cpusubtype (enum mach0_header_filetype)filetype ncmds sizeofcmds (enum mach0_header_flags)flags",
 		0);
 	sdb_set (kv, "mach0_segment.format", "[4]Ed[16]zxxxxoodx "
-		"(mach0_load_command_type)cmd cmdsize segname vmaddr vmsize fileoff filesize maxprot initprot nsects flags",
+		"(enum mach0_load_command_type)cmd cmdsize segname vmaddr vmsize fileoff filesize maxprot initprot nsects flags",
 		0);
 	sdb_set (kv, "mach0_segment64.format", "[4]Ed[16]zqqqqoodx "
-		"(mach0_load_command_type)cmd cmdsize segname vmaddr vmsize fileoff filesize maxprot initprot nsects flags",
+		"(enum mach0_load_command_type)cmd cmdsize segname vmaddr vmsize fileoff filesize maxprot initprot nsects flags",
 		0);
 	sdb_set (kv, "mach0_symtab_command.format", "[4]Edxdxd "
-		"(mach0_load_command_type)cmd cmdsize symoff nsyms stroff strsize",
+		"(enum mach0_load_command_type)cmd cmdsize symoff nsyms stroff strsize",
 		0);
 	sdb_set (kv, "mach0_dysymtab_command.format", "[4]Edddddddddddxdxdxxxd "
-		"(mach0_load_command_type)cmd cmdsize ilocalsym nlocalsym iextdefsym nextdefsym iundefsym nundefsym tocoff ntoc moddtaboff nmodtab extrefsymoff nextrefsyms inddirectsymoff nindirectsyms extreloff nextrel locreloff nlocrel",
+		"(enum mach0_load_command_type)cmd cmdsize ilocalsym nlocalsym iextdefsym nextdefsym iundefsym nundefsym tocoff ntoc moddtaboff nmodtab extrefsymoff nextrefsyms inddirectsymoff nindirectsyms extreloff nextrel locreloff nlocrel",
 		0);
 	sdb_set (kv, "mach0_section.format", "[16]z[16]zxxxxxx[1]E[3]Bxx "
-		"sectname segname addr size offset align reloff nreloc (mach0_section_types)flags_type (mach0_section_attrs)flags_attr reserved1 reserved2",
+		"sectname segname addr size offset align reloff nreloc (enum mach0_section_types)flags_type (enum mach0_section_attrs)flags_attr reserved1 reserved2",
 		0);
 	sdb_set (kv, "mach0_section64.format", "[16]z[16]zqqxxxx[1]E[3]Bxxx "
-		"sectname segname addr size offset align reloff nreloc (mach0_section_types)flags_type (mach0_section_attrs)flags_attr reserved1 reserved2 reserved3",
+		"sectname segname addr size offset align reloff nreloc (enum mach0_section_types)flags_type (enum mach0_section_attrs)flags_attr reserved1 reserved2 reserved3",
 		0);
 	sdb_set (kv, "mach0_dylib.format", "xxxxz "
 		"name_offset timestamp current_version compatibility_version name",
 		0);
 	sdb_set (kv, "mach0_dylib_command.format", "[4]Ed? "
-		"(mach0_load_command_type)cmd cmdsize (mach0_dylib)dylib",
+		"(enum mach0_load_command_type)cmd cmdsize (mach0_dylib)dylib",
 		0);
 	sdb_set (kv, "mach0_id_dylib_command.format", "[4]Ed? "
-		"(mach0_load_command_type)cmd cmdsize (mach0_dylib)dylib",
+		"(enum mach0_load_command_type)cmd cmdsize (mach0_dylib)dylib",
 		0);
 	sdb_set (kv, "mach0_uuid_command.format", "[4]Ed[16]b "
-		"(mach0_load_command_type)cmd cmdsize uuid",
+		"(enum mach0_load_command_type)cmd cmdsize uuid",
 		0);
 	sdb_set (kv, "mach0_rpath_command.format", "[4]Edxz "
-		"(mach0_load_command_type)cmd cmdsize path_offset path",
+		"(enum mach0_load_command_type)cmd cmdsize path_offset path",
 		0);
 	sdb_set (kv, "mach0_entry_point_command.format", "[4]Edqq "
-		"(mach0_load_command_type)cmd cmdsize entryoff stacksize",
+		"(enum mach0_load_command_type)cmd cmdsize entryoff stacksize",
 		0);
 	sdb_set (kv, "mach0_encryption_info64_command.format", "[4]Edxddx "
-		"(mach0_load_command_type)cmd cmdsize offset size id padding",
+		"(enum mach0_load_command_type)cmd cmdsize offset size id padding",
 		0);
 	sdb_set (kv, "mach0_encryption_info_command.format", "[4]Edxdd "
-		"(mach0_load_command_type)cmd cmdsize offset size id",
+		"(enum mach0_load_command_type)cmd cmdsize offset size id",
 		0);
 	sdb_set (kv, "mach0_code_signature_command.format", "[4]Edxd "
-		"(mach0_load_command_type)cmd cmdsize offset size",
+		"(enum mach0_load_command_type)cmd cmdsize offset size",
 		0);
 	sdb_set (kv, "mach0_dyld_info_only_command.format", "[4]Edxdxdxdxdxd "
-		"(mach0_load_command_type)cmd cmdsize rebase_off rebase_size bind_off bind_size weak_bind_off weak_bind_size lazy_bind_off lazy_bind_size export_off export_size",
+		"(enum mach0_load_command_type)cmd cmdsize rebase_off rebase_size bind_off bind_size weak_bind_off weak_bind_size lazy_bind_off lazy_bind_size export_off export_size",
 		0);
 	sdb_set (kv, "mach0_load_dylinker_command.format", "[4]Edxz "
-		"(mach0_load_command_type)cmd cmdsize name_offset name",
+		"(enum mach0_load_command_type)cmd cmdsize name_offset name",
 		0);
 	sdb_set (kv, "mach0_id_dylinker_command.format", "[4]Edxzi "
-		"(mach0_load_command_type)cmd cmdsize name_offset name",
+		"(enum mach0_load_command_type)cmd cmdsize name_offset name",
 		0);
 	sdb_set (kv, "mach0_build_version_command.format", "[4]Ed[4]Exxd "
-		"(mach0_load_command_type)cmd cmdsize (mach0_build_platform)platform minos sdk ntools",
+		"(enum mach0_load_command_type)cmd cmdsize (enum mach0_build_platform)platform minos sdk ntools",
 		0);
 	sdb_set (kv, "mach0_build_version_tool.format", "[4]Ex "
-		"(mach0_build_tool)tool version",
+		"(enum mach0_build_tool)tool version",
 		0);
 	sdb_set (kv, "mach0_source_version_command.format", "[4]Edq "
-		"(mach0_load_command_type)cmd cmdsize version",
+		"(enum mach0_load_command_type)cmd cmdsize version",
 		0);
 	sdb_set (kv, "mach0_function_starts_command.format", "[4]Edxd "
-		"(mach0_load_command_type)cmd cmdsize offset size",
+		"(enum mach0_load_command_type)cmd cmdsize offset size",
 		0);
 	sdb_set (kv, "mach0_data_in_code_command.format", "[4]Edxd "
-		"(mach0_load_command_type)cmd cmdsize offset size",
+		"(enum mach0_load_command_type)cmd cmdsize offset size",
 		0);
 	sdb_set (kv, "mach0_version_min_command.format", "[4]Edxx "
-		"(mach0_load_command_type)cmd cmdsize version reserved",
+		"(enum mach0_load_command_type)cmd cmdsize version reserved",
 		0);
 	sdb_set (kv, "mach0_segment_split_info_command.format", "[4]Edxd "
-		"(mach0_load_command_type)cmd cmdsize offset size",
+		"(enum mach0_load_command_type)cmd cmdsize offset size",
 		0);
 	sdb_set (kv, "mach0_unixthread_command.format", "[4]Eddd "
-		"(mach0_load_command_type)cmd cmdsize flavor count",
+		"(enum mach0_load_command_type)cmd cmdsize flavor count",
 		0);
 	sdb_set (kv, "mach0_aot_metadata.format", "[4]Eddddddd "
-		"(mach0_load_command_type)cmd cmdsize imagepathoffset imagepathlen field10 field14 x64code field1c",
+		"(enum mach0_load_command_type)cmd cmdsize imagepathoffset imagepathlen field10 field14 x64code field1c",
 		0);
 }
 
@@ -2067,7 +2067,7 @@ static int init_items(struct MACH0_(obj_t) * mo) {
 		if (format_name) {
 			sdb_setf (mo->kv, format_name, 0, "mach0_cmd_%d.format", i);
 		} else {
-			sdb_setf (mo->kv, "[4]Ed (mach_load_command_type)cmd size", 0, "mach0_cmd_%d.format", i);
+			sdb_setf (mo->kv, "[4]Ed (enum mach0_load_command_type)cmd size", 0, "mach0_cmd_%d.format", i);
 		}
 
 		snprintf (cmd_flagname, sizeof (cmd_flagname), "mach0_cmd_%d.cmd", i);
@@ -2425,7 +2425,7 @@ static int init_items(struct MACH0_(obj_t) * mo) {
 		if (format_name) {
 			sdb_setf (mo->kv, format_name, 0, "mach0_cmd_%d.format", i);
 		} else {
-			sdb_setf (mo->kv, "[4]Ed (mach_load_command_type)cmd size", 0, "mach0_cmd_%d.format", i);
+			sdb_setf (mo->kv, "[4]Ed (enum mach0_load_command_type)cmd size", 0, "mach0_cmd_%d.format", i);
 		}
 
 		switch (lc.cmd) {

@@ -168,7 +168,7 @@ static bool tlink51_shared(RCore *core, BorlandProfileContext *ctx) {
 		mu_assert_eq (length, size - 1, "actual prefix independently determines conditional resume");
 		char name[48];
 		snprintf (name, sizeof (name), "tlink51_InlineText%d", length);
-		RAnalBaseType *text = r_anal_get_base_type (core->anal, name);
+		RAnalBaseType *text = r_anal_get_base_type (core->anal, name, R_TYPE_NAMESPACE_ORDINARY);
 		mu_assert_notnull (text, "every source inline record layout");
 		mu_assert_eq (text->size, size * 8, "prefix and non-NUL text exact record extent");
 		mu_assert_eq (RVecAnalTypeMember_length (&text->struct_data.members), 2, "only length and text fields");
@@ -259,7 +259,7 @@ static bool test_tlink51_original_facts(void) {
 			mu_assert_true (tlink51_comment (core->anal, address, "partial/multi-entry partitions"), "source partial limitation");
 		}
 		for (i = 0; i < R_ARRAY_SIZE (expected_records); i++) {
-			RAnalBaseType *type = r_anal_get_base_type (core->anal, expected_records[i].name);
+			RAnalBaseType *type = r_anal_get_base_type (core->anal, expected_records[i].name, R_TYPE_NAMESPACE_ORDINARY);
 			mu_assert_notnull (type, "all independent source dynamic/working/static type views");
 			mu_assert_eq (type->kind, R_ANAL_BASE_TYPE_KIND_STRUCT, "native record");
 			mu_assert_eq (type->size, expected_records[i].size * 8, "complete nominal layout");
@@ -287,7 +287,7 @@ static bool test_tlink51_original_facts(void) {
 		}
 		r_anal_function_signature_free (writer);
 		mu_assert_eq (r_type_get_bitsize (core->anal->sdb_types, "NearWriterAnalysisState7"), 56, "no tuple padding");
-		RAnalBaseType *location = r_anal_get_base_type (core->anal, "tlink51_MaskedLocationClass");
+		RAnalBaseType *location = r_anal_get_base_type (core->anal, "tlink51_MaskedLocationClass", R_TYPE_NAMESPACE_ORDINARY);
 		mu_assert_notnull (location, "source masked-location enum");
 		mu_assert_eq (location->kind, R_ANAL_BASE_TYPE_KIND_ENUM, "independent native enum domain");
 		mu_assert_eq (location->size, 8, "source byte enum");

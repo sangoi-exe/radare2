@@ -116,7 +116,7 @@ static void synth_collect_sites(RVecSynthRec *recs, RVecSynthField *fields, bool
 
 // make disasm render the member name at the accessing instruction
 static void synth_hint(RAnal *anal, SynthRec *rec, ut64 off, ut64 iaddr) {
-	const char *sname = rec->bt->name;
+	char *sname = r_str_newf ("struct %s", rec->bt->name);
 	char *memb = r_type_get_struct_memb (anal->sdb_types, sname, (int)off);
 	if (!memb) {
 		// interior of an atomic array member doesn't resolve; snap to its base
@@ -125,6 +125,7 @@ static void synth_hint(RAnal *anal, SynthRec *rec, ut64 off, ut64 iaddr) {
 			memb = r_type_get_struct_memb (anal->sdb_types, sname, (int)a->off);
 		}
 	}
+	free (sname);
 	if (off > 0) {
 		if (memb) {
 			r_anal_hint_set_offset (anal, iaddr, memb);
@@ -371,7 +372,7 @@ static bool synth_type_names(const char *vtype, const char *name) {
 
 // a member of a kept parent, so dropping it would dangle the parent rather than a var
 static bool synth_member_names(RAnal *anal, const char *parent, const char *name) {
-	RAnalBaseType *bt = r_anal_get_base_type (anal, parent);
+	RAnalBaseType *bt = r_anal_get_base_type (anal, parent, R_TYPE_NAMESPACE_TAG);
 	if (!bt) {
 		return false;
 	}
@@ -806,6 +807,7 @@ void type_synth(RAnal *anal, RAnalFunction *fcn, bool apply, RVecSynthRec *recs)
 		const int carg = porig[ci].arg;
 		const ut64 coff = porig[ci].off;
 		RAnalBaseType *cbt = r_anal_base_type_new (R_ANAL_BASE_TYPE_KIND_STRUCT);
+		cbt->space = R_TYPE_NAMESPACE_TAG;
 		ut64 ccur = 0;
 		int ccount = 0;
 		size_t cj = ci;
@@ -855,6 +857,7 @@ void type_synth(RAnal *anal, RAnalFunction *fcn, bool apply, RVecSynthRec *recs)
 	while (p < nfields) {
 		const int arg = fields[p].arg;
 		RAnalBaseType *bt = r_anal_base_type_new (R_ANAL_BASE_TYPE_KIND_STRUCT);
+		bt->space = R_TYPE_NAMESPACE_TAG;
 		ut64 cur = 0;
 		int count = 0;
 		size_t q = p;
@@ -971,7 +974,9 @@ void type_synth(RAnal *anal, RAnalFunction *fcn, bool apply, RVecSynthRec *recs)
 			char *sp;
 			sdb_aforeach (sp, stale) {
 				if (!synth_type_referenced (anal, fcn, sp)) {
-					r_anal_remove_parsed_type (anal, sp);
+					char *spelling = r_str_newf ("struct %s", sp);
+					r_anal_remove_parsed_type (anal, spelling);
+					free (spelling);
 				}
 				sdb_aforeach_next (sp);
 			}

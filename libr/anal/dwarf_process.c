@@ -21,6 +21,32 @@ typedef struct dwarf_parse_context_t {
 	RArena *arena;
 } Context;
 
+static RTypeNamespace dwarf_type_namespace(const RBinDwarfCompUnit *unit) {
+	const RBinDwarfDie *die = unit && unit->dies? RVecDwarfDie_at (unit->dies, 0): NULL;
+	const RBinDwarfAttrValue *language = die? r_bin_dwarf_die_find_attr (unit, die, DW_AT_language): NULL;
+	if (!language || language->kind != DW_AT_KIND_CONSTANT) {
+		return R_TYPE_NAMESPACE_ORDINARY;
+	}
+	switch (language->uconstant) {
+	case DW_LANG_C:
+	case DW_LANG_C89:
+	case DW_LANG_C99:
+	case DW_LANG_C11:
+	case DW_LANG_C17:
+	case DW_LANG_C23:
+	case DW_LANG_C_plus_plus:
+	case DW_LANG_C_plus_plus_14:
+	case DW_LANG_C_plus_plus_17:
+	case DW_LANG_C_plus_plus_20:
+	case DW_LANG_C_plus_plus_23:
+	case DW_LANG_ObjC:
+	case DW_LANG_ObjC_plus_plus:
+		return R_TYPE_NAMESPACE_TAG;
+	default:
+		return R_TYPE_NAMESPACE_ORDINARY;
+	}
+}
+
 typedef struct dwarf_function_t {
 	ut64 addr;
 	const char *name;
@@ -348,6 +374,15 @@ static st32 parse_type(Context *ctx, const ut64 offset, RStrBuf *strbuf, ut64 *s
 	case DW_TAG_class_type:
 		name = get_die_name (ctx->arena, unit, die);
 		if (name) {
+			if (dwarf_type_namespace (unit) == R_TYPE_NAMESPACE_TAG) {
+				if (die->tag == DW_TAG_structure_type || die->tag == DW_TAG_class_type) {
+					r_strbuf_append (strbuf, "struct ");
+				} else if (die->tag == DW_TAG_union_type) {
+					r_strbuf_append (strbuf, "union ");
+				} else if (die->tag == DW_TAG_enumeration_type) {
+					r_strbuf_append (strbuf, "enum ");
+				}
+			}
 			r_strbuf_append (strbuf, name);
 		}
 		break;
@@ -554,6 +589,7 @@ static void parse_structure_type(Context *ctx, ut64 idx) {
 	if (!base_type) {
 		return;
 	}
+	base_type->space = dwarf_type_namespace (ctx->unit);
 
 	const char *name = get_die_name (ctx->arena, ctx->unit, die);
 	if (!name) {
@@ -626,6 +662,7 @@ static void parse_enum_type(Context *ctx, ut64 idx) {
 	if (!base_type) {
 		return;
 	}
+	base_type->space = dwarf_type_namespace (ctx->unit);
 
 	const char *name = get_die_name (ctx->arena, ctx->unit, die);
 	if (!name) {

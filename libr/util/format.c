@@ -1422,7 +1422,7 @@ static void r_print_format_enum(RPrintFormat *pf, ut64 seeki, char *fmtname, cha
 			pj_ks (pf->pj, "label", enumvalue);
 			pj_ks (pf->pj, "enum", fmtname);
 		} else if (MUSTSEE) {
-			r_print_printf (p, "%s (enum %s) = 0x%" PFMT64x " ; %s\n",
+			r_print_printf (p, "%s (%s) = 0x%" PFMT64x " ; %s\n",
 				fieldname, fmtname, addr, enumvalue);
 		} else if (MUSTSEESTRUCT) {
 			r_print_printf (p, "%s", enumvalue);
@@ -1433,7 +1433,7 @@ static void r_print_format_enum(RPrintFormat *pf, ut64 seeki, char *fmtname, cha
 			pj_kn (pf->pj, "value", addr);
 			pj_ks (pf->pj, "enum", fmtname);
 		} else if (MUSTSEE) {
-			r_print_printf (p, "%s (enum %s) = 0x%" PFMT64x "\n", //`te %s 0x%x`\n",
+			r_print_printf (p, "%s (%s) = 0x%" PFMT64x "\n", //`te %s 0x%x`\n",
 				fieldname, fmtname, addr); // enumvalue); //fmtname, addr);
 		}
 	}
@@ -2756,7 +2756,7 @@ R_API int r_print_format_internal(RPrint *p, RPrintFormat *pf, ut64 seek, const 
 							break;
 						}
 						format = strchr (fmtname, ' ');
-						if (format) {
+						if (format && !R_STR_STARTSWITH_ANY (fmtname, "struct ", "union ")) {
 							anon = 1;
 							fmtname = (char *)r_str_trim_head_ro (format);
 						}

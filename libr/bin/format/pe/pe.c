@@ -815,11 +815,11 @@ static int bin_pe_init_hdr(RBinPEObj *pe) {
 	sdb_num_set (pe->kv, "pe_nt_image_headers64.offset", pe->dos_header->e_lfanew, 0);
 	sdb_set (pe->kv, "pe_nt_image_headers64.format", "[4]z?? signature (pe_image_file_header)fileHeader (pe_image_optional_header64)optionalHeader", 0);
 	sdb_set (pe->kv, "pe_image_optional_header64.format", "[2]Ebbxxxxxqxxwwwwwwxxxx[2]E[2]Bqqqqxx[16]?"
-							" (pe_magic)magic majorLinkerVersion minorLinkerVersion sizeOfCode sizeOfInitializedData"
+							" (enum pe_magic)magic majorLinkerVersion minorLinkerVersion sizeOfCode sizeOfInitializedData"
 							" sizeOfUninitializedData addressOfEntryPoint baseOfCode imageBase"
 							" sectionAlignment fileAlignment majorOperatingSystemVersion minorOperatingSystemVersion"
 							" majorImageVersion minorImageVersion majorSubsystemVersion minorSubsystemVersion"
-							" win32VersionValue sizeOfImage sizeOfHeaders checkSum (pe_subsystem)subsystem (pe_dllcharacteristics)dllCharacteristics"
+							" win32VersionValue sizeOfImage sizeOfHeaders checkSum (enum pe_subsystem)subsystem (enum pe_dllcharacteristics)dllCharacteristics"
 							" sizeOfStackReserve sizeOfStackCommit sizeOfHeapReserve sizeOfHeapCommit loaderFlags"
 							" numberOfRvaAndSizes (pe_image_data_directory)dataDirectory",
 		0);
@@ -827,11 +827,11 @@ static int bin_pe_init_hdr(RBinPEObj *pe) {
 	sdb_num_set (pe->kv, "pe_nt_image_headers32.offset", pe->dos_header->e_lfanew, 0);
 	sdb_set (pe->kv, "pe_nt_image_headers32.format", "[4]z?? signature (pe_image_file_header)fileHeader (pe_image_optional_header32)optionalHeader", 0);
 	sdb_set (pe->kv, "pe_image_optional_header32.format", "[2]Ebbxxxxxxxxxwwwwwwxxxx[2]E[2]Bxxxxxx[16]?"
-							" (pe_magic)magic majorLinkerVersion minorLinkerVersion sizeOfCode sizeOfInitializedData"
+							" (enum pe_magic)magic majorLinkerVersion minorLinkerVersion sizeOfCode sizeOfInitializedData"
 							" sizeOfUninitializedData addressOfEntryPoint baseOfCode baseOfData imageBase"
 							" sectionAlignment fileAlignment majorOperatingSystemVersion minorOperatingSystemVersion"
 							" majorImageVersion minorImageVersion majorSubsystemVersion minorSubsystemVersion"
-							" win32VersionValue sizeOfImage sizeOfHeaders checkSum (pe_subsystem)subsystem (pe_dllcharacteristics)dllCharacteristics"
+							" win32VersionValue sizeOfImage sizeOfHeaders checkSum (enum pe_subsystem)subsystem (enum pe_dllcharacteristics)dllCharacteristics"
 							" sizeOfStackReserve sizeOfStackCommit sizeOfHeapReserve sizeOfHeapCommit loaderFlags numberOfRvaAndSizes"
 							" (pe_image_data_directory)dataDirectory",
 		0);
@@ -845,8 +845,8 @@ static int bin_pe_init_hdr(RBinPEObj *pe) {
 						" IMAGE_FILE_DLL=0x2000, IMAGE_FILE_UP_SYSTEM_ONLY=0x4000, IMAGE_FILE_BYTES_REVERSED_HI=0x8000 };",
 		0);
 	sdb_set (pe->kv, "pe_image_file_header.format", "[2]Ewtxxw[2]B"
-						" (pe_machine)machine numberOfSections timeDateStamp pointerToSymbolTable"
-						" numberOfSymbols sizeOfOptionalHeader (pe_characteristics)characteristics",
+						" (enum pe_machine)machine numberOfSections timeDateStamp pointerToSymbolTable"
+						" numberOfSymbols sizeOfOptionalHeader (enum pe_characteristics)characteristics",
 		0);
 	sdb_set (pe->kv, "pe_image_data_directory.format", "xx virtualAddress size", 0);
 

@@ -141,7 +141,7 @@ static DeclBinding decl_binding(DeclParser *parser, const char *name) {
 		}
 	}
 	const char *kind = parser->types? sdb_const_get (parser->types, name, NULL): NULL;
-	if (kind && (!strcmp (kind, "typedef") || !strcmp (kind, "type"))) {
+	if (kind && R_STR_CMP_ANY (kind, "typedef", "type", "struct", "union", "enum")) {
 		return DECL_BINDING_TYPE;
 	}
 	return DECL_BINDING_UNKNOWN;

@@ -2,7 +2,7 @@ NAME=tenum ut64
 FILE=--
 CMDS=<<EOF
 td enum test{ullnum=0x800000ULL }
-te test
+te enum test
 EOF
 EXPECT_ERR=<<EOF
 EOF
@@ -15,7 +15,7 @@ NAME=tenum ut64 second edition
 FILE=--
 CMDS=<<EOF
 td enum test{ullnum=0x800000ULL,ullnum2=0x8000123480000000ULL }
-te test
+te enum test
 EOF
 EXPECT_ERR=
 EXPECT=<<EOF
@@ -29,8 +29,8 @@ FILE=bins/elf/tcache
 CMDS=<<EOF
 e log.level=0
 aaa
-te-elf_machine
-te-elf_s_type
+te- enum elf_machine
+te- enum elf_s_type
 tf-*
 tv
 EOF
@@ -172,16 +172,16 @@ CMDS=<<EOF
 "td struct bar {int w;}"
 ts~bar,foo
 ?e ---
-ts- foo*
+ts- struct foo*
 ts~bar,foo
 EOF
 EXPECT=<<EOF
-bar
-foo
-foo2
-foobar
+struct bar
+struct foo
+struct foo2
+struct foobar
 ---
-bar
+struct bar
 EOF
 RUN
 
@@ -193,15 +193,15 @@ CMDS=<<EOF
 "td struct baz {int z;}"
 ts~bar,baz,foo
 ?e ---
-ts- foo baz
+ts- struct foo struct baz
 ts~bar,baz,foo
 EOF
 EXPECT=<<EOF
-bar
-baz
-foo
+struct bar
+struct baz
+struct foo
 ---
-bar
+struct bar
 EOF
 RUN
 
@@ -213,15 +213,15 @@ CMDS=<<EOF
 "td enum other {E=5}"
 te
 ?e ---
-te- myenum*
+te- enum myenum*
 te
 EOF
 EXPECT=<<EOF
-myenum
-myenum2
-other
+enum myenum
+enum myenum2
+enum other
 ---
-other
+enum other
 EOF
 RUN
 
@@ -233,15 +233,15 @@ CMDS=<<EOF
 "td union other {int i;char c;}"
 tu
 ?e ---
-tu- myunion*
+tu- union myunion*
 tu
 EOF
 EXPECT=<<EOF
-myunion
-myunion2
-other
+union myunion
+union myunion2
+union other
 ---
-other
+union other
 EOF
 RUN
 
@@ -262,10 +262,10 @@ te~efoo
 tu~ufoo
 EOF
 EXPECT=<<EOF
-sfoo
-sfoo2
-efoo
-ufoo
+struct sfoo
+struct sfoo2
+enum efoo
+union ufoo
 ---
 EOF
 RUN

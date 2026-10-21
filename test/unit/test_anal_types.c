@@ -1,10 +1,15 @@
 #include <r_asm.h>
+#include <r_core.h>
 
 #include "minunit.h"
 #include "test_sdb.h"
 
+static const char *tag_value(RAnal *anal, const char *key) {
+	return sdb_const_get (sdb_ns (anal->sdb_types, "tags", false), key, NULL);
+}
+
 static void setup_sdb_for_struct(Sdb *res) {
-	// "td struct kappa {int bar;int cow;};"
+	// Ordinary named analysis record.
 	sdb_set (res, "kappa", "struct", 0);
 	sdb_set (res, "struct.kappa", "bar,cow", 0);
 	sdb_set (res, "struct.kappa.bar", "int32_t,0,0", 0);
@@ -12,7 +17,7 @@ static void setup_sdb_for_struct(Sdb *res) {
 }
 
 static void setup_sdb_for_union(Sdb *res) {
-	// "td union kappa {int bar;int cow;};"
+	// Ordinary named analysis union.
 	sdb_set (res, "kappa", "union", 0);
 	sdb_set (res, "union.kappa", "bar,cow", 0);
 	sdb_set (res, "union.kappa.bar", "int32_t,0,0", 0);
@@ -20,7 +25,7 @@ static void setup_sdb_for_union(Sdb *res) {
 }
 
 static void setup_sdb_for_enum(Sdb *res) {
-	// "td enum foo { firstCase=1, secondCase=2,};"
+	// Ordinary named analysis enumeration.
 	sdb_set (res, "foo", "enum", 0);
 	sdb_set (res, "enum.foo", "firstCase,secondCase", 0);
 	sdb_set (res, "enum.foo.firstCase", "0x1", 0);
@@ -63,7 +68,7 @@ static bool test_anal_get_base_type_struct(void) {
 
 	setup_sdb_for_struct (anal->sdb_types);
 
-	RAnalBaseType *base = r_anal_get_base_type (anal, "kappa");
+	RAnalBaseType *base = r_anal_get_base_type (anal, "kappa", R_TYPE_NAMESPACE_ORDINARY);
 	mu_assert_notnull (base, "Couldn't create get base type of struct \"kappa\"");
 
 	mu_assert_eq (R_ANAL_BASE_TYPE_KIND_STRUCT, base->kind, "Wrong base type");
@@ -145,7 +150,7 @@ static bool test_anal_base_type_struct_member_needing_sanitization_roundtrip(voi
 	mu_assert_notnull (sdb_const_get (anal->sdb_types, "struct.Bird._vptr_Bird", 0),
 		"member is stored under the sanitized key");
 
-	RAnalBaseType *got = r_anal_get_base_type (anal, "Bird");
+	RAnalBaseType *got = r_anal_get_base_type (anal, "Bird", R_TYPE_NAMESPACE_ORDINARY);
 	mu_assert_notnull (got, "reload struct whose member name needed sanitization");
 	mu_assert_eq (RVecAnalTypeMember_length (&got->struct_data.members), 1,
 		"member survives the round trip");
@@ -179,7 +184,7 @@ static bool test_anal_base_type_enum_case_needing_sanitization_roundtrip(void) {
 
 	// get_enum_type treats a missing case key as fatal, so a single case name
 	// needing sanitization made the whole enum unreadable.
-	RAnalBaseType *got = r_anal_get_base_type (anal, "Mode");
+	RAnalBaseType *got = r_anal_get_base_type (anal, "Mode", R_TYPE_NAMESPACE_ORDINARY);
 	mu_assert_notnull (got, "reload enum whose case name needed sanitization");
 	mu_assert_eq (RVecAnalEnumCase_length (&got->enum_data.cases), 1,
 		"case survives the round trip");
@@ -199,7 +204,7 @@ static bool test_anal_get_base_type_union(void) {
 
 	setup_sdb_for_union (anal->sdb_types);
 
-	RAnalBaseType *base = r_anal_get_base_type (anal, "kappa");
+	RAnalBaseType *base = r_anal_get_base_type (anal, "kappa", R_TYPE_NAMESPACE_ORDINARY);
 	mu_assert_notnull (base, "Couldn't create get base type of union \"kappa\"");
 
 	mu_assert_eq (R_ANAL_BASE_TYPE_KIND_UNION, base->kind, "Wrong base type");
@@ -259,7 +264,7 @@ static bool test_anal_get_base_type_enum(void) {
 
 	setup_sdb_for_enum (anal->sdb_types);
 
-	RAnalBaseType *base = r_anal_get_base_type (anal, "foo");
+	RAnalBaseType *base = r_anal_get_base_type (anal, "foo", R_TYPE_NAMESPACE_ORDINARY);
 	mu_assert_notnull (base, "Couldn't create get base type of enum \"foo\"");
 
 	mu_assert_eq (R_ANAL_BASE_TYPE_KIND_ENUM, base->kind, "Wrong base type");
@@ -317,7 +322,7 @@ static bool test_anal_get_base_type_typedef(void) {
 	r_anal_types_reload (anal, R2_PREFIX, NULL, NULL);
 	setup_sdb_for_typedef (anal->sdb_types);
 
-	RAnalBaseType *base = r_anal_get_base_type (anal, "string");
+	RAnalBaseType *base = r_anal_get_base_type (anal, "string", R_TYPE_NAMESPACE_ORDINARY);
 	mu_assert_notnull (base, "Couldn't create get base type of typedef \"string\"");
 
 	mu_assert_eq (R_ANAL_BASE_TYPE_KIND_TYPEDEF, base->kind, "Wrong base type");
@@ -396,7 +401,7 @@ static bool test_anal_get_base_type_atomic(void) {
 
 	setup_sdb_for_atomic (anal->sdb_types);
 
-	RAnalBaseType *base = r_anal_get_base_type (anal, "char");
+	RAnalBaseType *base = r_anal_get_base_type (anal, "char", R_TYPE_NAMESPACE_ORDINARY);
 	mu_assert_notnull (base, "Couldn't create get base type of atomic type \"char\"");
 
 	mu_assert_eq (R_ANAL_BASE_TYPE_KIND_ATOMIC, base->kind, "Wrong base type");
@@ -438,15 +443,15 @@ static bool test_anal_get_base_type_not_found(void) {
 	mu_assert_notnull (anal, "Couldn't create new RAnal");
 	mu_assert_notnull (anal->sdb_types, "Couldn't create new RAnal.sdb_types");
 
-	RAnalBaseType *base = r_anal_get_base_type (anal, "non_existant23321312___");
+	RAnalBaseType *base = r_anal_get_base_type (anal, "non_existant23321312___", R_TYPE_NAMESPACE_ORDINARY);
 	mu_assert_null (base, "Should find nothing");
-	base = r_anal_get_base_type (anal, "foo");
+	base = r_anal_get_base_type (anal, "foo", R_TYPE_NAMESPACE_ORDINARY);
 	mu_assert_null (base, "Should find nothing");
-	base = r_anal_get_base_type (anal, "bar");
+	base = r_anal_get_base_type (anal, "bar", R_TYPE_NAMESPACE_ORDINARY);
 	mu_assert_null (base, "Should find nothing");
-	base = r_anal_get_base_type (anal, "quax");
+	base = r_anal_get_base_type (anal, "quax", R_TYPE_NAMESPACE_ORDINARY);
 	mu_assert_null (base, "Should find nothing");
-	base = r_anal_get_base_type (anal, "omega");
+	base = r_anal_get_base_type (anal, "omega", R_TYPE_NAMESPACE_ORDINARY);
 	mu_assert_null (base, "Should find nothing");
 
 	r_anal_free (anal);
@@ -477,7 +482,7 @@ static bool test_anal_base_type_struct_array_roundtrip(void) {
 	r_anal_save_base_type (anal, base);
 	r_anal_base_type_free (base);
 
-	RAnalBaseType *got = r_anal_get_base_type (anal, "arr");
+	RAnalBaseType *got = r_anal_get_base_type (anal, "arr", R_TYPE_NAMESPACE_ORDINARY);
 	mu_assert_notnull (got, "reload struct with array member");
 
 	RAnalStructMember *m = RVecAnalTypeMember_at (&got->struct_data.members, 0);
@@ -556,7 +561,7 @@ static bool test_anal_base_type_struct_comma_type_roundtrip(void) {
 	r_anal_save_base_type (anal, base);
 	r_anal_base_type_free (base);
 
-	RAnalBaseType *got = r_anal_get_base_type (anal, "tpl");
+	RAnalBaseType *got = r_anal_get_base_type (anal, "tpl", R_TYPE_NAMESPACE_ORDINARY);
 	mu_assert_notnull (got, "reload struct with comma in member type");
 
 	RAnalStructMember *m = RVecAnalTypeMember_at (&got->struct_data.members, 0);
@@ -587,7 +592,7 @@ static bool test_anal_base_type_union_comma_type_roundtrip(void) {
 	r_anal_save_base_type (anal, base);
 	r_anal_base_type_free (base);
 
-	RAnalBaseType *got = r_anal_get_base_type (anal, "utpl");
+	RAnalBaseType *got = r_anal_get_base_type (anal, "utpl", R_TYPE_NAMESPACE_ORDINARY);
 	mu_assert_notnull (got, "reload union with comma in member type");
 
 	RAnalUnionMember *m = RVecAnalTypeMember_at (&got->union_data.members, 0);
@@ -623,7 +628,7 @@ static bool test_anal_base_type_union_array_roundtrip(void) {
 	r_anal_save_base_type (anal, base);
 	r_anal_base_type_free (base);
 
-	RAnalBaseType *got = r_anal_get_base_type (anal, "uarr");
+	RAnalBaseType *got = r_anal_get_base_type (anal, "uarr", R_TYPE_NAMESPACE_ORDINARY);
 	mu_assert_notnull (got, "reload union with array member");
 
 	RAnalUnionMember *m = RVecAnalTypeMember_at (&got->union_data.members, 0);
@@ -804,14 +809,14 @@ static bool test_anal_cparse_attribute_duplicates(void) {
 		"func.mixed.@.value=gnu\nfunc.mixed.@.value=again\n"),
 		"comment duplicates replace the first entry while GNU duplicates append in order");
 	mu_assert_null (strstr (kv, "func.mixed.@.value=first\n"), "the replaced comment value is not applied");
-	mu_assert_notnull (strstr (kv, "struct.Mixed.@.aligned=8\n"), "aggregate attributes retain their scope");
-	mu_assert_notnull (strstr (kv, "struct.Mixed.member.@.value=comment\nstruct.Mixed.member.@.memberflag=true\n"),
+	mu_assert_notnull (strstr (kv, "tags/struct.Mixed.@.aligned=8\n"), "aggregate attributes retain their scope");
+	mu_assert_notnull (strstr (kv, "tags/struct.Mixed.member.@.value=comment\ntags/struct.Mixed.member.@.memberflag=true\n"),
 		"trailing comment replaces a matching GNU attribute and retains a bare flag");
-	mu_assert_null (strstr (kv, "struct.Mixed.member.@.value=gnu\n"), "mixed-form replacement does not append a duplicate");
-	mu_assert_null (strstr (kv, "struct.Mixed.tail.@."), "member attributes reset before the next member");
+	mu_assert_null (strstr (kv, "tags/struct.Mixed.member.@.value=gnu\n"), "mixed-form replacement does not append a duplicate");
+	mu_assert_null (strstr (kv, "tags/struct.Mixed.tail.@."), "member attributes reset before the next member");
 	mu_assert_null (strstr (kv, "func.ordinary.@."), "attributes reset before the next function");
 	r_anal_save_parsed_type (anal, kv);
-	mu_assert_eq (r_anal_type_bitsize (anal, "Mixed"), 64, "attribute lookup retains aggregate alignment");
+	mu_assert_eq (r_anal_type_bitsize (anal, "struct Mixed"), 64, "attribute lookup retains aggregate alignment");
 	free (kv);
 	r_anal_free (anal);
 	mu_end;
@@ -829,13 +834,13 @@ static bool test_anal_cparse_nested_layout(void) {
 			"struct Bright {void *morning;struct Window window;int ambassador;};", &error);
 		mu_assert_null (error, "parse nested pointer-sized record");
 		mu_assert_notnull (kv, "serialize nested pointer-sized record");
-		const char *ambassador = bits == 64? "struct.Bright.ambassador=int,16,0\n": "struct.Bright.ambassador=int,8,0\n";
+		const char *ambassador = bits == 64? "tags/struct.Bright.ambassador=int,16,0\n": "tags/struct.Bright.ambassador=int,8,0\n";
 		mu_assert_notnull (strstr (kv, ambassador), "the member after Window does not overlap it");
-		mu_assert_null (sdb_const_get (anal->sdb_types, "Window", NULL), "parsing does not import its definitions into analysis");
+		mu_assert_null (tag_value (anal, "Window"), "parsing does not import its definitions into analysis");
 		r_anal_save_parsed_type (anal, kv);
 		free (kv);
-		mu_assert_eq (r_anal_type_bitsize (anal, "Window"), bits, "Window retains its pointer-sized extent");
-		mu_assert_eq (r_anal_type_bitsize (anal, "Bright"), bits == 64? 192: 96, "Bright retains aggregate tail padding");
+		mu_assert_eq (r_anal_type_bitsize (anal, "struct Window"), bits, "Window retains its pointer-sized extent");
+		mu_assert_eq (r_anal_type_bitsize (anal, "struct Bright"), bits == 64? 192: 96, "Bright retains aggregate tail padding");
 		mu_assert_true (r_anal_import_c_decls (anal,
 			"typedef struct Window WindowAlias;typedef WindowAlias WindowPair[2];"
 			"typedef struct Group {char lead;WindowPair windows;char tail;} Group;"
@@ -843,8 +848,8 @@ static bool test_anal_cparse_nested_layout(void) {
 			"struct Outer {char lead;Choice choice;char tail;};", &error), "import aliases, arrays and definition-form aggregates");
 		mu_assert_null (error, "measure previously imported definitions");
 		mu_assert_streq (sdb_const_get (anal->sdb_types, "typedef.WindowPair", NULL), "WindowAlias [2]", "array typedef retains its element type and extent");
-		mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.Group.tail", NULL), bits == 64? "char,24,0": "char,12,0", "definition-form struct measures array alias elements");
-		mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.Outer.tail", NULL), bits == 64? "char,72,0": "char,36,0", "definition-form union extent governs its consumer");
+		mu_assert_streq (tag_value (anal, "struct.Group.tail"), bits == 64? "char,24,0": "char,12,0", "definition-form struct measures array alias elements");
+		mu_assert_streq (tag_value (anal, "struct.Outer.tail"), bits == 64? "char,72,0": "char,36,0", "definition-form union extent governs its consumer");
 		mu_assert_eq (r_anal_type_bitsize (anal, "Group"), bits == 64? 256: 128, "definition-form struct has tail padding");
 		mu_assert_eq (r_anal_type_bitsize (anal, "Choice"), bits == 64? 512: 256, "definition-form union measures its largest array");
 		mu_assert_true (r_anal_import_c_decls (anal,
@@ -852,8 +857,8 @@ static bool test_anal_cparse_nested_layout(void) {
 		mu_assert_true (r_anal_import_c_decls (anal,
 			"struct Envelope {char lead;struct Packed packed;char tail;};", &error), "reuse packing from a previous import");
 		mu_assert_null (error, "packed nested definition layout succeeds");
-		mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.Envelope.packed", NULL), "struct Packed,1,0", "nested packed alignment comes from its definition");
-		mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.Envelope.tail", NULL), bits == 64? "char,10,0": "char,6,0", "nested packed extent includes its pointer");
+		mu_assert_streq (tag_value (anal, "struct.Envelope.packed"), "struct Packed,1,0", "nested packed alignment comes from its definition");
+		mu_assert_streq (tag_value (anal, "struct.Envelope.tail"), bits == 64? "char,10,0": "char,6,0", "nested packed extent includes its pointer");
 		r_anal_free (anal);
 	}
 	mu_end;
@@ -870,20 +875,20 @@ static bool test_anal_cparse_callback_array_layout(void) {
 			"typedef int (*CB)(int x[4]); struct S { CB callback; char tail; };", &error), "import callback with an array parameter and its consumer together");
 		mu_assert_null (error, "callback parameter array does not prevent record layout");
 		mu_assert_streq (sdb_const_get (anal->sdb_types, "typedef.CB", NULL), "func.CB *", "callback typedef is imported");
-		mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.S.callback", NULL), "CB,0,0", "record retains its callback member");
-		mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.S.tail", NULL), bits == 64? "char,8,0": "char,4,0", "callback occupies one target pointer");
-		mu_assert_eq (r_anal_type_bitsize (anal, "S"), bits * 2, "callback record retains pointer alignment and tail padding");
+		mu_assert_streq (tag_value (anal, "struct.S.callback"), "CB,0,0", "record retains its callback member");
+		mu_assert_streq (tag_value (anal, "struct.S.tail"), bits == 64? "char,8,0": "char,4,0", "callback occupies one target pointer");
+		mu_assert_eq (r_anal_type_bitsize (anal, "struct S"), bits * 2, "callback record retains pointer alignment and tail padding");
 		mu_assert_true (r_anal_import_c_decls (anal,
 			"typedef int (*ArrayCallback)(int x[4]);typedef ArrayCallback CallbackAlias;"
 			"struct AliasRecord {CallbackAlias callback;char tail;};"
 			"typedef int *Pointers[2];struct PointerArrays {int *direct[2];Pointers indirect;char tail;};", &error), "import transitive callback aliases and outer pointer arrays");
 		mu_assert_null (error, "callback aliases and pointer arrays retain their distinct layout");
 		mu_assert_streq (sdb_const_get (anal->sdb_types, "typedef.CallbackAlias", NULL), "ArrayCallback", "transitive callback alias is imported");
-		mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.AliasRecord.tail", NULL), bits == 64? "char,8,0": "char,4,0", "transitive callback alias occupies one pointer");
-		mu_assert_eq (r_anal_type_bitsize (anal, "AliasRecord"), bits * 2, "transitive callback record retains tail padding");
-		mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.PointerArrays.indirect", NULL), bits == 64? "Pointers,16,0": "Pointers,8,0", "direct pointer array retains both elements");
-		mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.PointerArrays.tail", NULL), bits == 64? "char,32,0": "char,16,0", "outer array typedef retains both pointer elements");
-		mu_assert_eq (r_anal_type_bitsize (anal, "PointerArrays"), bits * 5, "pointer arrays retain their extent and alignment");
+		mu_assert_streq (tag_value (anal, "struct.AliasRecord.tail"), bits == 64? "char,8,0": "char,4,0", "transitive callback alias occupies one pointer");
+		mu_assert_eq (r_anal_type_bitsize (anal, "struct AliasRecord"), bits * 2, "transitive callback record retains tail padding");
+		mu_assert_streq (tag_value (anal, "struct.PointerArrays.indirect"), bits == 64? "Pointers,16,0": "Pointers,8,0", "direct pointer array retains both elements");
+		mu_assert_streq (tag_value (anal, "struct.PointerArrays.tail"), bits == 64? "char,32,0": "char,16,0", "outer array typedef retains both pointer elements");
+		mu_assert_eq (r_anal_type_bitsize (anal, "struct PointerArrays"), bits * 5, "pointer arrays retain their extent and alignment");
 		r_anal_free (anal);
 	}
 	mu_end;
@@ -905,17 +910,17 @@ static bool test_anal_cparse_lazy_alias_layout(void) {
 	mu_assert_notnull (strstr (kv, "func.before.arg.0=int *,values\n"), "local alias reaches a transitive host array alias");
 	mu_assert_notnull (strstr (kv, "func.before.arg.1=HostFn *,callback\n"), "host function typedef parameters retain adjustment");
 	mu_assert_notnull (strstr (kv, "func.shadowed.arg.0=char *,values\n"), "local definition shadows the end of a host alias chain");
-	mu_assert_notnull (strstr (kv, "struct.LocalRecord.tail=char,2,0\n"), "first layout replays all local definitions after host metadata");
+	mu_assert_notnull (strstr (kv, "tags/struct.LocalRecord.tail=char,2,0\n"), "first layout replays all local definitions after host metadata");
 	mu_assert_notnull (strstr (kv, "func.after.arg.0=char *,values\n"), "post-layout alias lookup retains the same local precedence");
 	mu_assert_streq (sdb_const_get (anal->sdb_types, "typedef.HostRow", NULL), "int [4]", "private shadowing does not change the host alias");
 	mu_assert_null (sdb_const_get (anal->sdb_types, "Local", NULL), "successful parsing does not import local aliases");
-	mu_assert_null (sdb_const_get (anal->sdb_types, "LocalRecord", NULL), "successful layout does not import local aggregates");
+	mu_assert_null (tag_value (anal, "LocalRecord"), "successful layout does not import local aggregates");
 	free (kv);
 	kv = r_anal_cparse (anal, "typedef char HostRow[2];struct Partial {HostRow row;};struct Broken {Unknown value;};", &error);
 	mu_assert_null (kv, "failed aggregate parsing returns no partial definitions");
 	mu_assert_notnull (error, "failed private layout reports the unmeasurable member");
 	mu_assert_streq (sdb_const_get (anal->sdb_types, "typedef.HostRow", NULL), "int [4]", "failed parsing does not overwrite host aliases");
-	mu_assert_null (sdb_const_get (anal->sdb_types, "Partial", NULL), "failed parsing does not import an earlier complete aggregate");
+	mu_assert_null (tag_value (anal, "Partial"), "failed parsing does not import an earlier complete aggregate");
 	free (error);
 	r_anal_free (anal);
 	mu_end;
@@ -931,6 +936,23 @@ static bool test_anal_tcc_prototype_metadata(void) {
 	mu_assert_nullable_streq (sdb_const_get (anal->sdb_types, "func.variadic.prototype", NULL), "fixed", "TCC ellipsis does not turn the prototype unspecified");
 	mu_assert_true (r_type_func_is_variadic (anal->sdb_types, "variadic", 2), "TCC preserves explicit ellipsis separately");
 	mu_assert_false (r_type_func_is_variadic (anal->sdb_types, "old", 0), "TCC does not invent literal ellipsis for FUNC_OLD");
+	r_anal_free (anal);
+	mu_end;
+}
+
+static bool test_anal_tcc_type_namespaces(void) {
+	RAnal *anal = r_anal_new ();
+	anal->config->bits = 64;
+	r_anal_types_reload (anal, R2_PREFIX, NULL, NULL);
+	anal->opt.tparser = strdup ("tcc");
+	mu_assert_true (r_anal_import_c_decls (anal, "typedef unsigned short Alias;struct Alias {int member;};", NULL), "TCC publishes distinct ordinary and tag identities");
+	mu_assert_eq (r_type_kind (anal->sdb_types, "Alias"), R_TYPE_TYPEDEF, "TCC retains the actual ordinary typedef");
+	mu_assert_eq (r_type_kind (anal->sdb_types, "struct Alias"), R_TYPE_STRUCT, "TCC retains the actual struct tag");
+	mu_assert_eq (r_type_get_bitsize (anal->sdb_types, "Alias"), 16, "TCC ordinary layout remains independent");
+	mu_assert_eq (r_type_get_bitsize (anal->sdb_types, "struct Alias"), 32, "TCC tagged layout reads its own members");
+	mu_assert_true (r_anal_import_c_decls (anal, "int use(struct Alias *value);", NULL), "TCC context loads the actual tag name, not a serialized query path");
+	mu_assert_eq (r_type_get_bitsize (anal->sdb_types, "struct Alias"), 32, "TCC tag references do not erase an existing definition");
+	mu_assert_false (r_anal_import_c_decls (anal, "union Alias;", NULL), "TCC rejects a tag-kind conflict even beside an ordinary typedef");
 	r_anal_free (anal);
 	mu_end;
 }
@@ -966,9 +988,9 @@ static bool test_anal_cparse_grouped_names(void) {
 	mu_assert_streq (sdb_const_get (anal->sdb_types, "grouped", NULL), "func", "the real grouped identifier owns the function");
 	mu_assert_streq (r_type_func_ret (anal->sdb_types, "grouped"), "int", "the grouped function keeps its return type");
 	mu_assert_streq (sdb_const_get (anal->sdb_types, "typedef.Number", NULL), "int", "a grouped typedef name still names an object type");
-	mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.Grouped.object", NULL), "int,0,0", "a grouped scalar member is not an anonymous function");
+	mu_assert_streq (tag_value (anal, "struct.Grouped.object"), "int,0,0", "a grouped scalar member is not an anonymous function");
 	mu_assert_null (sdb_const_get (anal->sdb_types, "Grouped.object", NULL), "a grouped scalar member does not install a callback signature");
-	mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.Grouped.callback", NULL), "func.Grouped.callback *,8,0", "the separate callback member retains its function-pointer shape");
+	mu_assert_streq (tag_value (anal, "struct.Grouped.callback"), "func.Grouped.callback *,8,0", "the separate callback member retains its function-pointer shape");
 	r_anal_free (anal);
 	mu_end;
 }
@@ -1017,6 +1039,194 @@ static bool test_anal_cparse_visible_typedef_callbacks(void) {
 	mu_end;
 }
 
+static bool test_anal_type_namespace_independence(void) {
+	RAnal *anal = r_anal_new ();
+	anal->config->bits = 64;
+	r_anal_types_reload (anal, R2_PREFIX, NULL, NULL);
+	char *error = NULL;
+	mu_assert_true (r_anal_import_c_decls (anal, "typedef uint16_t Alias;struct Alias;", &error), "ordinary typedef and same-spelling tag coexist");
+	Sdb *tags = r_type_namespace (anal->sdb_types, R_TYPE_NAMESPACE_TAG, false);
+	mu_assert_notnull (tags, "actual tags occupy the native child map");
+	mu_assert_true (r_anal_import_c_decls (anal, "int tag.Alias(void);", &error), "dotted ordinary function names do not collide with tag ownership");
+	mu_assert_eq (r_type_kind (anal->sdb_types, "tag.Alias"), R_TYPE_FUNCTION, "the existing dotted-name function contract is retained");
+	mu_assert_null (error, "separate namespaces admit the header");
+	mu_assert_eq (r_type_kind (anal->sdb_types, "Alias"), R_TYPE_TYPEDEF, "bare spelling selects the ordinary typedef");
+	mu_assert_eq (r_type_kind (anal->sdb_types, "struct Alias"), R_TYPE_STRUCT, "tagged spelling selects the incomplete struct");
+	mu_assert_eq (r_anal_type_bitsize (anal, "Alias"), 16, "the ordinary typedef retains its own layout");
+	mu_assert_eq (r_anal_type_bitsize (anal, "struct Alias"), 0, "an incomplete tag does not borrow ordinary extent");
+	mu_assert_true (r_anal_import_c_decls (anal, "struct Alias {uint64_t member;};", &error), "the tag completes independently");
+	mu_assert_eq (r_anal_type_bitsize (anal, "struct Alias"), 64, "the completed tag has its own extent");
+	mu_assert_eq (r_anal_type_bitsize (anal, "Alias"), 16, "tag completion leaves the ordinary extent intact");
+	mu_assert_false (r_anal_import_c_decls (anal, "union Alias;", &error), "an ordinary typedef cannot mask a tag-kind conflict");
+	free (error);
+	error = NULL;
+	mu_assert_false (r_anal_import_c_decls (anal, "enum Alias {VALUE};", &error), "enums participate in the same tag namespace");
+	free (error);
+	error = NULL;
+	mu_assert_true (r_anal_import_c_decls (anal, "typedef uint32_t Alias;", &error), "replace only the ordinary identity");
+	mu_assert_eq (r_anal_type_bitsize (anal, "struct Alias"), 64, "ordinary replacement preserves tag extent");
+	RAnalBaseType *tag = r_anal_get_base_type (anal, "Alias", R_TYPE_NAMESPACE_TAG);
+	mu_assert_notnull (tag, "read the actual tag record");
+	mu_assert_eq (tag->space, R_TYPE_NAMESPACE_TAG, "the base record carries explicit tag identity");
+	char *serialized = r_anal_base_type_to_kv (tag);
+	r_anal_remove_parsed_type (anal, "struct Alias");
+	mu_assert_eq (r_type_kind (anal->sdb_types, "Alias"), R_TYPE_TYPEDEF, "tag deletion preserves the ordinary owner");
+	mu_assert_null (sdb_const_get (tags, "type.Alias.size", NULL), "tag deletion removes only its recorded extent");
+	r_anal_save_parsed_type (anal, serialized);
+	mu_assert_eq (r_anal_type_bitsize (anal, "struct Alias"), 64, "serialized tag identity and layout roundtrip");
+	Sdb *copy = sdb_new0 ();
+	sdb_copy (anal->sdb_types, copy);
+	mu_assert_eq (r_type_kind (copy, "Alias"), R_TYPE_TYPEDEF, "native copies retain ordinary bindings");
+	mu_assert_eq (r_type_get_bitsize (copy, "struct Alias"), 64, "native copies retain tag members and recorded extent");
+	sdb_free (copy);
+	free (serialized);
+	r_anal_base_type_free (tag);
+	r_anal_remove_parsed_type (anal, "Alias");
+	mu_assert_eq (r_type_kind (anal->sdb_types, "Alias"), R_TYPE_INVALID, "ordinary deletion removes only the ordinary root");
+	mu_assert_eq (r_anal_type_bitsize (anal, "struct Alias"), 64, "ordinary deletion preserves the tag extent");
+	RAnalBaseType *view = r_anal_base_type_new (R_ANAL_BASE_TYPE_KIND_STRUCT);
+	view->name = strdup ("Alias");
+	view->size = 24;
+	RAnalTypeMember member = { .name = strdup ("analysis"), .type = strdup ("uint8_t"), .count = 3 };
+	RVecAnalTypeMember_push_back (r_anal_base_type_members (view), &member);
+	r_anal_save_base_type (anal, view);
+	mu_assert_eq (r_anal_type_bitsize (anal, "Alias"), 24, "a bare ordinary analysis record remains usable");
+	mu_assert_eq (r_anal_type_bitsize (anal, "struct Alias"), 64, "ordinary and tagged aggregate payloads do not collide");
+	mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.Alias.analysis", NULL), "uint8_t,0,3", "ordinary members use their own identity");
+	mu_assert_streq (sdb_const_get (tags, "struct.Alias.member", NULL), "uint64_t,0,0", "tag members retain the tag identity");
+	mu_assert_null (sdb_const_get (anal->sdb_types, "typedef.Alias", NULL), "an analysis record does not fabricate a source typedef");
+	view->space = R_TYPE_NAMESPACE_TAG;
+	view->size = 32;
+	r_anal_save_base_type (anal, view);
+	mu_assert_eq (r_anal_type_bitsize (anal, "Alias"), 24, "tag replacement leaves the ordinary analysis extent intact");
+	mu_assert_null (sdb_const_get (tags, "struct.Alias.member", NULL), "tag replacement removes stale tag members");
+	r_anal_remove_parsed_type (anal, "struct Alias");
+	mu_assert_eq (r_anal_type_bitsize (anal, "Alias"), 24, "tag deletion leaves ordinary analysis payload and extent intact");
+	mu_assert_eq (r_type_kind (anal->sdb_types, "struct Alias"), R_TYPE_INVALID, "a missing tag never falls back to an ordinary analysis record");
+	r_anal_base_type_free (view);
+	RAnalBaseType *opaque = r_anal_base_type_new (R_ANAL_BASE_TYPE_KIND_ATOMIC);
+	opaque->name = strdup ("C::D");
+	opaque->type = strdup ("w");
+	opaque->size = 16;
+	r_anal_save_base_type (anal, opaque);
+	r_anal_base_type_free (opaque);
+	opaque = r_anal_get_base_type (anal, "C::D", R_TYPE_NAMESPACE_ORDINARY);
+	mu_assert_notnull (opaque, "exact ordinary debug names do not require C parsing");
+	mu_assert_streq (opaque->name, "C::D", "opaque spelling survives exact lookup");
+	r_anal_base_type_free (opaque);
+	opaque = r_anal_get_base_type (anal, "char *", R_TYPE_NAMESPACE_ORDINARY);
+	mu_assert_notnull (opaque, "exact ordinary atomic pointer roots remain readable");
+	mu_assert_streq (opaque->name, "char *", "exact ordinary lookup does not parse away pointer syntax");
+	r_anal_base_type_free (opaque);
+	mu_assert_true (r_anal_import_c_decls (anal, "struct ResetWitness {uint16_t member;};", &error), "seed a user tag before reload");
+	anal->config->bits = 32;
+	r_anal_types_reload (anal, R2_PREFIX, NULL, NULL);
+	mu_assert_eq (r_type_kind (anal->sdb_types, "struct ResetWitness"), R_TYPE_INVALID, "reload clears user tag definitions together with ordinary types");
+	mu_assert_true (r_anal_import_c_decls (anal, "struct PurgeWitness {uint16_t member;};", &error), "seed a user tag before purge");
+	r_anal_purge (anal);
+	mu_assert_eq (r_type_kind (anal->sdb_types, "struct PurgeWitness"), R_TYPE_INVALID, "purge clears the native tag namespace");
+	free (error);
+	r_anal_free (anal);
+	mu_end;
+}
+
+static bool test_anal_type_record_deletion_ownership(void) {
+	RAnal *anal = r_anal_new ();
+	mu_assert_true (r_anal_import_c_decls (anal, "static int Parent(int obsolete);int Parent.Child(void);", NULL), "import independent legal dotted function identities");
+	sdb_set (anal->sdb_types, "func.Parent.arg.9", "int,stale", 0);
+	r_anal_remove_parsed_type (anal, "Parent");
+	mu_assert_null (r_type_func_ret (anal->sdb_types, "Parent"), "deletion removes the parent's return record");
+	mu_assert_null (sdb_const_get (anal->sdb_types, "func.Parent.arg.9", NULL), "deletion removes stale parent argument slots");
+	mu_assert_null (sdb_const_get (anal->sdb_types, "func.Parent.@.static", NULL), "deletion removes attributes owned by the parent");
+	mu_assert_true (r_type_func_exist (anal->sdb_types, "Parent.Child"), "deletion retains the independent dotted root");
+	mu_assert_streq (r_type_func_ret (anal->sdb_types, "Parent.Child"), "int", "deletion retains the dotted function's signature");
+	mu_assert_true (r_anal_import_c_decls (anal, "static int Parent(int obsolete);", NULL), "restore the parent through the current producer");
+	mu_assert_true (r_anal_import_c_decls (anal, "char Parent(void);", NULL), "replacement uses the same exact record-deletion owner");
+	mu_assert_streq (r_type_func_ret (anal->sdb_types, "Parent"), "char", "replacement installs the new parent's return type");
+	mu_assert_null (sdb_const_get (anal->sdb_types, "func.Parent.arg.0", NULL), "replacement removes obsolete parent parameters");
+	mu_assert_null (sdb_const_get (anal->sdb_types, "func.Parent.@.static", NULL), "replacement removes obsolete parent attributes");
+	mu_assert_streq (r_type_func_ret (anal->sdb_types, "Parent.Child"), "int", "replacement retains the dotted function's signature");
+	RAnalBaseType *atomic = r_anal_base_type_new (R_ANAL_BASE_TYPE_KIND_ATOMIC);
+	atomic->name = strdup ("Parent");
+	atomic->type = strdup ("c");
+	atomic->size = 8;
+	r_anal_save_base_type (anal, atomic);
+	r_anal_base_type_free (atomic);
+	mu_assert_eq (r_type_kind (anal->sdb_types, "Parent"), R_TYPE_BASIC, "structured replacement changes only the selected ordinary identity");
+	mu_assert_streq (r_type_func_ret (anal->sdb_types, "Parent.Child"), "int", "structured replacement preserves the dotted function's return record");
+	RTypeFunctionPrototype prototype;
+	mu_assert_true (r_type_func_get_prototype (anal->sdb_types, "Parent.Child", &prototype), "the dotted function's prototype record remains readable");
+	mu_assert_eq (prototype, R_TYPE_FUNC_PROTOTYPE_FIXED, "the dotted function retains its fixed input contract");
+	mu_assert_true (r_anal_import_c_decls (anal, "int link.Child(void);", NULL), "a dotted function name does not become a link record");
+	r_anal_remove_parsed_type (anal, "link.Child");
+	mu_assert_null (r_type_func_ret (anal->sdb_types, "link.Child"), "type deletion does not delegate a dotted identity to the link-record owner");
+	r_anal_free (anal);
+	mu_end;
+}
+
+static bool test_anal_anonymous_alias_identity(void) {
+	int parser;
+	for (parser = 0; parser < 2; parser++) {
+		RCore *core = r_core_new ();
+		RAnal *anal = core->anal;
+		anal->config->bits = 64;
+		r_anal_types_reload (anal, R2_PREFIX, NULL, NULL);
+		if (parser) {
+			anal->opt.tparser = strdup ("tcc");
+		}
+		mu_assert_true (r_anal_import_c_decls (anal,
+			"typedef struct {char byte;} Alias;struct Alias;"
+			"typedef enum {ONE} EnumAlias;struct EnumAlias;"
+			"typedef union {char byte;int word;} UnionAlias;union UnionAlias;"
+			"typedef struct Actual {int number;} NamedAlias;"
+			"int consume(Alias value);", NULL), "anonymous aliases do not introduce or conflict with genuine tags");
+		mu_assert_eq (r_type_kind (anal->sdb_types, "Alias"), R_TYPE_STRUCT, "the ordinary alias retains its anonymous aggregate category");
+		mu_assert_eq (r_type_get_bitsize (anal->sdb_types, "Alias"), 8, "the anonymous body owns the ordinary alias extent");
+		mu_assert_eq (r_type_get_bitsize (anal->sdb_types, "struct Alias"), 0, "the later genuine tag is still incomplete");
+		mu_assert_eq (r_type_kind (anal->sdb_types, "EnumAlias"), R_TYPE_ENUM, "the anonymous enumeration remains an ordinary enum");
+		mu_assert_eq (r_type_kind (anal->sdb_types, "struct EnumAlias"), R_TYPE_STRUCT, "an anonymous enum does not claim the later tag's kind");
+		char *value = r_type_enum_member (anal->sdb_types, "EnumAlias", "ONE", 0);
+		mu_assert_streq (value, "0x0", "the ordinary anonymous enum retains its cases");
+		free (value);
+		mu_assert_eq (r_type_kind (anal->sdb_types, "UnionAlias"), R_TYPE_UNION, "the ordinary alias retains its anonymous union category");
+		mu_assert_eq (r_type_get_bitsize (anal->sdb_types, "union UnionAlias"), 0, "the anonymous union does not complete a later genuine tag");
+		mu_assert_null (sdb_const_get (anal->sdb_types, "typedef.Alias", NULL), "an anonymous aggregate does not acquire a self-referential typedef");
+		mu_assert_eq (r_type_kind (anal->sdb_types, "NamedAlias"), R_TYPE_TYPEDEF, "a genuinely named-tag alias remains a typedef");
+		mu_assert_streq (sdb_const_get (anal->sdb_types, "typedef.NamedAlias", NULL), "struct Actual", "a named-tag alias targets the genuine tag");
+		value = r_type_func_args_type (anal->sdb_types, "consume", 0);
+		mu_assert_streq (value, "Alias", "function parameters retain the ordinary anonymous alias name");
+		free (value);
+		RTypeDecl *grouped = r_type_decl_parse ("int grouped(int (Alias), int (EnumAlias))", R_TYPE_DECL_CONTEXT_NAMED, anal->sdb_types, NULL);
+		mu_assert_notnull (grouped, "anonymous ordinary aggregate and enum names bind in contextual declarations");
+		RListIter *iter;
+		RTypeDecl *param;
+		r_list_foreach (grouped->type->function.parameters, iter, param) {
+			mu_assert_eq (param->type->kind, R_TYPE_DECL_FUNCTION, "ordinary anonymous aliases retain visible-type grouping independently of their tags");
+		}
+		r_type_decl_free (grouped);
+		mu_assert_true (r_anal_import_c_decls (anal, "struct Alias {short tagged;};int consume_again(Alias value);", NULL), "the genuine tag completes independently of the ordinary alias");
+		mu_assert_eq (r_type_get_bitsize (anal->sdb_types, "Alias"), 8, "genuine tag completion preserves the anonymous ordinary body");
+		mu_assert_eq (r_type_get_bitsize (anal->sdb_types, "struct Alias"), 16, "the genuine tag receives only its own definition");
+		char *projection = r_core_cmd_str (core, "tc Alias");
+		mu_assert_notnull (projection, "Core exports the ordinary aggregate as a named C type");
+		mu_assert_true (r_str_startswith (projection, "typedef struct {"), "the C projection declares the ordinary name without inventing a source tag");
+		mu_assert_true (r_anal_import_c_decls (anal, projection, NULL), "the selected parser accepts Core's ordinary aggregate projection");
+		free (projection);
+		projection = r_core_cmd_str (core, "tc EnumAlias");
+		mu_assert_notnull (projection, "Core exports the ordinary enum as a named C type");
+		mu_assert_true (r_str_startswith (projection, "typedef enum {"), "the enum projection declares the ordinary name without inventing a source tag");
+		mu_assert_true (r_anal_import_c_decls (anal, projection, NULL), "the selected parser accepts Core's ordinary enum projection");
+		free (projection);
+		mu_assert_eq (r_type_kind (anal->sdb_types, "Alias"), R_TYPE_STRUCT, "Core to parser roundtrip retains ordinary aggregate category");
+		mu_assert_eq (r_type_kind (anal->sdb_types, "EnumAlias"), R_TYPE_ENUM, "Core to parser roundtrip retains ordinary enum category");
+		mu_assert_null (sdb_const_get (anal->sdb_types, "typedef.Alias", NULL), "Core projection does not acquire stored typedef provenance");
+		mu_assert_eq (r_type_get_bitsize (anal->sdb_types, "Alias"), 8, "Core projection retains the ordinary extent");
+		mu_assert_eq (r_type_get_bitsize (anal->sdb_types, "struct Alias"), 16, "Core projection does not replace the genuine tag");
+		r_core_free (core);
+	}
+	mu_end;
+}
+
 static bool test_anal_cparse_forward_identity(void) {
 	RAnal *anal = r_anal_new ();
 	anal->config->bits = 16;
@@ -1028,10 +1238,10 @@ static bool test_anal_cparse_forward_identity(void) {
 		"typedef struct Opaque near *OpaqueNear;typedef union Choice far *ChoiceFar;"
 		"struct Handles {OpaqueNear first;ChoiceFar second;};struct Opaque;union Choice;", &error), "import real incomplete tags and pointer declarations");
 	mu_assert_null (error, "opaque pointer headers do not need pointee layout");
-	const char *names[] = { "Opaque", "Choice" };
+	const char *names[] = { "struct Opaque", "union Choice" };
 	int i;
 	for (i = 0; i < R_ARRAY_SIZE (names); i++) {
-		RAnalBaseType *base = r_anal_get_base_type (anal, names[i]);
+		RAnalBaseType *base = r_anal_get_base_type (anal, names[i] + (i? 6: 7), R_TYPE_NAMESPACE_TAG);
 		mu_assert_notnull (base, "a forward declaration has a readable base identity");
 		mu_assert_eq (base->kind, i? R_ANAL_BASE_TYPE_KIND_UNION: R_ANAL_BASE_TYPE_KIND_STRUCT, "the tag retains its aggregate kind");
 		mu_assert_true (RVecAnalTypeMember_empty (r_anal_base_type_members (base)), "an incomplete tag has no invented members");
@@ -1044,13 +1254,14 @@ static bool test_anal_cparse_forward_identity(void) {
 		RTypeLayout layout;
 		mu_assert_false (r_type_get_layout (anal->sdb_types, names[i], &layout), "save roundtrip must not make an incomplete tag a zero-byte object");
 	}
-	mu_assert_streq (sdb_const_get (anal->sdb_types, "Opaque", NULL), "struct", "save retains the struct identity");
-	mu_assert_streq (sdb_const_get (anal->sdb_types, "Choice", NULL), "union", "save retains the union identity");
+	Sdb *tags = r_type_namespace (anal->sdb_types, R_TYPE_NAMESPACE_TAG, false);
+	mu_assert_streq (sdb_const_get (tags, "Opaque", NULL), "struct", "save retains the struct identity");
+	mu_assert_streq (sdb_const_get (tags, "Choice", NULL), "union", "save retains the union identity");
 	mu_assert_streq (sdb_const_get (anal->sdb_types, "typedef.OpaqueNear", NULL), "struct Opaque near *", "near pointer retains its explicit opaque target");
 	mu_assert_streq (sdb_const_get (anal->sdb_types, "typedef.ChoiceFar", NULL), "union Choice far *", "far pointer retains its explicit opaque target");
 	mu_assert_eq (r_anal_type_bitsize (anal, "OpaqueNear"), 16, "near opaque pointer has target width");
 	mu_assert_eq (r_anal_type_bitsize (anal, "ChoiceFar"), 32, "far opaque pointer has target width");
-	mu_assert_eq (r_anal_type_bitsize (anal, "Handles"), 48, "pointer members compose without completing either tag");
+	mu_assert_eq (r_anal_type_bitsize (anal, "struct Handles"), 48, "pointer members compose without completing either tag");
 	r_anal_free (anal);
 	mu_end;
 }
@@ -1066,10 +1277,10 @@ static bool test_anal_cparse_forward_completion(void) {
 		"union Choice;union Choice {int value;};union Choice;", &error), "complete each tag and then forward declare it in one input");
 	mu_assert_true (r_anal_import_c_decls (anal, "struct Opaque;union Choice;struct Opaque;union Choice;", &error), "later imports may repeat forward declarations");
 	mu_assert_null (error, "forward declarations do not invalidate complete definitions");
-	const char *names[] = { "Opaque", "Choice" };
+	const char *names[] = { "struct Opaque", "union Choice" };
 	int i;
 	for (i = 0; i < R_ARRAY_SIZE (names); i++) {
-		RAnalBaseType *base = r_anal_get_base_type (anal, names[i]);
+		RAnalBaseType *base = r_anal_get_base_type (anal, names[i] + (i? 6: 7), R_TYPE_NAMESPACE_TAG);
 		mu_assert_notnull (base, "complete definition remains retrievable");
 		RAnalTypeMember *member = RVecAnalTypeMember_at (r_anal_base_type_members (base), 0);
 		mu_assert_notnull (member, "a repeated forward does not remove existing members");
@@ -1091,13 +1302,14 @@ static bool test_anal_cparse_forward_typedef(void) {
 		"typedef struct Distinct Alias;typedef union DistinctUnion UnionAlias;"
 		"struct Links {Opaque *first;Choice *second;struct Distinct *third;Alias *fourth;};", &error), "typedef-only declarations retain the introduced tag");
 	mu_assert_null (error, "same-name aliases do not create recursive typedefs");
-	mu_assert_streq (sdb_const_get (anal->sdb_types, "Opaque", NULL), "struct", "same-name struct typedef coalesces with the tag");
-	mu_assert_streq (sdb_const_get (anal->sdb_types, "Choice", NULL), "union", "same-name union typedef coalesces with the tag");
-	mu_assert_null (sdb_const_get (anal->sdb_types, "typedef.Opaque", NULL), "coalesced identity has no self-referential alias");
-	mu_assert_streq (sdb_const_get (anal->sdb_types, "Distinct", NULL), "struct", "a distinct explicit tag owns its identity");
+	mu_assert_streq (sdb_const_get (anal->sdb_types, "Opaque", NULL), "typedef", "same-name struct typedef has ordinary identity");
+	mu_assert_streq (sdb_const_get (anal->sdb_types, "Choice", NULL), "typedef", "same-name union typedef has ordinary identity");
+	mu_assert_streq (sdb_const_get (anal->sdb_types, "typedef.Opaque", NULL), "struct Opaque", "the ordinary alias targets the distinct tag identity");
+	Sdb *tags = r_type_namespace (anal->sdb_types, R_TYPE_NAMESPACE_TAG, false);
+	mu_assert_streq (sdb_const_get (tags, "Distinct", NULL), "struct", "a distinct explicit tag owns its identity");
 	mu_assert_streq (sdb_const_get (anal->sdb_types, "Alias", NULL), "typedef", "a distinct alias is not mistaken for the explicit tag");
 	mu_assert_streq (sdb_const_get (anal->sdb_types, "typedef.Alias", NULL), "struct Distinct", "a distinct typedef retains its actual target");
-	mu_assert_streq (sdb_const_get (anal->sdb_types, "DistinctUnion", NULL), "union", "a distinct union tag owns its identity");
+	mu_assert_streq (sdb_const_get (tags, "DistinctUnion", NULL), "union", "a distinct union tag owns its identity");
 	mu_assert_streq (sdb_const_get (anal->sdb_types, "typedef.UnionAlias", NULL), "union DistinctUnion", "a distinct union alias retains its actual target");
 	mu_assert_true (r_anal_import_c_decls (anal, "struct Opaque {int value;};union Choice {int value;};", &error), "complete coalesced typedef tags");
 	mu_assert_true (r_anal_import_c_decls (anal, "typedef struct Opaque Opaque;typedef union Choice Choice;", &error), "a later same-name typedef preserves completed layouts");
@@ -1109,7 +1321,7 @@ static bool test_anal_cparse_forward_typedef(void) {
 	mu_assert_notnull (error, "a real tag conflict reports a diagnostic");
 	mu_assert_notnull (strstr (error, "Conflicting aggregate tag"), "only the actual tag namespace establishes this conflict");
 	free (error);
-	mu_assert_streq (sdb_const_get (anal->sdb_types, "Opaque", NULL), "struct", "rejected tag-kind changes preserve the completed owner");
+	mu_assert_streq (sdb_const_get (tags, "Opaque", NULL), "struct", "rejected tag-kind changes preserve the completed owner");
 	r_anal_free (anal);
 	mu_end;
 }
@@ -1129,15 +1341,15 @@ static bool test_anal_cparse_distinct_tag_and_typedef_names(void) {
 		"struct BrightTypedefd;union UnionAlias;", &error);
 	if (imported) {
 		mu_assert_null (error, "ordinary typedef names are not evidence of a conflicting tag");
-		mu_assert_streq (sdb_const_get (anal->sdb_types, "Window", NULL), "struct", "later tag declarations retain earlier owners");
+		mu_assert_streq (tag_value (anal, "Window"), "struct", "later tag declarations retain earlier owners");
 		mu_assert_streq (sdb_const_get (anal->sdb_types, "BrightTypedefd", NULL), "typedef", "the ordinary typedef is not replaced with a tag owner");
 		mu_assert_streq (sdb_const_get (anal->sdb_types, "typedef.BrightTypedefd", NULL), "struct Bright", "the ordinary alias retains its actual aggregate");
 		mu_assert_streq (sdb_const_get (anal->sdb_types, "typedef.BrightTypedefdPtr", NULL), "struct BrightTypedefd *", "the distinct incomplete tag retains its explicit spelling");
 		mu_assert_streq (sdb_const_get (anal->sdb_types, "UnionAlias", NULL), "typedef", "a union tag does not replace an unrelated ordinary alias");
 		mu_assert_streq (sdb_const_get (anal->sdb_types, "typedef.UnionFar", NULL), "union UnionAlias far *", "a far pointer retains the distinct union tag");
-		mu_assert_eq (r_anal_type_bitsize (anal, "Window"), 16, "earlier pointer-containing layouts survive admission");
-		mu_assert_eq (r_anal_type_bitsize (anal, "Pointers"), 64, "ordinary, near and far pointers do not need incomplete pointee layouts");
-		mu_assert_eq (r_anal_type_bitsize (anal, "Ordinary"), 32, "ordinary struct and union aliases remain usable by value");
+		mu_assert_eq (r_anal_type_bitsize (anal, "struct Window"), 16, "earlier pointer-containing layouts survive admission");
+		mu_assert_eq (r_anal_type_bitsize (anal, "struct Pointers"), 64, "ordinary, near and far pointers do not need incomplete pointee layouts");
+		mu_assert_eq (r_anal_type_bitsize (anal, "struct Ordinary"), 32, "ordinary struct and union aliases remain usable by value");
 	}
 	free (error);
 	r_anal_free (anal);
@@ -1153,8 +1365,8 @@ static bool test_anal_cparse_tagged_member_does_not_resolve_typedef(void) {
 		"struct Bright {int member;};typedef struct Bright Alias;"
 		"union Box {int member;};typedef union Box UnionAlias;"
 		"struct Ordinary {Alias value;};struct Pointer {struct Alias *value;};", NULL), "seed ordinary aliases and an opaque tagged pointer");
-	mu_assert_eq (r_anal_type_bitsize (anal, "Ordinary"), 32, "ordinary Alias still names the completed struct");
-	mu_assert_eq (r_anal_type_bitsize (anal, "Pointer"), 64, "an opaque tagged pointer still has target representation");
+	mu_assert_eq (r_anal_type_bitsize (anal, "struct Ordinary"), 32, "ordinary Alias still names the completed struct");
+	mu_assert_eq (r_anal_type_bitsize (anal, "struct Pointer"), 64, "an opaque tagged pointer still has target representation");
 	RTypeLayout layout;
 	bool struct_layout = r_type_get_layout (anal->sdb_types, "struct Alias", &layout);
 	bool union_layout = r_type_get_layout (anal->sdb_types, "union UnionAlias", &layout);
@@ -1167,7 +1379,7 @@ static bool test_anal_cparse_tagged_member_does_not_resolve_typedef(void) {
 		refused = refused && !imported && error && strstr (error, "Cannot measure member type");
 		free (error);
 	}
-	bool no_consumer = !sdb_const_get (anal->sdb_types, "Consumer", NULL);
+	bool no_consumer = !tag_value (anal, "Consumer");
 	r_anal_free (anal);
 	mu_assert_false (struct_layout, "struct Alias cannot use the unrelated ordinary typedef's layout");
 	mu_assert_false (union_layout, "union UnionAlias cannot use the unrelated ordinary typedef's layout");
@@ -1230,9 +1442,9 @@ static bool test_anal_cparse_incomplete_member(void) {
 		mu_assert_notnull (strstr (error, "Cannot measure member type"), "failure identifies the missing member layout");
 		free (error);
 		error = NULL;
-		mu_assert_null (sdb_const_get (anal->sdb_types, "Broken", NULL), "failed import must not invent a containing aggregate");
+		mu_assert_null (tag_value (anal, "Broken"), "failed import must not invent a containing aggregate");
 	}
-	mu_assert_streq (sdb_const_get (anal->sdb_types, "Opaque", NULL), "struct", "failed by-value imports preserve the opaque identity");
+	mu_assert_streq (tag_value (anal, "Opaque"), "struct", "failed by-value imports preserve the opaque identity");
 	r_anal_free (anal);
 	mu_end;
 }
@@ -1248,12 +1460,12 @@ static bool test_anal_cparse_definition_alias(void) {
 		"typedef struct Same {Alias value;} Same;"
 		"typedef struct {UnionAlias value;} Anonymous;", &error), "import definition-form aliases");
 	mu_assert_null (error, "definition-form aliases parse successfully");
-	RAnalBaseType *base = r_anal_get_base_type (anal, "Alias");
+	RAnalBaseType *base = r_anal_get_base_type (anal, "Alias", R_TYPE_NAMESPACE_ORDINARY);
 	mu_assert_notnull (base, "the distinct struct alias has a native owner");
 	mu_assert_eq (base->kind, R_ANAL_BASE_TYPE_KIND_TYPEDEF, "the distinct struct alias is a typedef");
 	mu_assert_streq (base->type, "struct Tag", "the alias targets the named struct");
 	r_anal_base_type_free (base);
-	base = r_anal_get_base_type (anal, "Tag");
+	base = r_anal_get_base_type (anal, "Tag", R_TYPE_NAMESPACE_TAG);
 	mu_assert_notnull (base, "the named struct remains readable");
 	mu_assert_eq (base->kind, R_ANAL_BASE_TYPE_KIND_STRUCT, "the tag owns the struct definition");
 	RAnalTypeMember *member = RVecAnalTypeMember_at (r_anal_base_type_members (base), 1);
@@ -1261,12 +1473,12 @@ static bool test_anal_cparse_definition_alias(void) {
 	mu_assert_streq (member->name, "y", "the named struct retains field identity");
 	mu_assert_eq (member->offset, 4, "the named struct retains field layout");
 	r_anal_base_type_free (base);
-	base = r_anal_get_base_type (anal, "UnionAlias");
+	base = r_anal_get_base_type (anal, "UnionAlias", R_TYPE_NAMESPACE_ORDINARY);
 	mu_assert_notnull (base, "the distinct union alias has a native owner");
 	mu_assert_eq (base->kind, R_ANAL_BASE_TYPE_KIND_TYPEDEF, "the distinct union alias is a typedef");
 	mu_assert_streq (base->type, "union UnionTag", "the alias targets the named union");
 	r_anal_base_type_free (base);
-	base = r_anal_get_base_type (anal, "UnionTag");
+	base = r_anal_get_base_type (anal, "UnionTag", R_TYPE_NAMESPACE_TAG);
 	mu_assert_notnull (base, "the named union remains readable");
 	mu_assert_eq (base->kind, R_ANAL_BASE_TYPE_KIND_UNION, "the tag owns the union definition");
 	r_anal_base_type_free (base);
@@ -1275,13 +1487,14 @@ static bool test_anal_cparse_definition_alias(void) {
 	const char *records[] = {"Same", "Anonymous"};
 	size_t i;
 	for (i = 0; i < R_ARRAY_SIZE (records); i++) {
-		base = r_anal_get_base_type (anal, records[i]);
+		base = r_anal_get_base_type (anal, records[i], i? R_TYPE_NAMESPACE_ORDINARY: R_TYPE_NAMESPACE_TAG);
 		mu_assert_notnull (base, "same-name and anonymous definitions remain native records");
 		mu_assert_eq (base->kind, R_ANAL_BASE_TYPE_KIND_STRUCT, "the definition owns its record kind");
 		mu_assert_eq (base->size, 64, "record layout follows the distinct alias member");
 		r_anal_base_type_free (base);
-		mu_assert_null (sdb_const_getf (anal->sdb_types, NULL, "typedef.%s", records[i]), "a record does not declare itself as a typedef");
+		mu_assert_streq (sdb_const_getf (anal->sdb_types, NULL, "%s", records[i]), i? "struct": "typedef", "anonymous aliases own ordinary aggregates, while named-tag aliases own typedef records");
 	}
+	mu_assert_null (r_anal_get_base_type (anal, "Anonymous", R_TYPE_NAMESPACE_TAG), "an anonymous body does not fabricate a same-spelling tag");
 	r_anal_free (anal);
 	mu_end;
 }
@@ -1309,9 +1522,9 @@ static bool test_anal_type_bitsize_struct_recorded(void) {
 	r_anal_base_type_free (base);
 	mu_assert_eq (sdb_num_get (TDB, "type.padded.size", NULL), 128, "The struct width is saved beside its members");
 	mu_assert_eq (r_type_get_bitsize (TDB, "padded"), 128, "A recorded width wins over the member sum");
-	mu_assert_eq (r_type_get_bitsize (TDB, "struct padded"), 128, "The keyword spelling reads the same record");
+	mu_assert_eq (r_type_get_bitsize (TDB, "struct padded"), 0, "A tag spelling cannot borrow an ordinary analysis record");
 	// a re-save of what was read back keeps the width
-	base = r_anal_get_base_type (anal, "padded");
+	base = r_anal_get_base_type (anal, "padded", R_TYPE_NAMESPACE_ORDINARY);
 	mu_assert_notnull (base, "The saved struct reads back");
 	mu_assert_eq (base->size, 128, "The width reads back with the members");
 	r_anal_save_base_type (anal, base);
@@ -1426,12 +1639,12 @@ static bool test_anal_cparse_array_bounds(void) {
 		mu_assert_null (error, "supported bounds reach the real c2 importer");
 		free (header);
 		char *expected = r_str_newf ("char,0,%d", counts[i]);
-		mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.Bounds.direct", NULL), expected, "direct member count uses shared evaluation");
+		mu_assert_streq (tag_value (anal, "struct.Bounds.direct"), expected, "direct member count uses shared evaluation");
 		free (expected);
 		expected = r_str_newf ("char,%d,0", 10 * counts[i]);
-		mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.Bounds.tail", NULL), expected, "nested, alias, near and far arrays have the expected combined extent");
+		mu_assert_streq (tag_value (anal, "struct.Bounds.tail"), expected, "nested, alias, near and far arrays have the expected combined extent");
 		free (expected);
-		mu_assert_eq (r_anal_type_bitsize (anal, "Bounds"), (10 * counts[i] + 2) * 8, "record extent retains target two-byte pointer alignment");
+		mu_assert_eq (r_anal_type_bitsize (anal, "struct Bounds"), (10 * counts[i] + 2) * 8, "record extent retains target two-byte pointer alignment");
 		mu_assert_eq (r_anal_type_bitsize (anal, "Grid"), counts[i] * 16, "nested typedef arrays multiply both dimensions");
 		mu_assert_eq (r_anal_type_bitsize (anal, "NearRow"), counts[i] * 16, "near pointer elements retain two-byte target width");
 		mu_assert_eq (r_anal_type_bitsize (anal, "FarRow"), counts[i] * 32, "far pointer elements retain four-byte target width");
@@ -1471,7 +1684,7 @@ static bool test_anal_array_bound_target_model(void) {
 		char *error = NULL;
 		mu_assert_true (r_anal_import_c_decls (anal, "struct TargetBound {char items[0xffff+2];char tail;};", &error), "c2 uses the actual selected integer model");
 		mu_assert_null (error, "target-width expression imports successfully");
-		mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.TargetBound.tail", NULL), bits == 16? "char,1,0": "char,65537,0", "target integer wrap governs the next field offset");
+		mu_assert_streq (tag_value (anal, "struct.TargetBound.tail"), bits == 16? "char,1,0": "char,65537,0", "target integer wrap governs the next field offset");
 		char *format = r_type_format (anal->sdb_types, "char[0xffff+2]");
 		mu_assert_streq (format, bits == 16? "c": "65537c", "formatting uses the same target-dependent count");
 		free (format);
@@ -1554,18 +1767,18 @@ static bool test_anal_x86_16_declaration_layout(void) {
 	mu_assert_eq (r_anal_type_bitsize (anal, "func.CB"), 0, "function reference is not a sized object");
 	mu_assert_eq (r_anal_type_bitsize (anal, "MIX"), 16, "outer near pointer determines object width");
 	mu_assert_eq (r_anal_type_bitsize (anal, "CB"), 32, "far callback pointer width is independent from the convention");
-	mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.Mixed.p", NULL), "MIX,2,0", "near pointer retains target alignment");
-	mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.Mixed.farptr", NULL), "int far *,4,0", "far pointer has four-byte extent without imposing four-byte alignment");
-	mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.Mixed.cb", NULL), "CB,8,0", "far callback follows the far data pointer");
-	mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.Mixed.tail", NULL), "char,12,0", "callback occupies four bytes");
-	mu_assert_eq (r_anal_type_bitsize (anal, "Mixed"), 112, "aggregate retains two-byte pointer alignment and tail padding");
-	mu_assert_eq (r_anal_type_bitsize (anal, "Wide"), 160, "long-double array aggregate retains twenty-byte extent");
-	mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.WideTail.tail", NULL), "char,20,0", "tail follows twenty bytes of long-double elements");
-	char *format = r_type_format (anal->sdb_types, "WideTail");
+	mu_assert_streq (tag_value (anal, "struct.Mixed.p"), "MIX,2,0", "near pointer retains target alignment");
+	mu_assert_streq (tag_value (anal, "struct.Mixed.farptr"), "int far *,4,0", "far pointer has four-byte extent without imposing four-byte alignment");
+	mu_assert_streq (tag_value (anal, "struct.Mixed.cb"), "CB,8,0", "far callback follows the far data pointer");
+	mu_assert_streq (tag_value (anal, "struct.Mixed.tail"), "char,12,0", "callback occupies four bytes");
+	mu_assert_eq (r_anal_type_bitsize (anal, "struct Mixed"), 112, "aggregate retains two-byte pointer alignment and tail padding");
+	mu_assert_eq (r_anal_type_bitsize (anal, "struct Wide"), 160, "long-double array aggregate retains twenty-byte extent");
+	mu_assert_streq (tag_value (anal, "struct.WideTail.tail"), "char,20,0", "tail follows twenty bytes of long-double elements");
+	char *format = r_type_format (anal->sdb_types, "struct WideTail");
 	mu_assert_streq (format, "[20]bc values tail ", "format composes primitive repetition with the member array extent");
 	free (format);
 	sdb_set (anal->sdb_types, "type.long double", "[18446744073709551615]b", 0);
-	format = r_type_format (anal->sdb_types, "WideTail");
+	format = r_type_format (anal->sdb_types, "struct WideTail");
 	mu_assert_null (format, "overflowing repeat composition is not serialized");
 	sdb_set (anal->sdb_types, "type.long double", "[10]b", 0);
 	char *argument = r_type_func_args_type (anal->sdb_types, "CB", 1);
@@ -1589,13 +1802,13 @@ static bool test_anal_x86_16_declaration_layout(void) {
 	free (argument);
 	mu_assert_eq (r_anal_type_bitsize (anal, "FN"), 0, "function typedef is not globally coerced to a pointer object");
 	mu_assert_streq (sdb_const_get (anal->sdb_types, "func.CB.cc", NULL), "cdecl", "pointer qualification does not rewrite the current convention");
-	RAnalBaseType *record = r_anal_get_base_type (anal, "Mixed");
+	RAnalBaseType *record = r_anal_get_base_type (anal, "Mixed", R_TYPE_NAMESPACE_TAG);
 	char *serialized = r_anal_base_type_to_kv (record);
 	mu_assert_notnull (serialized, "serialize the current explicit-layer record");
-	r_anal_remove_parsed_type (anal, "Mixed");
+	r_anal_remove_parsed_type (anal, "struct Mixed");
 	r_anal_save_parsed_type (anal, serialized);
-	mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.Mixed.farptr", NULL), "int far *,4,0", "saved-analysis representation retains the far pointer");
-	mu_assert_eq (r_anal_type_bitsize (anal, "Mixed"), 112, "current-shape record retains its extent after storage roundtrip");
+	mu_assert_streq (tag_value (anal, "struct.Mixed.farptr"), "int far *,4,0", "saved-analysis representation retains the far pointer");
+	mu_assert_eq (r_anal_type_bitsize (anal, "struct Mixed"), 112, "current-shape record retains its extent after storage roundtrip");
 	free (serialized);
 	r_anal_base_type_free (record);
 	free (error);
@@ -1610,6 +1823,9 @@ static bool test_anal_x86_16_declaration_layout(void) {
 }
 
 int all_tests(void) {
+	mu_run_test (test_anal_type_namespace_independence);
+	mu_run_test (test_anal_type_record_deletion_ownership);
+	mu_run_test (test_anal_anonymous_alias_identity);
 	mu_run_test (test_anal_x86_16_declaration_layout);
 	mu_run_test (test_anal_get_base_type_struct);
 	mu_run_test (test_anal_save_base_type_struct);
@@ -1631,6 +1847,7 @@ int all_tests(void) {
 	mu_run_test (test_anal_cparse_definition_alias);
 	mu_run_test (test_anal_cparse_prototype_metadata);
 	mu_run_test (test_anal_tcc_prototype_metadata);
+	mu_run_test (test_anal_tcc_type_namespaces);
 	mu_run_test (test_anal_cparse_grouped_names);
 	mu_run_test (test_anal_cparse_visible_typedef_callbacks);
 	mu_run_test (test_anal_cparse_forward_identity);

@@ -3,12 +3,12 @@ FILE=malloc://32
 ARGS=-a x86 -b 16
 CMDS=<<EOF
 'td struct Wide {long double values[2];char tail;};
-tk struct.Wide.tail
-ts Wide
-.ts* Wide
+tk tags/struct.Wide.tail
+ts struct Wide
+.ts* struct Wide
 wx 7f @ 20
-pfs.Wide
-pfj.Wide
+pfs."struct Wide"
+pfj."struct Wide"
 EOF
 EXPECT=<<EOF
 char,20,0
@@ -73,7 +73,7 @@ tss uint16_t
 tss uint64_t
 tss long double[2]
 'td struct Wide {long double values[2];};
-tss Wide
+tss struct Wide
 e asm.arch=arm
 e asm.bits=16
 tss int
@@ -102,21 +102,21 @@ FILE=malloc://32
 CMDS=<<EOF
 'td union Str { char str0[5]; char str1[11]; }
 tu
-tuc Str
-tu Str
+tuc union Str
+tu union Str
 tu
 w hello world sucks
 pf 0[5]z[11]z str0 str1
-.tu Str
+.tu union Str
 EOF
 EXPECT=<<EOF
-Str
+union Str
 union Str {
   char str0[5];
   char str1[11];
 };
 'pf 0[5]z[11]z str0 str1
-Str
+union Str
  str0 : 0x00000000 = "hello"
  str1 : 0x00000000 = "hello world"
  str0 : 0x00000000 = "hello"
@@ -128,16 +128,16 @@ NAME=td union with nested struct
 FILE=malloc://32
 CMDS=<<EOF
 'td struct PadStr { char pad[6]; char str1[11]; }
-'td union Str { char str0[5]; PadStr str1; }
+'td union Str { char str0[5]; struct PadStr str1; }
 w hello world sucks
-tu Str
-.tu Str
+tu union Str
+.tu union Str
 EOF
 EXPECT=<<EOF
-'pf 0[5]z? str0 (PadStr)str1
+'pf 0[5]z? str0 (struct PadStr)str1
  str0 : 0x00000000 = "hello"
  str1 : 
-                struct<PadStr>
+                struct<struct PadStr>
        pad : 0x00000000 = "hello "
       str1 : 0x00000006 = "world sucks"
 EOF
@@ -149,17 +149,17 @@ CMDS=<<EOF
 'td struct Foo {int a;};
 'td struct Bar { char *hello; int world[]; };
 ts~Foo,Bar
-ts Foo
-ts Bar
+ts struct Foo
+ts struct Bar
 s 0
 EOF
 EXPECT=<<EOF
-Bar
-Foo
+struct Bar
+struct Foo
 'pf d a
 EOF
 EXPECT_ERR=<<EOF
-ERROR: Cannot find 'Bar' type
+ERROR: Formatting/layout unavailable for type 'struct Bar'
 EOF
 RUN
 
@@ -168,17 +168,16 @@ FILE=--
 CMDS=<<EOF
 e types.plugin=tcc
 'td typedef struct { int a.%p.%p; char b[4]; } T;
-tk~typedef.T
+tk~struct.T
 'td typedef struct { int a.b; char c[4]; } U;
-tk~typedef.U
+tk~struct.U
 EOF
 EXPECT=<<EOF
-typedef.U=struct
-typedef.U.a.b=int32_t,0,0
-typedef.U.a.b.meta=0
-typedef.U.c=char,4,4
-typedef.U.c.meta=4
-typedef.U.fields=a.b,c
+struct.U=a.b,c
+struct.U.a.b=int32_t,0,0
+struct.U.a.b.meta=0
+struct.U.c=char,4,4
+struct.U.c.meta=4
 <string>:1: error: ',' expected (got "%")
 <string>:1: error: ';' expected (got "p.")
 <string>:1: error: bracket expected
@@ -280,7 +279,7 @@ afs
 tl- 0
 afs
 'td struct NotAFunction { int value; };
-tl NotAFunction = 0
+tl struct NotAFunction = 0
 afs
 EOF
 EXPECT=<<EOF
@@ -339,26 +338,26 @@ e types.plugin=
 s sym.Java_com_app_ndh_NDHActivity_print
 to bins/headers/jni.h
 td struct NULL { }
-tl JNINativeInterface = 0x464c457f
-tl NULL = 0
+tl struct JNINativeInterface = 0x464c457f
+tl struct NULL = 0
 pdf~JNINativeInterface
 pdr~JNI?
 EOF
 EXPECT=<<EOF
-| ; var struct JNINativeInterface @ sp+0x12c
+| ; var struct JNINativeInterface JNINativeInterface @ sp+0x12c
 | 0x00000f74      4b93           str r3, [JNINativeInterface]
-| 0x00000f76      039b           ldr r3, [var_134h]                    ; JNINativeInterface.reserved0
-| 0x00000f7e      d358           ldr r3, [r2, r3]                      ; JNINativeInterface.GetStringUTFChars
-| 0x00000f82      019a           ldr r2, [var_13ch]                    ; JNINativeInterface.reserved0
-| 0x0000100e      d358           ldr r3, [r2, r3]                      ; JNINativeInterface.GetStringLength
-| 0x00001012      019a           ldr r2, [var_13ch]                    ; JNINativeInterface.reserved0
-| 0x00001066      d258           ldr r2, [r2, r3]                      ; JNINativeInterface.NewStringUTF
-| 0x00001078      439a           ldr r2, [var_34h]                     ; JNINativeInterface.reserved0
-| 0x00001114      d258           ldr r2, [r2, r3]                      ; JNINativeInterface.NewStringUTF
-| 0x00001128      1a68           ldr r2, [r3]                          ; JNINativeInterface.reserved0
-| 0x0000112e      d258           ldr r2, [r2, r3]                      ; JNINativeInterface.NewStringUTF
-| 0x00001144      4b9a           ldr r2, [JNINativeInterface]          ; JNINativeInterface.reserved0
-| 0x00001148      9a42           cmp r2, r3                            ; JNINativeInterface.reserved0
+| 0x00000f76      039b           ldr r3, [var_134h]                    ; struct JNINativeInterface.reserved0
+| 0x00000f7e      d358           ldr r3, [r2, r3]                      ; struct JNINativeInterface.GetStringUTFChars
+| 0x00000f82      019a           ldr r2, [var_13ch]                    ; struct JNINativeInterface.reserved0
+| 0x0000100e      d358           ldr r3, [r2, r3]                      ; struct JNINativeInterface.GetStringLength
+| 0x00001012      019a           ldr r2, [var_13ch]                    ; struct JNINativeInterface.reserved0
+| 0x00001066      d258           ldr r2, [r2, r3]                      ; struct JNINativeInterface.NewStringUTF
+| 0x00001078      439a           ldr r2, [var_34h]                     ; struct JNINativeInterface.reserved0
+| 0x00001114      d258           ldr r2, [r2, r3]                      ; struct JNINativeInterface.NewStringUTF
+| 0x00001128      1a68           ldr r2, [r3]                          ; struct JNINativeInterface.reserved0
+| 0x0000112e      d258           ldr r2, [r2, r3]                      ; struct JNINativeInterface.NewStringUTF
+| 0x00001144      4b9a           ldr r2, [JNINativeInterface]          ; struct JNINativeInterface.reserved0
+| 0x00001148      9a42           cmp r2, r3                            ; struct JNINativeInterface.reserved0
 14
 EOF
 RUN
@@ -448,7 +447,7 @@ FILE=-
 CMDS=<<EOF
 td enum pe_machine { IMAGE_FILE_MACHINE_IA64=0x200, IMAGE_FILE_MACHINE_I386=0x14c };
 te~?pe_machine
-t-pe_machine
+t- enum pe_machine
 te~?pe_machine
 EOF
 EXPECT=<<EOF
@@ -462,7 +461,7 @@ FILE=-
 CMDS=<<EOF
 t-*
 'td struct three_elements{int x; char y; float z;}
-t-three_elements
+t- struct three_elements
 ts~?
 EOF
 EXPECT=<<EOF
@@ -474,8 +473,8 @@ NAME=t-union
 FILE=-
 CMDS=<<EOF
 'td union xoo{int x; int y; int z;}
-tk*~union
-t-xoo
+tk tags/*~union
+t- union xoo
 EOF
 EXPECT=<<EOF
 union.xoo=x,y,z
@@ -513,7 +512,7 @@ NAME=teb
 FILE=-
 CMDS=<<EOF
 td enum pe_machine { IMAGE_FILE_MACHINE_IA64=0x200, IMAGE_FILE_MACHINE_I386=0x14c };
-teb pe_machine IMAGE_FILE_MACHINE_I386
+teb enum pe_machine IMAGE_FILE_MACHINE_I386
 EOF
 EXPECT=<<EOF
 0x14c
@@ -524,7 +523,7 @@ NAME=te
 FILE=-
 CMDS=<<EOF
 td enum pe_machine { IMAGE_FILE_MACHINE_IA64=0x200, IMAGE_FILE_MACHINE_I386=0x14c };
-te pe_machine 0x14c
+te enum pe_machine 0x14c
 EOF
 EXPECT=<<EOF
 IMAGE_FILE_MACHINE_I386
@@ -570,8 +569,8 @@ tsn
 tsn?
 EOF
 EXPECT=<<EOF
-AlsoTwo
-Two
+struct AlsoTwo
+struct Two
 | tsn <size>  list all structs matching the given size
 | tsn <size>  list all structs matching the given size
 EOF
@@ -582,9 +581,9 @@ FILE=-
 CMDS=<<EOF
 'td enum v { t=0x123, p=0x321 };
 te~?
-tk v
-tk enum.v.t
-tk enum.v.p
+tk tags/v
+tk tags/enum.v.t
+tk tags/enum.v.p
 EOF
 EXPECT=<<EOF
 1
@@ -599,8 +598,8 @@ FILE=-
 CMDS=<<EOF
 'td enum v { t=0x8000000000000001, p=0x8000000000000008 };
 te~?
-tk enum.v.t
-tk enum.v.p
+tk tags/enum.v.t
+tk tags/enum.v.p
 EOF
 EXPECT=<<EOF
 1
@@ -656,7 +655,7 @@ to bins/other/test.h
 t~char,double,float,int,long,short,size,uid,void # basic universal types
 ts~addr,date,dox,name
 tt~addr_t,date_t,dox_t,name_t
-t addr
+t struct addr
 EOF
 EXPECT=<<EOF
 char
@@ -680,10 +679,10 @@ unsigned char
 unsigned int
 unsigned short
 void *
-addr
-date
-dox
-name
+struct addr
+struct date
+struct dox
+struct name
 addr_t
 date_t
 dox_t
@@ -712,7 +711,7 @@ s 4
 w Carlos
 s 0
 wx 13
-tp person @ 0x0
+tp struct person @ 0x0
 EOF
 EXPECT=<<EOF
   age : 0x00000000 = 0x00000013
@@ -727,7 +726,7 @@ CMDS=<<EOF
 tu
 EOF
 EXPECT=<<EOF
-x
+union x
 EOF
 RUN
 
@@ -773,14 +772,14 @@ FILE=-
 CMDS=<<EOF
 'td struct bar { int a; int b; };
 'td struct foo { int x; struct bar moo; };
-ts foo
-.ts foo
+ts struct foo
+.ts struct foo
 EOF
 EXPECT=<<EOF
-'pf d? x (bar)moo
+'pf d? x (struct bar)moo
    x : 0x00000000 = 0x00000000
  moo : 
-                struct<bar>
+                struct<struct bar>
    a : 0x00000004 = 0x00000000
    b : 0x00000008 = 0x00000000
 EOF
@@ -791,19 +790,19 @@ FILE=-
 CMDS=<<EOF
 'td struct bar { int a; int b; };
 'td struct foo { int x; struct bar moo[2]; };
-ts foo
-.ts foo
+ts struct foo
+.ts struct foo
 EOF
 EXPECT=<<EOF
-'pf d[2]? x (bar)moo
+'pf d[2]? x (struct bar)moo
    x : 0x00000000 = 0x00000000
  moo : 
 [
-                struct<bar>
+                struct<struct bar>
    a : 0x00000004 = 0x00000000
    b : 0x00000008 = 0x00000000
 
-                struct<bar>
+                struct<struct bar>
    a : 0x0000000c = 0x00000000
    b : 0x00000010 = 0x00000000
 ]
@@ -815,10 +814,10 @@ FILE=-
 CMDS=<<EOF
 'td enum Foo {COW=1,BAR=2};
 te
-te Foo
+te enum Foo
 EOF
 EXPECT=<<EOF
-Foo
+enum Foo
 COW = 0x1
 BAR = 0x2
 EOF
@@ -828,7 +827,7 @@ NAME=te <enum> <value>
 FILE=-
 CMDS=<<EOF
 'td enum Foo {COW=1,BAR=2};
-te Foo 1
+te enum Foo 1
 EOF
 EXPECT=<<EOF
 COW
@@ -839,7 +838,7 @@ NAME=teb <enum> <name>
 FILE=-
 CMDS=<<EOF
 'td enum Foo {COW=1,BAR=2};
-teb Foo COW
+teb enum Foo COW
 EOF
 EXPECT=<<EOF
 0x1
@@ -856,11 +855,11 @@ tenq 2
 tenj 2
 EOF
 EXPECT=<<EOF
-Alpha.TWO = 0x2
-Beta.UNO = 0x2
-Alpha.TWO
-Beta.UNO
-[{"type":"Alpha","name":"TWO","value":2},{"type":"Beta","name":"UNO","value":2}]
+enum Alpha.TWO = 0x2
+enum Beta.UNO = 0x2
+enum Alpha.TWO
+enum Beta.UNO
+[{"type":"enum Alpha","name":"TWO","value":2},{"type":"enum Beta","name":"UNO","value":2}]
 EOF
 RUN
 
@@ -905,9 +904,9 @@ CMDS=<<EOF
 'td struct foobar{uint32_t a; uint32_t b; uint32_t c; uint32_t d;}
 b 64
 woe 1
-tp foobar
+tp struct foobar
 b 4
-tp foobar
+tp struct foobar
 EOF
 EXPECT=<<EOF
  a : 0x00000000 = 0x03020100
@@ -931,7 +930,7 @@ aei
 aeim
 aecu 0x000006d5
 ?e
-tp Books var_e0h
+tp struct Books var_e0h
 EOF
 EXPECT=<<EOF
 
@@ -945,7 +944,7 @@ NAME=tpx test
 FILE=-
 CMDS=<<EOF
 'td struct foo {char* a; int b;}
-tpx foo 41414141441414141414420010000000
+tpx struct foo 41414141441414141414420010000000
 EOF
 EXPECT=<<EOF
  a : 0x00000000 = "AAAAD\x14\x14\x14\x14\x14B"
@@ -960,15 +959,15 @@ e asm.arch = arm
 e asm.bits = 32
 wx 082090e5040081e5
 'td struct foo {int a; int b; int c;};
-aht foo.c @ 0x00000000
-aht foo.b @ 0x00000004
+aht struct foo.c @ 0x00000000
+aht struct foo.b @ 0x00000004
 ?e
 pd 2
 EOF
 EXPECT=<<EOF
 
-            0x00000000      082090e5       ldr r2, [r0, foo.c]
-            0x00000004      040081e5       str r0, [r1, foo.b]
+            0x00000000      082090e5       ldr r2, [r0, struct foo.c]
+            0x00000004      040081e5       str r0, [r1, struct foo.b]
 EOF
 RUN
 
@@ -978,17 +977,17 @@ CMDS=<<EOF
 e asm.arch=mips
 wx 08007fac040053800800538c
 'td struct foo {int a; int b; int c;};
-aht foo.c @ 0x00000000
-aht foo.c @ 0x00000008
-aht foo.b @ 0x00000004
+aht struct foo.c @ 0x00000000
+aht struct foo.c @ 0x00000008
+aht struct foo.b @ 0x00000004
 ?e
 pd 3
 EOF
 EXPECT=<<EOF
 
-            0x00000000      08007fac       sw ra, foo.c(v1)
-            0x00000004      04005380       lb s3, foo.b(v0)
-            0x00000008      0800538c       lw s3, foo.c(v0)
+            0x00000000      08007fac       sw ra, struct foo.c(v1)
+            0x00000004      04005380       lb s3, struct foo.b(v0)
+            0x00000008      0800538c       lw s3, struct foo.c(v0)
 EOF
 RUN
 
@@ -998,11 +997,11 @@ ARGS=-a arm -b 64
 CMDS=<<EOF
 wx 408440a9
 'td struct foo {int a; int b; int c;};
-aht foo.c
+aht struct foo.c
 pd 1
 EOF
 EXPECT=<<EOF
-            0x00000000      408440a9       ldp x0, x1, [x2, foo.c]
+            0x00000000      408440a9       ldp x0, x1, [x2, struct foo.c]
 EOF
 RUN
 
@@ -1014,18 +1013,18 @@ e asm.bits=32
 'td struct foo {int a; int b ; int c;}
 wx 8b40048951048d500883780800
 ?e
-aht foo.b @ 0x00000000
-aht foo.b @ 0x00000003
-aht foo.c @ 0x00000006
-aht foo.c @ 0x00000009
+aht struct foo.b @ 0x00000000
+aht struct foo.b @ 0x00000003
+aht struct foo.c @ 0x00000006
+aht struct foo.c @ 0x00000009
 pd 4
 EOF
 EXPECT=<<EOF
 
-            0x00000000      8b4004         mov eax, dword [eax + foo.b]
-            0x00000003      895104         mov dword [ecx + foo.b], edx
-            0x00000006      8d5008         lea edx, [eax + foo.c]
-            0x00000009      83780800       cmp dword [eax + foo.c], 0
+            0x00000000      8b4004         mov eax, dword [eax + struct foo.b]
+            0x00000003      895104         mov dword [ecx + struct foo.b], edx
+            0x00000006      8d5008         lea edx, [eax + struct foo.c]
+            0x00000009      83780800       cmp dword [eax + struct foo.c], 0
 EOF
 RUN
 
@@ -1038,16 +1037,16 @@ e asm.comments = false
 'td struct bar {int a ; int b; int c;}
 wx 48C7C058190000488B5004488B4808483B500448BBEFBEADDE00000000488958089090C3
 af
-tl bar = 0x1958
+tl struct bar = 0x1958
 ?e
 pdf~bar.
 EOF
 EXPECT=<<EOF
 
-|           0x00000007      488b5004       mov rdx, qword [rax + bar.b]
-|           0x0000000b      488b4808       mov rcx, qword [rax + bar.c]
-|           0x0000000f      483b5004       cmp rdx, qword [rax + bar.b]
-|           0x0000001d      48895808       mov qword [rax + bar.c], rbx
+|           0x00000007      488b5004       mov rdx, qword [rax + struct bar.b]
+|           0x0000000b      488b4808       mov rcx, qword [rax + struct bar.c]
+|           0x0000000f      483b5004       cmp rdx, qword [rax + struct bar.b]
+|           0x0000001d      48895808       mov qword [rax + struct bar.c], rbx
 EOF
 RUN
 
@@ -1059,7 +1058,7 @@ e asm.bits=64
 e asm.comments = false
 'td struct bar {int a ; int b; int c;}
 wx 48C7C058190000488B5004488B4808483B500448BBEFBEADDE00000000488958089090C3
-tl bar = 0x1958
+tl struct bar = 0x1958
 af
 aat @ fcn.00000000
 ?e
@@ -1067,10 +1066,10 @@ pdf~bar.
 EOF
 EXPECT=<<EOF
 
-|           0x00000007      488b5004       mov rdx, qword [rax + bar.b]
-|           0x0000000b      488b4808       mov rcx, qword [rax + bar.c]
-|           0x0000000f      483b5004       cmp rdx, qword [rax + bar.b]
-|           0x0000001d      48895808       mov qword [rax + bar.c], rbx
+|           0x00000007      488b5004       mov rdx, qword [rax + struct bar.b]
+|           0x0000000b      488b4808       mov rcx, qword [rax + struct bar.c]
+|           0x0000000f      483b5004       cmp rdx, qword [rax + struct bar.b]
+|           0x0000001d      48895808       mov qword [rax + struct bar.c], rbx
 EOF
 RUN
 
@@ -1084,8 +1083,8 @@ e asm.flags = false
 'td struct bar {int x; int y; int z;};
 'td struct foo {int a; int b; int c;};
 wx 48C7C000010000488B5008488B480448C7C000020000488B5008488B48049090C3
-tl bar = 0x200
-tl foo = 0x100
+tl struct bar = 0x200
+tl struct foo = 0x100
 af
 aat
 pdf
@@ -1093,11 +1092,11 @@ EOF
 EXPECT=<<EOF
 / 33: fcn.00000000 ();
 |           0x00000000      48c7c00001..   mov rax, 0x100
-|           0x00000007      488b5008       mov rdx, qword [rax + foo.c]
-|           0x0000000b      488b4804       mov rcx, qword [rax + foo.b]
+|           0x00000007      488b5008       mov rdx, qword [rax + struct foo.c]
+|           0x0000000b      488b4804       mov rcx, qword [rax + struct foo.b]
 |           0x0000000f      48c7c00002..   mov rax, 0x200
-|           0x00000016      488b5008       mov rdx, qword [rax + bar.z]
-|           0x0000001a      488b4804       mov rcx, qword [rax + bar.y]
+|           0x00000016      488b5008       mov rdx, qword [rax + struct bar.z]
+|           0x0000001a      488b4804       mov rcx, qword [rax + struct bar.y]
 |           0x0000001e      90             nop
 |           0x0000001f      90             nop
 \           0x00000020      c3             ret
@@ -1111,20 +1110,20 @@ e asm.var.summary=0
 aa
 s main
 'td struct Books {char  title[50];char  author[50]; char  subject[100];};
-tl Books = 0x00177f18
+tl struct Books = 0x00177f18
 ?e
 pdf~Books
 EOF
 EXPECT=<<EOF
 
-|           ; var struct Books @ rbp-0xe0
-|           0x00000684      488d8520ff..   lea rax, [Books]
-|           0x00000695      488910         mov qword [rax], rdx        ; Books.title
-|           0x00000698      488d8520ff..   lea rax, [Books]
-|           0x000006ad      488908         mov qword [rax], rcx        ; Books.author
-|           0x000006b0      488d8520ff..   lea rax, [Books]
-|           0x000006c5      488930         mov qword [rax], rsi        ; Books.subject
-|           0x000006d5      b800000000     mov eax, 0                  ; Books.subject
+|           ; var struct Books Books @ rbp-0xe0
+|           0x00000684      488d8520ff..   lea rax, [Books.title]
+|           0x00000695      488910         mov qword [rax], rdx        ; struct Books.title
+|           0x00000698      488d8520ff..   lea rax, [Books.title]
+|           0x000006ad      488908         mov qword [rax], rcx        ; struct Books.author
+|           0x000006b0      488d8520ff..   lea rax, [Books.title]
+|           0x000006c5      488930         mov qword [rax], rsi        ; struct Books.subject
+|           0x000006d5      b800000000     mov eax, 0                  ; struct Books.subject
 EOF
 RUN
 
@@ -1135,16 +1134,16 @@ aa
 'td struct Test { int a; int  b; char *c;};
 s main
 ahr 0x00000597 @ 0x00000592
-tl Test = 0x00002020
+tl struct Test = 0x00002020
 s 0x000005a8
 ?e
 pd 3
 EOF
 EXPECT=<<EOF
 
-|           0x000005a8      c70206000000   mov dword [edx], 6          ; Test.a
-|           0x000005ae      8b55f4         mov edx, dword [Test]       ; Test.a
-|           0x000005b1      c742040700..   mov dword [edx + Test.b], 7
+|           0x000005a8      c70206000000   mov dword [edx], 6          ; struct Test.a
+|           0x000005ae      8b55f4         mov edx, dword [Test.a]     ; struct Test.a
+|           0x000005b1      c742040700..   mov dword [edx + struct Test.b], 7
 EOF
 RUN
 
@@ -1154,17 +1153,17 @@ CMDS=<<EOF
 aa
 'td union Books {char  title[50];char  author[50]; char  subject[100];};
 tu
-tu Books
+tu union Books
 s main
-tl Books = 0x00177f88
+tl union Books = 0x00177f88
 afv~Books
 s 0x000006d2
 pd 1
 EOF
 EXPECT=<<EOF
-Books
+union Books
 'pf 0[50]z[50]z[100]z title author subject
-var union Books @ rbp-0x70
+var union Books Books @ rbp-0x70
 |           0x000006d2      488d4590       lea rax, [Books]
 EOF
 RUN
@@ -1175,8 +1174,8 @@ CMDS=<<EOF
 e asm.bits=64
 ws hello @ 0x10
 'td struct foo {int x; int (*fp)(int a , int b ); char *b;};
-ts foo
-.ts foo
+ts struct foo
+.ts struct foo
 EOF
 EXPECT=<<EOF
 'pf d[4].pz x fp b
@@ -1191,7 +1190,7 @@ FILE=-
 CMDS=<<EOF
 'td struct normal {int a;char b;};
 'td struct pointer {char *y;struct normal *obj;};
-ts pointer
+ts struct pointer
 EOF
 EXPECT=<<EOF
 'pf zp y obj
@@ -1202,7 +1201,7 @@ NAME=tsc test
 FILE=-
 CMDS=<<EOF
 'td struct three_elements{int x; char y; float z;}
-tsc three_elements
+tsc struct three_elements
 EOF
 EXPECT=<<EOF
 struct three_elements {
@@ -1217,7 +1216,7 @@ NAME=tsc with array
 FILE=-
 CMDS=<<EOF
 'td struct with_array{int x; char y[50]; float z;}
-tsc with_array
+tsc struct with_array
 EOF
 EXPECT=<<EOF
 struct with_array {
@@ -1240,12 +1239,12 @@ tk struct.G.c=int32_t,24,0
 tsc G
 EOF
 EXPECT=<<EOF
-struct G {
+typedef struct {
   int32_t a;
   char *b;
   uint8_t pad_0x10[8]; // gap
   int32_t c;
-};
+} G;
 EOF
 RUN
 
@@ -1254,7 +1253,7 @@ FILE=-
 ARGS=-a x86 -b 64
 CMDS=<<EOF
 'td struct P {char *p; int c;};
-tk struct.P.c
+tk tags/struct.P.c
 EOF
 EXPECT=<<EOF
 int,8,0
@@ -1266,7 +1265,7 @@ FILE=-
 ARGS=-a x86 -b 32
 CMDS=<<EOF
 'td struct P {char *p; int c;};
-tk struct.P.c
+tk tags/struct.P.c
 EOF
 EXPECT=<<EOF
 int,4,0
@@ -1278,16 +1277,16 @@ FILE=-
 ARGS=-a x86 -b 64
 CMDS=<<EOF
 'td enum Ambassador { AMBASSADOR_PURE=0, AMBASSADOR_MILLION=1000000 }; struct Window { const char *sunlight; }; struct Morning { uint32_t saved_argc; char **saved_argv; }; struct Bright { struct Morning *morning; struct Window window; enum Ambassador ambassador; };
-tk struct.Bright.window
-tk struct.Bright.ambassador
-tk type.Window.size
-tk type.Morning.size
-tk type.Bright.size
-tsc Bright
+tk tags/struct.Bright.window
+tk tags/struct.Bright.ambassador
+tk tags/type.Window.size
+tk tags/type.Morning.size
+tk tags/type.Bright.size
+tsc struct Bright
 'td struct After { char c; struct Bright records[2]; char tail; };
-tk struct.After.records
-tk struct.After.tail
-tk type.After.size
+tk tags/struct.After.records
+tk tags/struct.After.tail
+tk tags/type.After.size
 EOF
 EXPECT=<<EOF
 struct Window,8,0
@@ -1313,11 +1312,11 @@ CMDS=<<EOF
 'td typedef struct Tag { int x; int y; } Alias; typedef union UnionTag { Alias value; int word; } UnionAlias;
 tk Alias
 tk typedef.Alias
-tk Tag
-tk struct.Tag.y
+tk tags/Tag
+tk tags/struct.Tag.y
 tk UnionAlias
 tk typedef.UnionAlias
-tk UnionTag
+tk tags/UnionTag
 tss Alias
 tss UnionAlias
 ttc Alias
@@ -1341,14 +1340,14 @@ FILE=-
 ARGS=-a x86 -b 32
 CMDS=<<EOF
 'td struct Window { const char *sunlight; }; struct Bright { void *morning; struct Window window; int ambassador; };
-tk struct.Bright.window
-tk struct.Bright.ambassador
-tk type.Window.size
-tk type.Bright.size
+tk tags/struct.Bright.window
+tk tags/struct.Bright.ambassador
+tk tags/type.Window.size
+tk tags/type.Bright.size
 'td struct After { char c; struct Bright records[2]; char tail; };
-tk struct.After.records
-tk struct.After.tail
-tk type.After.size
+tk tags/struct.After.records
+tk tags/struct.After.tail
+tk tags/type.After.size
 EOF
 EXPECT=<<EOF
 struct Window,4,0
@@ -1366,9 +1365,9 @@ FILE=malloc://1024
 ARGS=-a x86 -b 64
 CMDS=<<EOF
 'td struct H {int32_t a; uint8_t pad[8]; char *b; int32_t c;};
-tk struct.H.b
-tk struct.H.c
-tsc H
+tk tags/struct.H.b
+tk tags/struct.H.c
+tsc struct H
 EOF
 EXPECT=<<EOF
 char *,16,0
@@ -1392,10 +1391,10 @@ tk union.U.b=int64_t,0,0
 tuc U
 EOF
 EXPECT=<<EOF
-union U {
+typedef union {
   int32_t a;
   int64_t b;
-};
+} U;
 EOF
 RUN
 
@@ -1403,7 +1402,7 @@ NAME=tec test
 FILE=-
 CMDS=<<EOF
 'td enum Foo {COW=1,BAR=2};
-tec Foo
+tec enum Foo
 EOF
 EXPECT=<<EOF
 enum Foo {
@@ -1417,7 +1416,7 @@ NAME=tuc test
 FILE=-
 CMDS=<<EOF
 'td union x{int x; int y; int z;}
-tuc x
+tuc union x
 EOF
 EXPECT=<<EOF
 union x {
@@ -1467,11 +1466,12 @@ NAME=typedef struct
 FILE=-
 CMDS=<<EOF
 to bins/headers/12273.h
-ts A
+ts struct A
 ts B
 ts C  # Broken but shouldn't hang
 ?e ----
-tk~typedef.A=,typedef.B=,typedef.C=,struct.A,struct.B,struct.C
+tk tags/*~struct.A
+tk~typedef.B=,typedef.C=,struct.B,struct.C
 ?e
 ts~A,B,C,D
 EOF
@@ -1491,9 +1491,9 @@ struct.C=ch
 struct.C.ch=char,0,0
 struct.C.ch.meta=0
 
-A
 B
 C
+struct A
 EOF
 RUN
 
@@ -2220,7 +2220,7 @@ RUN
 NAME=types size
 CMDS=<<EOF
 'td struct s1 { int a; int size; int b; };
-tk~struct.s1
+tk tags/*~struct.s1
 EOF
 EXPECT=<<EOF
 struct.s1=a,size,b
@@ -2427,18 +2427,18 @@ CMDS=<<EOF
 tu*~foo
 ts*~foo
 t*~foo
-t foo
-tu* foo
+t union foo
+tu* union foo
 EOF
 EXPECT=<<EOF
-'pf.foo 0dc a b
-'tk foo=union
-'tk type.foo.size=32
-'tk union.foo=a,b
-'tk union.foo.a=int,0,0
-'tk union.foo.b=char,0,0
+'pf."union foo" 0dc a b
+'tk tags/foo=union
+'tk tags/type.foo.size=32
+'tk tags/union.foo=a,b
+'tk tags/union.foo.a=int,0,0
+'tk tags/union.foo.b=char,0,0
 'pf 0dc a b
-'pf.foo 0dc a b
+'pf."union foo" 0dc a b
 EOF
 RUN
 
@@ -2513,11 +2513,11 @@ wx 0xa00f
 wx 0x401f @ 0x4
 wx 0800000000000080 @ 0x8
 'td struct foo {int a; int b; uint64_t c;};
-tl foo @ 0x0
+tl struct foo @ 0x0
 pd 1
 EOF
 EXPECT=<<EOF
-(foo)
+(struct foo)
  a : 0x00000000 = 0x00000fa0
  b : 0x00000004 = 0x00001f40
  c : 0x00000008 = (qword)0x8000000000000008
@@ -2526,16 +2526,27 @@ RUN
 
 NAME=td empty struct
 FILE=-
+ARGS=-a x86 -b 64
 CMDS=<<EOF
-wx 0xa00f
-wx 0x401f @ 0x4
-wx 0800000000000080 @ 0x8
 'td struct foo {};
-tl foo @ 0x0
-pd 1
+'td struct Forward;
+tk tags/foo
+tk tags/Forward
+tss struct foo *
+tss struct Forward *
+ts struct foo
+ts struct Forward
+s 0
 EOF
 EXPECT=<<EOF
-(foo)
+struct
+struct
+8
+8
+EOF
+EXPECT_ERR=<<EOF
+ERROR: Formatting/layout unavailable for type 'struct foo'
+ERROR: Formatting/layout unavailable for type 'struct Forward'
 EOF
 RUN
 
@@ -2597,17 +2608,17 @@ e asm.bits=64
 ahts 4 ~foo
 ?e =
 wx c7400400000000
-aht foo.bar
+aht struct foo.bar
 pd 1
 EOF
 EXPECT=<<EOF
-foo.bar
-foo2.bar
-foo3.bar
-foo4.bar
-foo5.bar
+struct foo.bar
+struct foo2.bar
+struct foo3.bar
+struct foo4.bar
+struct foo5.bar
 =
-            0x00000000      c740040000..   mov dword [rax + foo.bar], 0
+            0x00000000      c740040000..   mov dword [rax + struct foo.bar], 0
 EOF
 RUN
 
@@ -2619,7 +2630,7 @@ CMDS=<<EOF
 ahts 8 ~spam
 EOF
 EXPECT=<<EOF
-spam._foo.cow
+struct spam._foo.cow
 EOF
 RUN
 
@@ -2631,7 +2642,7 @@ CMDS=<<EOF
 ahts 4 ~ahtunion.
 EOF
 EXPECT=<<EOF
-ahtunion.pair.b
+union ahtunion.pair.b
 EOF
 RUN
 
@@ -2976,7 +2987,7 @@ NAME=visibility hidden metadata parsing
 FILE=--
 CMDS=<<CMDS
 to bins/other/visibility_test.h
-tk ~PadStr
+tk tags/*~PadStr
 CMDS
 EXPECT=<<EXPECT
 PadStr=struct
@@ -2992,7 +3003,7 @@ NAME=visibility hidden pf format
 FILE=malloc://32
 CMDS=<<CMDS
 to bins/other/visibility_test.h
-ts PadStr
+ts struct PadStr
 CMDS
 EXPECT=<<EXPECT
 'pf [6].[11]z str1
@@ -3003,7 +3014,7 @@ NAME=visibility hidden tsc output
 FILE=--
 CMDS=<<CMDS
 to bins/other/visibility_test.h
-tsc PadStr
+tsc struct PadStr
 CMDS
 EXPECT=<<EXPECT
 struct PadStr {
@@ -3018,7 +3029,7 @@ FILE=malloc://32
 CMDS=<<CMDS
 to bins/other/visibility_test.h
 w hello world sucks
-.ts PadStr
+.ts struct PadStr
 CMDS
 EXPECT=<<EXPECT
  str1 : 0x00000006 = "world sucks"
@@ -3029,7 +3040,7 @@ NAME=@pack(1) attribute removes padding
 FILE=--
 CMDS=<<CMDS
 to bins/other/packed_test.h
-tk ~struct.packed
+tk tags/*~struct.packed
 CMDS
 EXPECT=<<EXPECT
 struct.packed=a,b,c
@@ -3044,7 +3055,7 @@ NAME=struct without pack has natural alignment
 FILE=--
 CMDS=<<CMDS
 to bins/other/packed_test.h
-tk ~struct.normal
+tk tags/*~struct.normal
 CMDS
 EXPECT=<<EXPECT
 struct.normal=a,b,c
@@ -3058,7 +3069,7 @@ NAME=packed struct pf format (no padding)
 FILE=--
 CMDS=<<CMDS
 to bins/other/packed_test.h
-ts packed
+ts struct packed
 CMDS
 EXPECT=<<EXPECT
 'pf cdc a b c
@@ -3069,7 +3080,7 @@ NAME=normal struct pf format (with padding)
 FILE=--
 CMDS=<<CMDS
 to bins/other/packed_test.h
-ts normal
+ts struct normal
 CMDS
 EXPECT=<<EXPECT
 'pf c[3].dc a b c
@@ -3080,7 +3091,7 @@ NAME=__attribute__((packed)) syntax
 FILE=--
 CMDS=<<CMDS
 'td struct foo __attribute__((packed)) { char a; int b; };
-tk ~struct.foo
+tk tags/*~struct.foo
 CMDS
 EXPECT=<<EXPECT
 struct.foo=a,b
@@ -3094,7 +3105,7 @@ NAME=@aligned attribute on field
 FILE=--
 CMDS=<<CMDS
 'td struct bar { char gap; int val __attribute__((__aligned__(8))); };
-tk ~struct.bar
+tk tags/*~struct.bar
 CMDS
 EXPECT=<<EXPECT
 struct.bar=gap,val
@@ -3109,7 +3120,7 @@ FILE=malloc://32
 CMDS=<<CMDS
 to bins/other/packed_test.h
 wx 4112345678ff
-tp packed
+tp struct packed
 CMDS
 EXPECT=<<EXPECT
  a : 0x00000000 = 'A'
@@ -3123,7 +3134,7 @@ FILE=malloc://32
 CMDS=<<CMDS
 to bins/other/packed_test.h
 wx 41000000123456784200000000000000
-tp normal
+tp struct normal
 CMDS
 EXPECT=<<EXPECT
  a : 0x00000000 = 'A'
@@ -3144,7 +3155,7 @@ CMDS=<<CMDS
 'td #if #"stale"
 'td int a[*1];
 'td struct ok { char a; int b; }
-tk ~struct.ok=
+tk tags/*~struct.ok=
 CMDS
 EXPECT=<<EXPECT
 struct.ok=a,b
@@ -3167,7 +3178,7 @@ NAME=tsv struct with offsets
 FILE=--
 CMDS=<<EOF
 'td struct foo {int a;int b;}
-tsv foo
+tsv struct foo
 EOF
 EXPECT=<<EOF
 0x00000000 struct foo {
@@ -3181,7 +3192,7 @@ NAME=tuv union with offsets
 FILE=--
 CMDS=<<EOF
 'td union bar {int a;short b;}
-tuv bar
+tuv union bar
 EOF
 EXPECT=<<EOF
 0x00000000 union bar {
@@ -3195,7 +3206,7 @@ NAME=tv struct view
 FILE=--
 CMDS=<<EOF
 'td struct point {int x;int y;}
-tv point
+tv struct point
 EOF
 EXPECT=<<EOF
 0x00000000 struct point {
@@ -3209,7 +3220,7 @@ NAME=tv union view
 FILE=--
 CMDS=<<EOF
 'td union value {int i;float f;}
-tv value
+tv union value
 EOF
 EXPECT=<<EOF
 0x00000000 union value {
@@ -3223,7 +3234,7 @@ NAME=tv enum view
 FILE=--
 CMDS=<<EOF
 'td enum status {ok=0,err=1}
-tv status
+tv enum status
 EOF
 EXPECT=<<EOF
 0x00000000 enum status {
@@ -3357,14 +3368,14 @@ FILE=-
 CMDS=<<EOF
 'td struct KS {int a; char buf[16];}
 'td union KU {char buf[8]; int x;}
-tk KS
-tk struct.KS
-tk struct.KS.buf
-tk KU
-tk union.KU
-tk union.KU.buf
-tsc KS
-tuc KU
+tk tags/KS
+tk tags/struct.KS
+tk tags/struct.KS.buf
+tk tags/KU
+tk tags/union.KU
+tk tags/union.KU.buf
+tsc struct KS
+tuc union KU
 EOF
 EXPECT=<<EOF
 struct
@@ -3388,13 +3399,13 @@ NAME=td array dimensions in hex
 FILE=malloc://32
 CMDS=<<EOF
 "td struct Hex { char pad[0x8]; int x; char tail[0x10]; };"
-tk struct.Hex.x
-tk struct.Hex.tail
+tk tags/struct.Hex.x
+tk tags/struct.Hex.tail
 "td typedef struct Tg { char b[0x10]; } TgT;"
-tk struct.Tg.b
+tk tags/struct.Tg.b
 "td typedef union Ug { char c[0x18]; int v; } UgT;"
-tk union.Ug.c
-tsc Hex
+tk tags/union.Ug.c
+tsc struct Hex
 EOF
 EXPECT=<<EOF
 int,8,0
@@ -3414,11 +3425,11 @@ FILE=-
 ARGS=-a x86 -b 16
 CMDS=<<EOF
 'td struct LiteralBounds {char decimal[8];char octal[010];char hex[0x8];char precedence[1|2+3];char tail;};
-tk struct.LiteralBounds.octal
-tk struct.LiteralBounds.hex
-tk struct.LiteralBounds.precedence
-tk struct.LiteralBounds.tail
-tss LiteralBounds
+tk tags/struct.LiteralBounds.octal
+tk tags/struct.LiteralBounds.hex
+tk tags/struct.LiteralBounds.precedence
+tk tags/struct.LiteralBounds.tail
+tss struct LiteralBounds
 EOF
 EXPECT=<<EOF
 char,8,8
@@ -3434,12 +3445,12 @@ FILE=-
 ARGS=-a x86 -b 16
 CMDS=<<EOF
 'td typedef int near *Near[010];typedef int far *Far[0x8];struct TargetBound {char items[0xffff+2];char nested[2][1|2+3];Near nearptrs;Far farptrs;char tail;};
-tk struct.TargetBound.items
-tk struct.TargetBound.nested
-tk struct.TargetBound.nearptrs
-tk struct.TargetBound.farptrs
-tk struct.TargetBound.tail
-tss TargetBound
+tk tags/struct.TargetBound.items
+tk tags/struct.TargetBound.nested
+tk tags/struct.TargetBound.nearptrs
+tk tags/struct.TargetBound.farptrs
+tk tags/struct.TargetBound.tail
+tss struct TargetBound
 EOF
 EXPECT=<<EOF
 char,0,1
@@ -3461,10 +3472,10 @@ tsc tpl
 tsv tpl
 EOF
 EXPECT=<<EOF
-struct tpl {
+typedef struct {
   uint8_t pad_0x0[8]; // gap
   pair<int, char> p;
-};
+} tpl;
 0x00000000 struct tpl {
 0x00000008   pair<int, char> p;
 0x00000008 };
@@ -3482,10 +3493,10 @@ tuc utpl
 tuv utpl
 EOF
 EXPECT=<<EOF
-union utpl {
+typedef union {
   pair<int, char> p[4];
   int32_t q;
-};
+} utpl;
 0x00000000 union utpl {
 0x00000000   pair<int, char> p[4];
 0x00000000   int32_t q;
@@ -3981,7 +3992,7 @@ af+ 0x100 wideenum
 afb+ 0x100 0x100 1
 af @ 0
 "td enum wide { W_A = 1 };"
-tk type.wide.size=128
+tk tags/type.wide.size=128
 td int wideenum(double a, enum wide e, long c);
 tk func.wideenum.cc=amd64
 aaft
@@ -4337,10 +4348,10 @@ af @ 0
 afn c @ 0
 afvt arg1 "struct S *" @ 0
 td int cb(int v);
-tk S=struct
-tk struct.S=x,fp
-tk struct.S.x=int,0,0
-tk struct.S.fp=cb,8,0
+tk tags/S=struct
+tk tags/struct.S=x,fp
+tk tags/struct.S.x=int,0,0
+tk tags/struct.S.fp=cb,8,0
 td void c(double a, struct S *p);
 aei
 aeim
@@ -4369,10 +4380,10 @@ wa ret @ 11
 af @ 0
 afn c @ 0
 td int cb(int v);
-tk S=struct
-tk struct.S=x,fp
-tk struct.S.x=int,0,0
-tk struct.S.fp=cb,8,0
+tk tags/S=struct
+tk tags/struct.S=x,fp
+tk tags/struct.S.x=int,0,0
+tk tags/struct.S.fp=cb,8,0
 td void c(double a, struct S *p);
 aei
 aeim
@@ -4402,10 +4413,10 @@ af @ 0
 afn c @ 0
 afvt arg1 "struct S *" @ 0
 td int cb(int v);
-tk S=struct
-tk struct.S=x,fp
-tk struct.S.x=int,0,0
-tk struct.S.fp=cb,8,0
+tk tags/S=struct
+tk tags/struct.S=x,fp
+tk tags/struct.S.x=int,0,0
+tk tags/struct.S.fp=cb,8,0
 td void c(long a, struct S *p);
 aei
 aeim
@@ -5519,7 +5530,7 @@ CMDS=<<EOF
 tk~^func.A2
 tss func.A2.m
 tss func.A2.m *
-tss A2
+tss struct A2
 EOF
 EXPECT=<<EOF
 func.A2.m.args=0
@@ -5656,9 +5667,9 @@ NAME=DWARF struct member needing sdb sanitization survives the save round-trip
 FILE=bins/elf/dwarf2_many_comp_units.elf
 ARGS=-e bin.dbginfo=true
 CMDS=<<EOF
-tk struct.Bird
-tk struct.Bird._vptr_Bird
-tsc Bird
+tk tags/struct.Bird
+tk tags/struct.Bird._vptr_Bird
+tsc struct Bird
 EOF
 EXPECT=<<EOF
 _vptr_Bird
@@ -5716,8 +5727,8 @@ k anal/types/type.ULONGLONG.size
 k anal/types/u_long
 k anal/types/type.u_long
 k anal/types/type.u_long.size
-tss l_timeval
-tsj l_timeval
+tss struct l_timeval
+tsj struct l_timeval
 EOF
 EXPECT=<<EOF
 type
@@ -5733,7 +5744,7 @@ type
 d
 32
 8
-{"name":"l_timeval","format":"dd tv_sec tv_usec","fields":[{"name":"tv_sec","type":"LONG","offset":0,"size":4},{"name":"tv_usec","type":"LONG","offset":4,"size":4}]}
+{"name":"struct l_timeval","format":"dd tv_sec tv_usec","fields":[{"name":"tv_sec","type":"LONG","offset":0,"size":4},{"name":"tv_usec","type":"LONG","offset":4,"size":4}]}
 EOF
 RUN
 
@@ -6042,8 +6053,9 @@ tk func.stat.ret=int
 tk func.stat.args=2
 tk func.stat.arg.0=const char *,path
 tk func.stat.arg.1=void *,buf
-tk stat=struct
-tk struct.stat=st_dev,st_ino
+tk stat=func
+tk tags/stat=struct
+tk tags/struct.stat=st_dev,st_ino
 af+ 0 sym.imp.stat
 afb+ 0 0 10
 afsq @ 0
@@ -6058,7 +6070,7 @@ FILE=bins/elf/dwarf2_many_comp_units.elf
 ARGS=-e bin.dbginfo=true
 CMDS=<<EOF_CMDS
 tk type.int
-ts Bird
+ts struct Bird
 EOF_CMDS
 EXPECT=<<EOF_EXPECT
 d
@@ -6172,12 +6184,12 @@ FILE=--
 ARGS=-b 64
 CMDS=<<EOF
 'td struct rea_vfs_prefix { int iVersion; int szOsFile; int mxPathname; void *pNext; const char *zName; void *pAppData; };
-tsj rea_vfs_prefix
-tss rea_vfs_prefix
-tsv rea_vfs_prefix
+tsj struct rea_vfs_prefix
+tss struct rea_vfs_prefix
+tsv struct rea_vfs_prefix
 EOF
 EXPECT=<<EOF
-{"name":"rea_vfs_prefix","format":"ddd[4].pzp iVersion szOsFile mxPathname pNext zName pAppData","fields":[{"name":"iVersion","type":"int","offset":0,"size":4},{"name":"szOsFile","type":"int","offset":4,"size":4},{"name":"mxPathname","type":"int","offset":8,"size":4},{"name":"pNext","type":"void *","offset":16,"size":8},{"name":"zName","type":"const char *","offset":24,"size":8},{"name":"pAppData","type":"void *","offset":32,"size":8}]}
+{"name":"struct rea_vfs_prefix","format":"ddd[4].pzp iVersion szOsFile mxPathname pNext zName pAppData","fields":[{"name":"iVersion","type":"int","offset":0,"size":4},{"name":"szOsFile","type":"int","offset":4,"size":4},{"name":"mxPathname","type":"int","offset":8,"size":4},{"name":"pNext","type":"void *","offset":16,"size":8},{"name":"zName","type":"const char *","offset":24,"size":8},{"name":"pAppData","type":"void *","offset":32,"size":8}]}
 40
 0x00000000 struct rea_vfs_prefix {
 0x00000000   int iVersion;
@@ -6195,11 +6207,11 @@ FILE=--
 ARGS=-b 64
 CMDS=<<EOF
 'td struct rea_layout { char tag; int values[3]; long long end; };
-tsj rea_layout
-tss rea_layout
+tsj struct rea_layout
+tss struct rea_layout
 EOF
 EXPECT=<<EOF
-{"name":"rea_layout","format":"c[3].[3]dq tag values end","fields":[{"name":"tag","type":"char","offset":0,"size":1},{"name":"values","type":"int","offset":4,"size":12,"array_size":3},{"name":"end","type":"long long","offset":16,"size":8}]}
+{"name":"struct rea_layout","format":"c[3].[3]dq tag values end","fields":[{"name":"tag","type":"char","offset":0,"size":1},{"name":"values","type":"int","offset":4,"size":12,"array_size":3},{"name":"end","type":"long long","offset":16,"size":8}]}
 24
 EOF
 RUN
@@ -6234,7 +6246,7 @@ e types.plugin=tcc
 'td #include "/x_overflow.h"
 'td #include "/missing.h"
 'td struct foo { int x; };
-ts foo
+ts struct foo
 ?e done
 EOF
 EXPECT=<<EOF
@@ -6248,26 +6260,26 @@ FILE=-
 ARGS=-b 64
 CMDS=<<EOF_CMDS
 'td struct HeaderOpaque;union HeaderChoice;struct HeaderOpaque;union HeaderChoice;
-tk HeaderOpaque
-tk HeaderChoice
+tk tags/HeaderOpaque
+tk tags/HeaderChoice
 'td typedef struct HeaderOpaque HeaderOpaque;typedef union HeaderChoice HeaderChoice;typedef struct OtherTag Alias;
 tk HeaderOpaque
 tk HeaderChoice
-tk OtherTag
+tk tags/OtherTag
 tk Alias
 tk typedef.Alias
 'td struct HeaderOpaque {int value;};union HeaderChoice {int value;};struct HeaderOpaque;union HeaderChoice;
 'td struct HeaderOpaque;union HeaderChoice;
-tk struct.HeaderOpaque
-tk union.HeaderChoice
+tk tags/struct.HeaderOpaque
+tk tags/union.HeaderChoice
 tss struct HeaderOpaque
 tss union HeaderChoice
 EOF_CMDS
 EXPECT=<<EOF_EXPECT
 struct
 union
-struct
-union
+typedef
+typedef
 struct
 typedef
 struct OtherTag
@@ -6287,8 +6299,8 @@ tk grouped
 tk func.grouped.ret
 tk func.grouped.arg.0
 tk typedef.Number
-tk struct.Grouped.object
-tk struct.Grouped.callback
+tk tags/struct.Grouped.object
+tk tags/struct.Grouped.callback
 EOF_CMDS
 EXPECT=<<EOF_EXPECT
 func
@@ -6464,10 +6476,10 @@ CMDS=<<EOF_CMDS
 tk Alias
 tk typedef.Alias
 tk typedef.AliasPointer
-tk type.Ordinary.size
-tk type.OpaquePointers.size
+tk tags/type.Ordinary.size
+tk tags/type.OpaquePointers.size
 'td struct Consumer {struct Alias value;};
-tk Consumer
+tk tags/Consumer
 tk Alias
 EOF_CMDS
 EXPECT=<<EOF_EXPECT
@@ -6481,4 +6493,105 @@ EOF_EXPECT
 EXPECT_ERR=<<EOF_EXPECT_ERR
 ERROR: at line 1: Cannot measure member type: struct Alias
 EOF_EXPECT_ERR
+RUN
+
+NAME=ordinary typedef dotted function and C tag retain independent host identities
+FILE=malloc://32
+ARGS=-a x86 -b 64
+CMDS=<<EOF_CMDS
+'td typedef uint16_t Alias;struct Alias {uint64_t member;};int tag.Alias(void);
+tk Alias
+tk tag.Alias
+tk tags/Alias
+tss Alias
+tss struct Alias
+tsj struct Alias
+t*~tags/
+t- struct Alias
+tk Alias
+tk tags/Alias
+EOF_CMDS
+EXPECT=<<EOF_EXPECT
+typedef
+func
+struct
+2
+8
+{"name":"struct Alias","format":"q member","fields":[{"name":"member","type":"uint64_t","offset":0,"size":8}]}
+'tk tags/Alias=struct
+'tk tags/struct.Alias=member
+'tk tags/struct.Alias.member=uint64_t,0,0
+'tk tags/type.Alias.size=64
+typedef
+EOF_EXPECT
+RUN
+
+NAME=nested pf and idd preserve C tag identity beside an ordinary typedef
+FILE=malloc://32
+ARGS=-a x86 -b 64
+CMDS=<<EOF_CMDS
+'td typedef uint16_t Alias;struct Alias {uint64_t tagged;};struct Envelope {struct Alias nested;Alias ordinary;};
+wx 01000000000000000200000000000000
+pfj ?w (struct Alias)nested ordinary
+iddd struct Envelope
+EOF_CMDS
+EXPECT=<<EOF_EXPECT
+[{"name":"nested","type":"struct Alias","offset":0,"value":[{"name":"tagged","type":"q","offset":0,"value":1}]},{"name":"ordinary","type":"w","offset":8,"value":2}]
+struct Envelope {
+  struct Alias nested;
+  Alias ordinary;
+};
+EOF_EXPECT
+RUN
+
+NAME=named pf preserves canonical tag names through export replay and deletion
+FILE=malloc://32
+ARGS=-a x86 -b 64
+CMDS=<<EOF_CMDS
+'td typedef uint16_t Alias;struct Alias {uint64_t value;};
+.ts* struct Alias
+pf.
+pfs."struct Alias"
+pfj."struct Alias"
+pf."struct Alias".value
+.pf.
+pfs."struct Alias"
+pf.-"struct Alias"
+pf.
+EOF_CMDS
+EXPECT=<<EOF_EXPECT
+'pf."struct Alias" q value
+8
+[{"name":"value","type":"q","offset":0,"value":0}]
+ value : 0x00000000 = (qword)0x0000000000000000
+8
+EOF_EXPECT
+RUN
+
+NAME=deleting or replacing a type preserves an independent dotted function signature
+FILE=--
+CMDS=<<EOF_CMDS
+'td int Parent(void);int Parent.Child(void);
+tk Parent.Child
+tk func.Parent.Child.ret
+t- Parent
+tk Parent.Child
+tk func.Parent.Child.ret
+tfc Parent.Child
+'td int Parent(int obsolete);
+'td char Parent(void);
+tk func.Parent.arg.0
+tfc Parent.Child
+'td int link.Child(void);
+t- link.Child
+tk func.link.Child.ret
+EOF_CMDS
+EXPECT=<<EOF_EXPECT
+func
+int
+func
+int
+int Parent.Child(void);
+int Parent.Child(void);
+EOF_EXPECT
 RUN
