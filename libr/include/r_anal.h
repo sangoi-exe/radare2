@@ -1243,6 +1243,13 @@ R_API void r_anal_del_jmprefs(RAnal *anal, RAnalFunction *fcn);
 R_API RAnalFunction *r_anal_function_next(RAnal *anal, ut64 addr);
 // Parse one named function signature, defaulting an omitted result to void; free with r_type_decl_free.
 R_API R_OWNED RTypeDecl *r_anal_function_signature_parse(const char * R_NONNULL signature, char ** R_NULLABLE error);
+typedef struct r_anal_function_signature_prepared_t RAnalFunctionSignaturePrepared;
+// Synchronously admit one normalized declaration through the selected parser before Core renames it.
+R_API R_OWNED RAnalFunctionSignaturePrepared *r_anal_function_signature_prepare(RAnal *anal, const char *signature, char **error);
+R_API const char *r_anal_function_signature_prepared_name(const RAnalFunctionSignaturePrepared *prepared);
+// Apply the admitted result to the function's effective binding without parsing C again.
+R_API bool r_anal_function_signature_apply(RAnal *anal, RAnalFunction *fcn, const RAnalFunctionSignaturePrepared *prepared);
+R_API void r_anal_function_signature_prepared_free(RAnalFunctionSignaturePrepared *prepared);
 R_API RAnalFunctionSignature *r_anal_function_get_signature(RAnalFunction *function);
 R_API void r_anal_function_signature_free(RAnalFunctionSignature *signature);
 R_API char *r_anal_function_get_signature_string(RAnalFunction *function);

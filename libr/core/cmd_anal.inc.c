@@ -4421,8 +4421,10 @@ static void rename_fcnsig(RAnalFunction *fcn, const char *oname, const char *nna
 	free (type_name);
 	if (declared) {
 		char *linked = r_type_link_at (DB, fcn->addr);
+		const char *dwarf = sdb_const_getf (DB, NULL, "fcnlink.%08" PFMT64x, fcn->addr);
+		bool dwarf_bound = dwarf && r_type_kind (DB, dwarf) == R_TYPE_FUNCTION;
 		char *source = r_type_func_key (DB, oname);
-		if (!linked && source) {
+		if (!linked && !dwarf_bound && source) {
 			r_type_set_link (DB, source, fcn->addr);
 		}
 		free (source);
@@ -4441,6 +4443,17 @@ static void rename_fcnsig(RAnalFunction *fcn, const char *oname, const char *nna
 	const char *type = sdb_const_get (DB, oname, 0);
 	if (type && !strcmp (type, "func")) {
 		sdb_rename (DB, oname, nname, 0);
+		SdbList *links = sdb_foreach_list (DB, true);
+		SdbListIter *iter;
+		SdbKv *link;
+		ls_foreach (links, iter, link) {
+			const char *key = sdbkv_key (link);
+			if ((r_str_startswith (key, "link.") || r_str_startswith (key, "fcnlink."))
+					&& !strcmp (sdbkv_value (link), oname)) {
+				sdb_set (DB, key, nname, 0);
+			}
+		}
+		ls_free (links);
 	}
 	sdb_rename (DB, prototype_old, prototype_new, 0);
 	free (prototype_old);
@@ -4489,16 +4502,20 @@ static bool __setFunctionName(RCore *core, ut64 addr, const char *_name, bool pr
 	R_RETURN_VAL_IF_FAIL (core && _name, false);
 	bool ret = false;
 	char *name = getFunctionName (core, addr, r_str_trim_head_ro (_name), prefix);
-	char *fname = r_name_filter_dup (name);
+	char *fname = name? r_name_filter_dup (name): NULL;
 	RAnalFunction *fcn = r_anal_get_function_at (core->anal, addr);
-	if (fcn) {
+	RAnalFunction *existing = name? r_anal_get_function_byname (core->anal, name): NULL;
+	if (fcn && name && fname && (!existing || existing == fcn)) {
 		char *oname = strdup (fcn->name);
-		RFlagItem *flag = r_flag_get (core->flags, fcn->name);
+		if (!oname) {
+			free (name);
+			free (fname);
+			return false;
+		}
+		RFlagItem *flag = r_flag_get (core->flags, oname);
 		if (flag && flag->space && strcmp (flag->space->name, R_FLAGS_FS_FUNCTIONS) == 0) {
 			// Only flags in the functions fs should be renamed, e.g. we don't want to rename symbol flags.
-			if (fname) {
-				r_flag_rename (core->flags, flag, fname);
-			}
+			r_flag_rename (core->flags, flag, fname);
 		} else {
 			// No flag or not specific to the function, create a new one.
 			r_flag_space_push (core->flags, R_FLAGS_FS_FUNCTIONS);
@@ -4506,12 +4523,11 @@ static bool __setFunctionName(RCore *core, ut64 addr, const char *_name, bool pr
 			r_flag_space_pop (core->flags);
 		}
 		rename_fcnsig (fcn, oname, name);
-		r_anal_function_rename (fcn, name);
-		if (core->anal->cb.on_fcn_rename) {
+		ret = r_anal_function_rename (fcn, name);
+		if (ret && core->anal->cb.on_fcn_rename) {
 			core->anal->cb.on_fcn_rename (core->anal, core->anal->user, fcn, name);
 		}
 		free (oname);
-		ret = true;
 	}
 	free (name);
 	free (fname);
@@ -6848,17 +6864,21 @@ static int cmd_af(RCore *core, const char *input) {
 				const char *arg = r_str_trim_head_ro (input + 2);
 				if (R_STR_ISNOTEMPTY (arg)) {
 					char *error = NULL;
-					RTypeDecl *decl = r_anal_function_signature_parse (arg, &error);
-					if (decl) {
-						if (strcmp (f->name, decl->name)) {
-							(void)__setFunctionName (core, addr, decl->name, false);
-							f = r_anal_get_fcn_in (core->anal, addr, -1);
+					RAnalFunctionSignaturePrepared *prepared = r_anal_function_signature_prepare (core->anal, arg, &error);
+					bool ok = false;
+					if (prepared) {
+						const char *name = r_anal_function_signature_prepared_name (prepared);
+						if (!strcmp (f->name, name) || __setFunctionName (core, f->addr, name, false)) {
+							ok = r_anal_function_signature_apply (core->anal, f, prepared);
 						}
-						r_anal_str_to_fcn (core->anal, f, arg);
-					} else if (error) {
+					}
+					if (error) {
 						R_LOG_ERROR ("%s", error);
 					}
-					r_type_decl_free (decl);
+					if (!ok) {
+						r_core_return_code (core, R_CMD_RC_FAILURE);
+					}
+					r_anal_function_signature_prepared_free (prepared);
 					free (error);
 					break;
 				}

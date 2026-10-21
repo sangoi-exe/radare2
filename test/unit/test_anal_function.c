@@ -809,6 +809,211 @@ bool test_r_core_afs_preserves_compound_return_name_and_flags(void) {
 	mu_end;
 }
 
+static int signature_parser_calls;
+static bool signature_parser_saw_original;
+static RAnalFunction *signature_parser_function;
+
+static char *signature_parser_refuse(RAnal *anal, const char *text) {
+	signature_parser_calls++;
+	signature_parser_saw_original = !strcmp (signature_parser_function->name, "keep")
+		&& !strcmp (r_type_func_ret (anal->sdb_types, "keep"), "int");
+	return NULL;
+}
+
+static char *signature_parser_admit(RAnal *anal, const char *text) {
+	signature_parser_calls++;
+	signature_parser_saw_original = !strcmp (signature_parser_function->name, "keep");
+	char *parser = anal->opt.tparser;
+	anal->opt.tparser = NULL;
+	char *result = r_anal_cparse (anal, text, NULL);
+	anal->opt.tparser = parser;
+	return result;
+}
+
+bool test_r_core_afs_selected_parser_refuses_before_mutation(void) {
+	RCore *core = r_core_new ();
+	RAnalFunction *fcn = r_anal_create_function (core->anal, "keep", 0, R_ANAL_FCN_TYPE_FCN, NULL);
+	RAnalBlock *block = r_anal_create_block (core->anal, 0, 1);
+	r_anal_function_add_block (fcn, block);
+	r_unref (block);
+	mu_assert_true (r_anal_str_to_fcn (core->anal, fcn, "int keep(int value);"), "seed the admitted contract");
+	RFlagItem *flag = r_flag_set_inspace (core->flags, R_FLAGS_FS_FUNCTIONS, "keep", 0, 1);
+	RAnalPlugin parser = { .meta = { .name = "signature_refusal" }, .tparse_text = signature_parser_refuse };
+	r_anal_plugin_add (core->anal, &parser);
+	r_config_set (core->config, "types.plugin", parser.meta.name);
+	signature_parser_calls = 0;
+	signature_parser_function = fcn;
+	ut64 function_epoch = r_anal_function_dirty_epoch (fcn);
+	ut64 types_epoch = r_anal_types_dirty_epoch (core->anal);
+	r_core_cmd0 (core, "afs char denied(void)");
+	bool identity_unchanged = !strcmp (fcn->name, "keep") && r_flag_get (core->flags, "keep") == flag
+		&& !r_flag_get (core->flags, "denied");
+	const char *ret = r_type_func_ret (core->anal->sdb_types, "keep");
+	bool contract_unchanged = ret && !strcmp (ret, "int")
+		&& !sdb_const_get (core->anal->sdb_types, "denied", NULL);
+	bool epochs_unchanged = r_anal_function_dirty_epoch (fcn) == function_epoch
+		&& r_anal_types_dirty_epoch (core->anal) == types_epoch;
+	r_core_free (core);
+	mu_assert_eq (signature_parser_calls, 1, "the selected parser admits exactly once");
+	mu_assert_true (signature_parser_saw_original, "local rejecting callback runs before identity mutation");
+	mu_assert_true (identity_unchanged, "selected-parser rejection preserves function and flag identity");
+	mu_assert_true (contract_unchanged, "selected-parser rejection preserves the contract");
+	mu_assert_true (epochs_unchanged, "selected-parser rejection leaves both epochs unchanged");
+	mu_end;
+}
+
+bool test_r_core_afs_reuses_selected_parser_admission(void) {
+	RCore *core = r_core_new ();
+	RAnalFunction *fcn = r_anal_create_function (core->anal, "keep", 0, R_ANAL_FCN_TYPE_FCN, NULL);
+	RAnalBlock *block = r_anal_create_block (core->anal, 0, 1);
+	r_anal_function_add_block (fcn, block);
+	r_unref (block);
+	RAnalPlugin parser = { .meta = { .name = "signature_admission" }, .tparse_text = signature_parser_admit };
+	r_anal_plugin_add (core->anal, &parser);
+	r_config_set (core->config, "types.plugin", parser.meta.name);
+	signature_parser_calls = 0;
+	signature_parser_function = fcn;
+	r_core_cmd0 (core, "afs admitted.name();;");
+	RAnalFunctionSignature *signature = r_anal_function_get_signature (fcn);
+	bool accepted = signature && !strcmp (fcn->name, "admitted.name") && !strcmp (signature->ret_type, "void")
+		&& signature->prototype == R_TYPE_FUNC_PROTOTYPE_UNSPECIFIED
+		&& !sdb_const_get (core->anal->sdb_types, "link.00000000", NULL);
+	r_anal_function_signature_free (signature);
+	r_core_free (core);
+	mu_assert_eq (signature_parser_calls, 1, "the selected parser's admitted result is not reparsed after rename");
+	mu_assert_true (signature_parser_saw_original, "local admitting callback observes the original function identity");
+	mu_assert_true (accepted, "normalization preserves dotted omitted-return syntax and specificity");
+	mu_end;
+}
+
+bool test_r_core_afs_name_collision_preserves_state(void) {
+	RCore *core = r_core_new ();
+	RAnalFunction *fcn = r_anal_create_function (core->anal, "keep", 0, R_ANAL_FCN_TYPE_FCN, NULL);
+	RAnalFunction *other = r_anal_create_function (core->anal, "taken", 16, R_ANAL_FCN_TYPE_FCN, NULL);
+	RAnalBlock *block = r_anal_create_block (core->anal, 0, 1);
+	r_anal_function_add_block (fcn, block);
+	r_unref (block);
+	mu_assert_true (r_anal_import_c_decls (core->anal, "int keep(int value);long taken(char saved);", NULL), "seed both contracts");
+	RFlagItem *flag = r_flag_set_inspace (core->flags, R_FLAGS_FS_FUNCTIONS, "keep", 0, 1);
+	RFlagItem *other_flag = r_flag_set_inspace (core->flags, R_FLAGS_FS_FUNCTIONS, "taken", 16, 1);
+	ut64 function_epoch = r_anal_function_dirty_epoch (fcn);
+	ut64 types_epoch = r_anal_types_dirty_epoch (core->anal);
+	r_core_cmd0 (core, "afs char taken(void)");
+	bool identity_unchanged = !strcmp (fcn->name, "keep") && !strcmp (other->name, "taken")
+		&& r_flag_get (core->flags, "keep") == flag && r_flag_get (core->flags, "taken") == other_flag;
+	const char *ret = r_type_func_ret (core->anal->sdb_types, "keep");
+	bool contract_unchanged = ret && !strcmp (ret, "int")
+		&& !strcmp (r_type_func_ret (core->anal->sdb_types, "taken"), "long");
+	bool epochs_unchanged = r_anal_function_dirty_epoch (fcn) == function_epoch
+		&& r_anal_types_dirty_epoch (core->anal) == types_epoch;
+	r_core_free (core);
+	mu_assert_true (identity_unchanged, "duplicate function name preserves both function-owned flags");
+	mu_assert_true (contract_unchanged, "duplicate function name preserves both prototypes");
+	mu_assert_true (epochs_unchanged, "ordinary name collision leaves metadata epochs unchanged");
+	mu_end;
+}
+
+bool test_r_core_afs_updates_effective_binding(void) {
+	const struct {
+		const char *link;
+		const char *source;
+		const char *effective;
+		const char *input;
+		RTypeFunctionPrototype prototype;
+		bool destination;
+	} cases[] = {
+		{ NULL, NULL, "original", "afs char target(void)", R_TYPE_FUNC_PROTOTYPE_FIXED, true },
+		{ "link.00000000", "linked", "linked", "afs char target()", R_TYPE_FUNC_PROTOTYPE_UNSPECIFIED, false },
+		{ "link.00000000", "original", "target", "afs char target(void)", R_TYPE_FUNC_PROTOTYPE_FIXED, false },
+		{ "fcnlink.00000000", "original", "target", "afs char target()", R_TYPE_FUNC_PROTOTYPE_UNSPECIFIED, false },
+		{ "fcnlink.00000000", "linked", "linked", "afs char target(void)", R_TYPE_FUNC_PROTOTYPE_FIXED, false },
+		{ "fcnlink.00000000", "linked", "linked", "afs char target(void)", R_TYPE_FUNC_PROTOTYPE_FIXED, true }
+	};
+	size_t i;
+	for (i = 0; i < R_ARRAY_SIZE (cases); i++) {
+		RCore *core = r_core_new ();
+		RAnalFunction *fcn = r_anal_create_function (core->anal, "original", 0, R_ANAL_FCN_TYPE_FCN, NULL);
+		RAnalBlock *block = r_anal_create_block (core->anal, 0, 8);
+		r_anal_function_add_block (fcn, block);
+		r_unref (block);
+		mu_assert_true (r_anal_import_c_decls (core->anal, "int original(int old);short linked(char saved);", NULL), "seed the source and linked contracts");
+		if (cases[i].destination) {
+			mu_assert_true (r_anal_import_c_decls (core->anal, "long target(void);", NULL), "seed an occupied destination prototype");
+		}
+		if (cases[i].link) {
+			sdb_set (core->anal->sdb_types, cases[i].link, cases[i].source, 0);
+		}
+		RFlagItem *flag = r_flag_set_inspace (core->flags, R_FLAGS_FS_FUNCTIONS, "original", 0, 8);
+		RFlagItem *symbol = r_flag_set_inspace (core->flags, R_FLAGS_FS_SYMBOLS, "sym.original", 0, 8);
+		r_core_seek (core, 4, true);
+		r_core_cmd0 (core, cases[i].input);
+		RAnalFunctionSignature *signature = r_anal_function_get_signature (fcn);
+		bool identity_updated = !strcmp (fcn->name, "target") && r_flag_get (core->flags, "target") == flag
+			&& r_flag_get (core->flags, "sym.original") == symbol;
+		bool contract_updated = signature && signature->ret_type && !strcmp (signature->ret_type, "char") && r_list_empty (signature->params)
+			&& signature->prototype == cases[i].prototype;
+		const char *value = sdb_const_getf (core->anal->sdb_types, NULL, "func.%s.ret", cases[i].effective);
+		bool effective_updated = value && !strcmp (value, "char");
+		const char *link = cases[i].link? sdb_const_get (core->anal->sdb_types, cases[i].link, NULL): NULL;
+		bool links_preserved = !cases[i].link || (link && !strcmp (link, cases[i].effective));
+		const char *destination = r_type_func_ret (core->anal->sdb_types, "target");
+		bool destination_preserved = !cases[i].destination || (destination && !strcmp (destination, "long"));
+		bool dwarf_priority_preserved = !cases[i].destination || !cases[i].link
+			|| !sdb_const_get (core->anal->sdb_types, "link.00000000", NULL);
+		r_anal_function_signature_free (signature);
+		r_core_free (core);
+		mu_assert_true (identity_updated, "afs at a contained address renames the owning function and flag, not its symbol");
+		mu_assert_true (contract_updated, "afs applies the admitted result to the selected effective contract");
+		mu_assert_true (effective_updated, "the effective owner receives the supplied signature");
+		mu_assert_true (links_preserved, "explicit address and DWARF links remain live when their prototype moves");
+		mu_assert_true (destination_preserved, "an occupied destination keeps its unrelated contract");
+		mu_assert_true (dwarf_priority_preserved, "occupied destination rename does not override an explicit DWARF association");
+	}
+	mu_end;
+}
+
+bool test_r_core_afs_overrides_import_for_only_the_current_function(void) {
+	RCore *core = r_core_new ();
+	RAnalFunction *fcn = r_anal_create_function (core->anal, "original", 0, R_ANAL_FCN_TYPE_FCN, NULL);
+	RAnalBlock *block = r_anal_create_block (core->anal, 0, 1);
+	r_anal_function_add_block (fcn, block);
+	r_unref (block);
+	mu_assert_true (r_anal_import_c_decls (core->anal, "long library(char saved);", NULL), "seed a shared library signature");
+	RFlagItem *import = r_flag_set_inspace (core->flags, R_FLAGS_FS_IMPORTS, "sym.imp.library", 0, 1);
+	r_core_cmd0 (core, "afs int edited(void)");
+	RAnalFunctionSignature *signature = r_anal_function_get_signature (fcn);
+	mu_assert_notnull (signature, "the current function has its edited contract");
+	mu_assert_streq (fcn->name, "edited", "the explicit declaration supplies the function name");
+	mu_assert_streq (signature->ret_type, "int", "the import flag does not shadow the supplied contract");
+	mu_assert_eq (signature->prototype, R_TYPE_FUNC_PROTOTYPE_FIXED, "the admitted fixed-empty contract is retained");
+	mu_assert_streq (sdb_const_get (core->anal->sdb_types, "link.00000000", NULL), "edited", "existing address association selects the function-owned declaration");
+	mu_assert_streq (r_type_func_ret (core->anal->sdb_types, "library"), "long", "the shared library return remains unchanged");
+	mu_assert_streq (sdb_const_get (core->anal->sdb_types, "func.library.arg.0", NULL), "char,saved", "the shared library parameters remain unchanged");
+	mu_assert_ptreq (r_flag_get (core->flags, "sym.imp.library"), import, "the independent import flag remains unchanged");
+	r_anal_function_signature_free (signature);
+	r_core_free (core);
+	mu_end;
+}
+
+bool test_r_core_afn_migrates_explicit_prototype_links(void) {
+	RCore *core = r_core_new ();
+	RAnalFunction *fcn = r_anal_create_function (core->anal, "original", 0, R_ANAL_FCN_TYPE_FCN, NULL);
+	mu_assert_true (r_anal_import_c_decls (core->anal, "int original();", NULL), "seed a renameable prototype");
+	sdb_set (core->anal->sdb_types, "link.00000000", "original", 0);
+	sdb_set (core->anal->sdb_types, "fcnlink.00000020", "original", 0);
+	r_core_cmd0 (core, "afn migrated");
+	mu_assert_streq (fcn->name, "migrated", "ordinary afn retains its rename behavior");
+	mu_assert_streq (sdb_const_get (core->anal->sdb_types, "link.00000000", NULL), "migrated", "ordinary rename retains the explicit address association");
+	mu_assert_streq (sdb_const_get (core->anal->sdb_types, "fcnlink.00000020", NULL), "migrated", "other explicit references to the moved prototype do not dangle");
+	mu_assert_null (sdb_const_get (core->anal->sdb_types, "original", NULL), "the original owner is actually moved");
+	RAnalFunctionSignature *signature = r_anal_function_get_signature (fcn);
+	mu_assert_notnull (signature, "the moved prototype remains readable");
+	mu_assert_eq (signature->prototype, R_TYPE_FUNC_PROTOTYPE_UNSPECIFIED, "ordinary rename retains parameter-list knowledge");
+	r_anal_function_signature_free (signature);
+	r_core_free (core);
+	mu_end;
+}
+
 bool test_r_anal_function_get_signature_string_resolves_import_flag_prototype(void) {
 	RCore *core = r_core_new ();
 	mu_assert_notnull (core, "Couldn't create new RCore");
@@ -1350,6 +1555,12 @@ int all_tests(void) {
 	mu_run_test (test_r_core_afs_rejects_grouped_object_without_mutation);
 	mu_run_test (test_r_anal_str_to_fcn_does_not_retry_rejected_header);
 	mu_run_test (test_r_core_afs_preserves_compound_return_name_and_flags);
+	mu_run_test (test_r_core_afs_selected_parser_refuses_before_mutation);
+	mu_run_test (test_r_core_afs_reuses_selected_parser_admission);
+	mu_run_test (test_r_core_afs_name_collision_preserves_state);
+	mu_run_test (test_r_core_afs_updates_effective_binding);
+	mu_run_test (test_r_core_afs_overrides_import_for_only_the_current_function);
+	mu_run_test (test_r_core_afn_migrates_explicit_prototype_links);
 	mu_run_test (test_r_anal_function_get_signature_string_resolves_import_flag_prototype);
 	mu_run_test (test_r_anal_function_get_signature_uses_basename_for_dbg_prefixed_function);
 	mu_run_test (test_r_anal_function_get_signature_string_falls_back_to_vars);

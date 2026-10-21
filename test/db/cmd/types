@@ -6386,3 +6386,49 @@ int Legacy ();
 {"name":"Legacy","noreturn":false,"ret":"int","prototype":"unknown","callconv":"amd64","argc":0,"args":[]}
 EOF_EXPECT
 RUN
+
+NAME=afs applies the admitted contract to an occupied destination binding from inside the function
+FILE=malloc://64
+ARGS=-a x86 -b 64
+CMDS=<<EOF_CMDS
+wx b800000000c3
+af
+afn original
+'afs int original(int old)
+'td long target(void);
+s 1
+'afs char target(void)
+afn
+afs
+tfc target
+tk link.00000000
+EOF_CMDS
+EXPECT=<<EOF_EXPECT
+target
+char target (void);
+long target(void);
+original
+EOF_EXPECT
+RUN
+
+NAME=afs rejects an existing function name without replacing either contract
+FILE=malloc://64
+ARGS=-a x86 -b 64
+CMDS=<<EOF_CMDS
+wx c3
+af
+afn keep
+af+ 16 taken
+'td long taken(char saved);
+'afs int keep(int old)
+'afs char taken(void)
+afn
+afs
+tfc taken
+EOF_CMDS
+EXPECT=<<EOF_EXPECT
+keep
+int keep (int old);
+long taken(char saved);
+EOF_EXPECT
+RUN

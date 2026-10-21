@@ -3450,37 +3450,123 @@ R_API R_OWNED RTypeDecl *r_anal_function_signature_parse(const char *sig, char *
 	return decl;
 }
 
-/* set function signature from string */
-R_API int r_anal_str_to_fcn(RAnal *a, RAnalFunction *f, const char *sig) {
-	R_RETURN_VAL_IF_FAIL (a && f && sig, false);
-	int ret = false;
-	char *error_msg = NULL;
-	RTypeDecl *decl = r_anal_function_signature_parse (sig, NULL);
+struct r_anal_function_signature_prepared_t {
+	char *name;
+	Sdb *types;
+};
+
+R_API void r_anal_function_signature_prepared_free(RAnalFunctionSignaturePrepared *prepared) {
+	if (prepared) {
+		free (prepared->name);
+		sdb_free (prepared->types);
+		free (prepared);
+	}
+}
+
+R_API const char *r_anal_function_signature_prepared_name(const RAnalFunctionSignaturePrepared *prepared) {
+	R_RETURN_VAL_IF_FAIL (prepared, NULL);
+	return prepared->name;
+}
+
+R_API RAnalFunctionSignaturePrepared *r_anal_function_signature_prepare(RAnal *anal, const char *sig, char **error) {
+	R_RETURN_VAL_IF_FAIL (anal && sig, NULL);
+	RTypeDecl *decl = r_anal_function_signature_parse (sig, error);
 	char *text = decl? r_type_decl_render (decl, true): NULL;
 	char *normalized = text? r_str_newf ("%s;", text): NULL;
 	free (text);
-	char *out = NULL;
-	if (normalized) {
-		out = r_anal_cparse (a, normalized, &error_msg);
+	char *out = normalized? r_anal_cparse (anal, normalized, error): NULL;
+	free (normalized);
+	RAnalFunctionSignaturePrepared *prepared = NULL;
+	if (out) {
+		Sdb *types = sdb_new0 ();
+		RTypeFunctionPrototype prototype;
+		int argc;
+		if (types && sdb_query_lines (types, out)
+				&& r_type_kind (types, decl->name) == R_TYPE_FUNCTION
+				&& r_type_func_args_count (types, decl->name, &argc)
+				&& r_type_func_get_prototype (types, decl->name, &prototype)) {
+			prepared = R_NEW0 (RAnalFunctionSignaturePrepared);
+			prepared->name = decl->name;
+			decl->name = NULL;
+			prepared->types = types;
+		} else {
+			sdb_free (types);
+		}
+	}
+	if (!prepared && error && !*error) {
+		*error = strdup ("Selected type parser did not admit the named function signature");
 	}
 	r_type_decl_free (decl);
-	free (normalized);
-	if (out) {
-		r_anal_save_parsed_type (a, out);
-		RAnalFunctionSignature *signature = r_anal_function_get_signature (f);
+	free (out);
+	return prepared;
+}
+
+R_API bool r_anal_function_signature_apply(RAnal *anal, RAnalFunction *fcn, const RAnalFunctionSignaturePrepared *prepared) {
+	R_RETURN_VAL_IF_FAIL (anal && fcn && prepared, false);
+	char *type_name = function_signature_address_type_name (anal->sdb_types, fcn->addr);
+	if (!type_name) {
+		type_name = strdup (prepared->name);
+	}
+	char *prefix = r_str_newf ("func.%s", prepared->name);
+	if (!type_name || !prefix) {
+		free (type_name);
+		free (prefix);
+		return false;
+	}
+	RStrBuf output;
+	r_strbuf_init (&output);
+	SdbList *records = sdb_foreach_list (prepared->types, true);
+	SdbListIter *iter;
+	SdbKv *record;
+	size_t prefix_len = strlen (prefix);
+	bool ok = records != NULL;
+	ls_foreach (records, iter, record) {
+		const char *key = sdbkv_key (record);
+		const char *value = sdbkv_value (record);
+		if (!strcmp (key, prepared->name)) {
+			ok = r_strbuf_appendf (&output, "%s=%s\n", type_name, value);
+		} else if (!strncmp (key, prefix, prefix_len) && (!key[prefix_len] || key[prefix_len] == '.')) {
+			ok = r_strbuf_appendf (&output, "func.%s%s=%s\n", type_name, key + prefix_len, value);
+		} else {
+			ok = r_strbuf_appendf (&output, "%s=%s\n", key, value);
+		}
+		if (!ok) {
+			break;
+		}
+	}
+	ls_free (records);
+	free (prefix);
+	if (ok) {
+		r_anal_save_parsed_type (anal, r_strbuf_get (&output));
+		char *effective = function_signature_type_name (anal, fcn);
+		if (!effective || strcmp (effective, type_name)) {
+			ok = r_type_set_link (anal->sdb_types, type_name, fcn->addr);
+		}
+		free (effective);
+		RAnalFunctionSignature *signature = ok? r_anal_function_get_signature (fcn): NULL;
+		ok = signature != NULL;
 		if (signature) {
-			function_signature_sync (f, signature);
+			function_signature_sync (fcn, signature);
 			r_anal_function_signature_free (signature);
 		}
-		free (out);
-		ret = true;
 	}
-	if (error_msg) {
-		R_LOG_ERROR ("%s", error_msg);
-		free (error_msg);
-	}
+	r_strbuf_fini (&output);
+	free (type_name);
+	return ok;
+}
 
-	return ret;
+/* set function signature from string */
+R_API int r_anal_str_to_fcn(RAnal *a, RAnalFunction *f, const char *sig) {
+	R_RETURN_VAL_IF_FAIL (a && f && sig, false);
+	char *error = NULL;
+	RAnalFunctionSignaturePrepared *prepared = r_anal_function_signature_prepare (a, sig, &error);
+	bool ok = prepared && r_anal_function_signature_apply (a, f, prepared);
+	r_anal_function_signature_prepared_free (prepared);
+	if (error) {
+		R_LOG_ERROR ("%s", error);
+	}
+	free (error);
+	return ok;
 }
 
 R_API RAnalFunction *r_anal_function_next(RAnal *anal, ut64 addr) {
