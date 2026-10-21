@@ -2,6 +2,8 @@
 
 ## 2026-10-20
 
+- Implemented and committed target-sized Win16 declarations, explicit near/far layers, native prototype serialization and contextual compound-return printing. Matching private checks pass the declared host305/bridge73/native40 frontiers and35 actual MCP responses. The final broad crossed Code Gate returned `DO_NOT_PROCEED` with seven findings: ABI-lowered callback writeback, invalid long-double array formatting, repeated parser database copying, ordinary near/far identifier rejection, pointer-spelling type loss and two build/test follower gaps. The candidate is preserved pending current-user remediation decisions; no final acceptance, global installation or push is claimed. The task log records exact proof limits and review artifact-placement deviations.
+
 - Completed native OMF external/group/FIXUPP provenance, explicit NE statuses, exact-image TASM3.1 CF/ZF contracts, the matching native-engine pin, a read-only MCP query and existing agent startup guidance. After the first Gate rejected five source defects, the user-selected canonical corrections pass failing-before/passing-after regressions, combined host units, the newly linked full MCP suite and actual native observations. Final `Remediation delta review` returned `PROCEED`, closing F1–F4/P2. Three actual Claude quota failures were narrowly dispensed under the resident procedure; no Claude semantic approval is claimed. Incorrect affected mappings are corrected without compatibility/migration. Private build exclusions and remaining proof/deferred-observation limits are recorded; no installation or publication occurred.
 
 ## 2026-10-18

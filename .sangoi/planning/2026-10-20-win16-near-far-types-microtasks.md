@@ -2,7 +2,7 @@
 
 Authority: [the canonical Intent Contract](2026-10-20-win16-near-far-types.md). This annex tracks execution only. It does not own Scope, architecture, acceptance, lifecycle or current-user decisions.
 
-Currentness: implementation and matching-component validation are complete. Host runtime2d8c835, native3f46b7c and bridge7bb2af5 are committed. B1 passes73/73; root's final native MCP observation passes35 responses, including compound-return graph and token annotations. The fixed-candidate local Code Gate remains pending. This statement records execution evidence, not an independent lifecycle authority.
+Currentness: the initial implementation entries and bounded qualification are complete and committed, but the final cumulative Code Gate returned `DO_NOT_PROCEED` with H1–H4/F1–F3. Host runtime2d8c835, native3f46b7c and bridge7bb2af5 remain preserved. Their successful checks retain their stated coverage; they are not final acceptance. No remediation entry is dispatched until the user selects the correction directions. The Intent Contract owns the on-hold state and decisions; the task log records the review evidence.
 
 ## H1 — shared host declaration boundary
 
