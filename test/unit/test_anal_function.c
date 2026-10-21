@@ -1148,6 +1148,67 @@ bool test_r_core_signature_isolation_avoids_other_name_matches(void) {
 	mu_end;
 }
 
+bool test_r_core_signature_isolation_preserves_dormant_peer_bindings(void) {
+	const char *bindings[] = { "link", "fcnlink" };
+	size_t i;
+	for (i = 0; i < R_ARRAY_SIZE (bindings); i++) {
+		RCore *core = r_core_new ();
+		r_config_set (core->config, "asm.arch", "x86");
+		r_config_set_i (core->config, "asm.bits", 64);
+		mu_assert_notnull (r_core_file_open (core, "malloc://64", R_PERM_RW, 0), "open the actual function bytes");
+		mu_assert_true (r_core_bin_load (core, NULL, UT64_MAX), "map the raw function buffer through Core loading");
+		r_core_cmd0 (core, "wx c3 @ 0;wx c3 @ 0x10;af+ 0 original;af+ 0x10 peer;td int future(void)");
+		ut8 ret;
+		mu_assert_true (r_io_read_at (core->io, 0, &ret, 1), "read the addressed function's actual body");
+		mu_assert_eq (ret, 0xc3, "the addressed function contains a real return instruction");
+		mu_assert_true (r_io_read_at (core->io, 0x10, &ret, 1), "read the peer function's actual body");
+		mu_assert_eq (ret, 0xc3, "the peer function contains a real return instruction");
+		RAnalFunction *original = r_anal_get_function_at (core->anal, 0);
+		RAnalFunction *peer = r_anal_get_function_at (core->anal, 0x10);
+		mu_assert_notnull (original, "create the addressed function");
+		mu_assert_notnull (peer, "create the peer function");
+		RAnalBlock *block = r_anal_create_block (core->anal, original->addr, 1);
+		r_anal_function_add_block (original, block);
+		r_unref (block);
+		block = r_anal_create_block (core->anal, peer->addr, 1);
+		r_anal_function_add_block (peer, block);
+		r_unref (block);
+		char *binding = r_str_newf ("%s.%08" PFMT64x, bindings[i], peer->addr);
+		char *command = r_str_newf ("tk %s=future", binding);
+		r_core_cmd0 (core, command);
+		free (command);
+		r_core_cmd0 (core, "t- future");
+		mu_assert_null (sdb_const_get (core->anal->sdb_types, "future", NULL), "normal deletion removes the fixed-empty producer's type owner");
+		mu_assert_null (sdb_const_get (core->anal->sdb_types, "func.future", NULL), "no typed-argument name row masks the dormant-binding witness");
+		mu_assert_streq (sdb_const_get (core->anal->sdb_types, binding, NULL), "future", "normal deletion retains the demonstrated dormant binding");
+		RAnalFunctionSignature *before = r_anal_function_get_signature (peer);
+		mu_assert_notnull (before, "read the peer after deleting its target type");
+		mu_assert_streq (before->signature, "void peer ();", "the dormant peer has no known return or formal-list declaration");
+		mu_assert_eq (before->prototype, R_TYPE_FUNC_PROTOTYPE_UNKNOWN, "the dormant peer has unknown source specificity");
+		ut64 peer_epoch = r_anal_function_dirty_epoch (peer);
+		r_core_seek (core, original->addr, false);
+		r_core_cmd0 (core, "afs char future(void)");
+		RAnalFunctionSignature *after = r_anal_function_get_signature (peer);
+		RAnalFunctionSignature *edited = r_anal_function_get_signature (original);
+		bool peer_unchanged = after && !strcmp (before->signature, after->signature)
+			&& after->prototype == R_TYPE_FUNC_PROTOTYPE_UNKNOWN && r_list_empty (after->params)
+			&& r_anal_function_dirty_epoch (peer) == peer_epoch;
+		bool edit_applied = edited && edited->ret_type && !strcmp (edited->ret_type, "char")
+			&& edited->prototype == R_TYPE_FUNC_PROTOTYPE_FIXED && r_list_empty (edited->params);
+		const char *retained = sdb_const_get (core->anal->sdb_types, binding, NULL);
+		bool binding_unchanged = retained && !strcmp (retained, "future");
+		free (binding);
+		r_anal_function_signature_free (before);
+		r_anal_function_signature_free (after);
+		r_anal_function_signature_free (edited);
+		r_core_free (core);
+		mu_assert_true (peer_unchanged, "creating an isolated signature cannot activate another function's dormant link or fcnlink");
+		mu_assert_true (binding_unchanged, "the peer's dormant binding is not deleted or rewritten");
+		mu_assert_true (edit_applied, "the addressed fixed-empty declaration still applies successfully");
+	}
+	mu_end;
+}
+
 bool test_r_core_afs_overrides_import_for_only_the_current_function(void) {
 	RCore *core = r_core_new ();
 	RAnalFunction *fcn = r_anal_create_function (core->anal, "original", 0, R_ANAL_FCN_TYPE_FCN, NULL);
@@ -1739,6 +1800,7 @@ int all_tests(void) {
 	mu_run_test (test_r_core_afs_name_collision_preserves_state);
 	mu_run_test (test_r_core_afs_updates_effective_binding);
 	mu_run_test (test_r_core_signature_isolation_avoids_other_name_matches);
+	mu_run_test (test_r_core_signature_isolation_preserves_dormant_peer_bindings);
 	mu_run_test (test_r_core_afs_overrides_import_for_only_the_current_function);
 	mu_run_test (test_r_core_afn_migrates_explicit_prototype_links);
 	mu_run_test (test_r_anal_function_get_signature_string_resolves_import_flag_prototype);

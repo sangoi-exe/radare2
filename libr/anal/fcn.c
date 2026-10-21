@@ -3580,6 +3580,12 @@ static char *function_signature_unused_type_name(RAnal *anal, RAnalFunction *fcn
 				if (other == fcn) {
 					continue;
 				}
+				const char *linked = sdb_const_getf (anal->sdb_types, NULL, "link.%08" PFMT64x, other->addr);
+				const char *dwarf = sdb_const_getf (anal->sdb_types, NULL, "fcnlink.%08" PFMT64x, other->addr);
+				if ((linked && !strcmp (linked, candidate)) || (dwarf && !strcmp (dwarf, candidate))) {
+					occupied = true;
+					break;
+				}
 				RAnalFunctionSignatureOrigin origin;
 				char *resolved = function_signature_type_name_origin (anal, other, probe, &origin);
 				occupied = resolved && !strcmp (resolved, candidate);
