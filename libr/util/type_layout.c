@@ -131,8 +131,20 @@ static bool type_layout_node(Sdb *db, const RTypeDeclNode *node, RTypeLayout *la
 		return false;
 	}
 	const char *name = node->base.name;
-	if (r_str_startswith (name, "struct ") || r_str_startswith (name, "union ") || r_str_startswith (name, "enum ")) {
+	const char *tag_kind = NULL;
+	if (r_str_startswith (name, "struct ")) {
+		tag_kind = "struct";
+	} else if (r_str_startswith (name, "union ")) {
+		tag_kind = "union";
+	} else if (r_str_startswith (name, "enum ")) {
+		tag_kind = "enum";
+	}
+	if (tag_kind) {
 		name = strchr (name, ' ') + 1;
+	}
+	const char *kind = sdb_const_get (db, name, NULL);
+	if (tag_kind && (!kind || strcmp (kind, tag_kind))) {
+		return false;
 	}
 	int i;
 	for (i = 0; i < depth; i++) {
@@ -144,7 +156,6 @@ static bool type_layout_node(Sdb *db, const RTypeDeclNode *node, RTypeLayout *la
 		}
 	}
 	chain[depth] = name;
-	const char *kind = sdb_const_get (db, name, NULL);
 	const char *primitive = kind? NULL: type_signed_primitive (name);
 	if (primitive) {
 		// Signedness does not change the primitive width; exact database entries win.

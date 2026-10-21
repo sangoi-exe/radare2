@@ -1061,7 +1061,74 @@ static bool test_anal_cparse_forward_typedef(void) {
 	mu_assert_eq (r_anal_type_bitsize (anal, "Choice"), 32, "same-name union typedef does not clobber a complete definition");
 	mu_assert_true (r_anal_import_c_decls (anal, "struct Inline;typedef struct Inline Inline;struct Inline {int value;};typedef struct Inline Inline;", &error), "same-input forwards and same-name typedefs preserve completion");
 	mu_assert_eq (r_anal_type_bitsize (anal, "Inline"), 32, "same-input coalescing retains completed extent");
+	mu_assert_false (r_anal_import_c_decls (anal, "union Opaque;", &error), "a different aggregate kind still conflicts with an actual struct tag");
+	mu_assert_notnull (error, "a real tag conflict reports a diagnostic");
+	mu_assert_notnull (strstr (error, "Conflicting aggregate tag"), "only the actual tag namespace establishes this conflict");
+	free (error);
+	mu_assert_streq (sdb_const_get (anal->sdb_types, "Opaque", NULL), "struct", "rejected tag-kind changes preserve the completed owner");
 	r_anal_free (anal);
+	mu_end;
+}
+
+static bool test_anal_cparse_distinct_tag_and_typedef_names(void) {
+	RAnal *anal = r_anal_new ();
+	anal->config->bits = 16;
+	r_anal_types_reload (anal, R2_PREFIX, "windows", "x86");
+	char *error = NULL;
+	bool imported = r_anal_import_c_decls (anal,
+		"struct Window {const char *sunlight;};struct Bright {int member;};"
+		"typedef struct Bright BrightTypedefd;typedef struct BrightTypedefd *BrightTypedefdPtr;"
+		"typedef struct BrightTypedefd near *BrightNear;"
+		"union Box {int member;};typedef union Box UnionAlias;typedef union UnionAlias far *UnionFar;"
+		"struct Pointers {BrightTypedefdPtr first;BrightNear second;UnionFar third;};"
+		"struct Ordinary {BrightTypedefd first;UnionAlias second;};"
+		"struct BrightTypedefd;union UnionAlias;", &error);
+	if (imported) {
+		mu_assert_null (error, "ordinary typedef names are not evidence of a conflicting tag");
+		mu_assert_streq (sdb_const_get (anal->sdb_types, "Window", NULL), "struct", "later tag declarations retain earlier owners");
+		mu_assert_streq (sdb_const_get (anal->sdb_types, "BrightTypedefd", NULL), "typedef", "the ordinary typedef is not replaced with a tag owner");
+		mu_assert_streq (sdb_const_get (anal->sdb_types, "typedef.BrightTypedefd", NULL), "struct Bright", "the ordinary alias retains its actual aggregate");
+		mu_assert_streq (sdb_const_get (anal->sdb_types, "typedef.BrightTypedefdPtr", NULL), "struct BrightTypedefd *", "the distinct incomplete tag retains its explicit spelling");
+		mu_assert_streq (sdb_const_get (anal->sdb_types, "UnionAlias", NULL), "typedef", "a union tag does not replace an unrelated ordinary alias");
+		mu_assert_streq (sdb_const_get (anal->sdb_types, "typedef.UnionFar", NULL), "union UnionAlias far *", "a far pointer retains the distinct union tag");
+		mu_assert_eq (r_anal_type_bitsize (anal, "Window"), 16, "earlier pointer-containing layouts survive admission");
+		mu_assert_eq (r_anal_type_bitsize (anal, "Pointers"), 64, "ordinary, near and far pointers do not need incomplete pointee layouts");
+		mu_assert_eq (r_anal_type_bitsize (anal, "Ordinary"), 32, "ordinary struct and union aliases remain usable by value");
+	}
+	free (error);
+	r_anal_free (anal);
+	mu_assert_true (imported, "the header admits a typedef and a distinct incomplete tag with the same spelling");
+	mu_end;
+}
+
+static bool test_anal_cparse_tagged_member_does_not_resolve_typedef(void) {
+	RAnal *anal = r_anal_new ();
+	anal->config->bits = 64;
+	r_anal_types_reload (anal, R2_PREFIX, NULL, NULL);
+	mu_assert_true (r_anal_import_c_decls (anal,
+		"struct Bright {int member;};typedef struct Bright Alias;"
+		"union Box {int member;};typedef union Box UnionAlias;"
+		"struct Ordinary {Alias value;};struct Pointer {struct Alias *value;};", NULL), "seed ordinary aliases and an opaque tagged pointer");
+	mu_assert_eq (r_anal_type_bitsize (anal, "Ordinary"), 32, "ordinary Alias still names the completed struct");
+	mu_assert_eq (r_anal_type_bitsize (anal, "Pointer"), 64, "an opaque tagged pointer still has target representation");
+	RTypeLayout layout;
+	bool struct_layout = r_type_get_layout (anal->sdb_types, "struct Alias", &layout);
+	bool union_layout = r_type_get_layout (anal->sdb_types, "union UnionAlias", &layout);
+	const char *headers[] = { "struct Consumer {struct Alias value;};", "union Consumer {union UnionAlias value;};" };
+	bool refused = true;
+	size_t i;
+	for (i = 0; i < R_ARRAY_SIZE (headers); i++) {
+		char *error = NULL;
+		bool imported = r_anal_import_c_decls (anal, headers[i], &error);
+		refused = refused && !imported && error && strstr (error, "Cannot measure member type");
+		free (error);
+	}
+	bool no_consumer = !sdb_const_get (anal->sdb_types, "Consumer", NULL);
+	r_anal_free (anal);
+	mu_assert_false (struct_layout, "struct Alias cannot use the unrelated ordinary typedef's layout");
+	mu_assert_false (union_layout, "union UnionAlias cannot use the unrelated ordinary typedef's layout");
+	mu_assert_true (refused, "incomplete tagged by-value members refuse with a layout diagnostic");
+	mu_assert_true (no_consumer, "rejected member layouts do not install a fabricated containing aggregate");
 	mu_end;
 }
 
@@ -1489,6 +1556,8 @@ int all_tests(void) {
 	mu_run_test (test_anal_cparse_forward_identity);
 	mu_run_test (test_anal_cparse_forward_completion);
 	mu_run_test (test_anal_cparse_forward_typedef);
+	mu_run_test (test_anal_cparse_distinct_tag_and_typedef_names);
+	mu_run_test (test_anal_cparse_tagged_member_does_not_resolve_typedef);
 	mu_run_test (test_anal_cparse_incomplete_member);
 	mu_run_test (test_anal_get_base_type_union);
 	mu_run_test (test_anal_save_base_type_union);

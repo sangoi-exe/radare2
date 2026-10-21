@@ -6432,3 +6432,30 @@ int keep (int old);
 long taken(char saved);
 EOF_EXPECT
 RUN
+
+NAME=distinct tagged pointers preserve ordinary typedefs but cannot borrow their by-value layout
+FILE=-
+ARGS=-a x86 -b 64
+CMDS=<<EOF_CMDS
+'td struct Bright {int member;};typedef struct Bright Alias;typedef struct Alias *AliasPointer;struct Ordinary {Alias value;};struct OpaquePointers {AliasPointer value;};
+tk Alias
+tk typedef.Alias
+tk typedef.AliasPointer
+tk type.Ordinary.size
+tk type.OpaquePointers.size
+'td struct Consumer {struct Alias value;};
+tk Consumer
+tk Alias
+EOF_CMDS
+EXPECT=<<EOF_EXPECT
+typedef
+struct Bright
+struct Alias *
+32
+64
+typedef
+EOF_EXPECT
+EXPECT_ERR=<<EOF_EXPECT_ERR
+ERROR: at line 1: Cannot measure member type: struct Alias
+EOF_EXPECT_ERR
+RUN

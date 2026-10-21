@@ -505,7 +505,8 @@ static bool kvc_forward_declaration(KVCParser *kvc, const char *kind, const char
 	kvc_sync_types (kvc);
 	const char *existing = sdb_const_get (kvc->types, name, NULL);
 	if (existing) {
-		if (strcmp (existing, kind)) {
+		bool existing_is_tag = !strcmp (existing, "struct") || !strcmp (existing, "union") || !strcmp (existing, "enum");
+		if (existing_is_tag && strcmp (existing, kind)) {
 			kvc_error (kvc, "Conflicting aggregate tag");
 			return false;
 		}
