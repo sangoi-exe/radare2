@@ -3053,6 +3053,7 @@ static int fcn_print_json(RCore *core, RAnalFunction *fcn, bool dorefs, PJ *pj) 
 		RAnalFunctionSignature *sig = r_anal_function_get_signature (fcn);
 		if (sig) {
 			pj_ks (pj, "signature", sig->signature);
+			pj_ks (pj, "prototype", r_type_func_prototype_name (sig->prototype));
 			nargs = r_list_length (sig->params);
 		}
 		r_anal_function_signature_free (sig);

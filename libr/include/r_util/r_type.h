@@ -132,6 +132,18 @@ R_API char *r_type_format(Sdb *TDB, const char *t);
 R_API bool r_type_is_signed(Sdb * R_NONNULL TDB, const char * R_NONNULL type);
 R_API R_OWNED char *r_type_resolve_typedef(Sdb * R_NONNULL TDB, const char * R_NONNULL type);
 
+typedef enum {
+	R_TYPE_FUNC_PROTOTYPE_UNKNOWN,
+	R_TYPE_FUNC_PROTOTYPE_UNSPECIFIED,
+	R_TYPE_FUNC_PROTOTYPE_FIXED
+} RTypeFunctionPrototype;
+
+// Parameter-list knowledge is independent of declaration existence, argument count and explicit ellipsis.
+// Missing func.NAME.prototype means unknown; invalid values fail without publishing another state.
+R_API bool r_type_func_get_prototype(Sdb *TDB, const char * R_NONNULL func_name, R_OUT RTypeFunctionPrototype * R_NONNULL prototype);
+R_API bool r_type_func_set_prototype(Sdb *TDB, const char * R_NONNULL func_name, RTypeFunctionPrototype prototype);
+R_API const char * R_NULLABLE r_type_func_prototype_name(RTypeFunctionPrototype prototype);
+
 // Function prototypes api
 R_API int r_type_func_exist(Sdb *TDB, const char *func_name);
 // whether a prototype is recorded under func.NAME.*, whatever the kind key says
@@ -144,7 +156,7 @@ R_API const char *r_type_func_args_name(Sdb *TDB, const char * R_NONNULL func_na
 R_API R_OWNED char *r_type_func_guess(Sdb *TDB, const char * R_NONNULL func_name);
 R_API R_OWNED char *r_type_func_name(Sdb *types, const char *fname);
 R_API R_OWNED char *r_type_func_key(Sdb *types, const char *fname);
-// argc is the known prototype count, including the variadic slot.
+// argc counts stored parameter records, including the variadic slot; it does not imply fixed inputs.
 R_API bool r_type_func_is_variadic(Sdb *TDB, const char * R_NONNULL func_name, int argc);
 
 // the variadic slot is named "..." (r2 <= 6.1.8 stored it in the type half instead)

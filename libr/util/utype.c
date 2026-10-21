@@ -819,6 +819,7 @@ R_API void r_type_del(Sdb *TDB, const char *name) {
 		sdb_unset (TDB, r_strf ("func.%s.ret", name), 0);
 		sdb_unset (TDB, r_strf ("func.%s.cc", name), 0);
 		sdb_unset (TDB, r_strf ("func.%s.noreturn", name), 0);
+		sdb_unset (TDB, r_strf ("func.%s.prototype", name), 0);
 		sdb_unset (TDB, r_strf ("func.%s.args", name), 0);
 		sdb_unset (TDB, name, 0);
 	} else if (!strcmp (kind, "enum")) {
@@ -853,6 +854,46 @@ static inline const char *trim_lodashes(Sdb *TDB, const char *name) {
 		name += 2;
 	}
 	return name;
+}
+
+R_API const char *r_type_func_prototype_name(RTypeFunctionPrototype prototype) {
+	switch (prototype) {
+	case R_TYPE_FUNC_PROTOTYPE_UNKNOWN:
+		return "unknown";
+	case R_TYPE_FUNC_PROTOTYPE_UNSPECIFIED:
+		return "unspecified";
+	case R_TYPE_FUNC_PROTOTYPE_FIXED:
+		return "fixed";
+	}
+	return NULL;
+}
+
+R_API bool r_type_func_get_prototype(Sdb *TDB, const char *func_name, RTypeFunctionPrototype *prototype) {
+	R_RETURN_VAL_IF_FAIL (TDB && func_name && prototype, false);
+	const char *value = sdb_const_getf (TDB, NULL, "func.%s.prototype", trim_lodashes (TDB, func_name));
+	RTypeFunctionPrototype result = R_TYPE_FUNC_PROTOTYPE_UNKNOWN;
+	if (value) {
+		if (!strcmp (value, "unspecified")) {
+			result = R_TYPE_FUNC_PROTOTYPE_UNSPECIFIED;
+		} else if (!strcmp (value, "fixed")) {
+			result = R_TYPE_FUNC_PROTOTYPE_FIXED;
+		} else if (strcmp (value, "unknown")) {
+			R_LOG_ERROR ("Invalid parameter-list specificity for %s: %s", func_name, value);
+			return false;
+		}
+	}
+	*prototype = result;
+	return true;
+}
+
+R_API bool r_type_func_set_prototype(Sdb *TDB, const char *func_name, RTypeFunctionPrototype prototype) {
+	R_RETURN_VAL_IF_FAIL (TDB && func_name, false);
+	const char *value = r_type_func_prototype_name (prototype);
+	if (!value) {
+		R_LOG_ERROR ("Invalid parameter-list specificity for %s", func_name);
+		return false;
+	}
+	return sdb_setf (TDB, value, 0, "func.%s.prototype", trim_lodashes (TDB, func_name));
 }
 
 // Function prototypes api

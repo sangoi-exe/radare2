@@ -417,7 +417,7 @@ static bool profile_leaders(const BorlandCodeRange *ranges, int count, bool *lea
 static bool profile_signature_equal(const RAnalFunctionSignature *actual, const RAnalFunctionSignature *expected) {
 	if (!actual || !actual->ret_type || strcmp (actual->ret_type, expected->ret_type)
 			|| !actual->callconv || strcmp (actual->callconv, expected->callconv)
-			|| actual->noreturn != expected->noreturn || r_list_length (actual->params) != r_list_length (expected->params)) {
+			|| actual->prototype != expected->prototype || actual->noreturn != expected->noreturn || r_list_length (actual->params) != r_list_length (expected->params)) {
 		return false;
 	}
 	RListIter *iter;
@@ -433,7 +433,7 @@ static bool profile_signature_equal(const RAnalFunctionSignature *actual, const 
 }
 
 static bool profile_signature_admit(RAnal *anal, RAnalFunction *fcn, ut64 address, const char *name, const RAnalFunctionSignature *expected, bool *same) {
-	if (R_STR_ISEMPTY (expected->ret_type) || R_STR_ISEMPTY (expected->callconv) || !expected->params || expected->noreturn) {
+	if (expected->prototype != R_TYPE_FUNC_PROTOTYPE_FIXED || R_STR_ISEMPTY (expected->ret_type) || R_STR_ISEMPTY (expected->callconv) || !expected->params || expected->noreturn) {
 		return false;
 	}
 	RListIter *iter;
@@ -452,11 +452,13 @@ static bool profile_signature_admit(RAnal *anal, RAnalFunction *fcn, ut64 addres
 	bool conflict = (linked && r_type_kind (anal->sdb_types, linked) != R_TYPE_FUNCTION)
 		|| (dwarf && r_type_kind (anal->sdb_types, dwarf) != R_TYPE_FUNCTION);
 	char *key = r_type_func_key (anal->sdb_types, fcn->name);
-	bool occupied = linked || dwarf || key || sdb_const_get (anal->sdb_types, fcn->name, NULL);
+	bool occupied = linked || dwarf || key || sdb_const_get (anal->sdb_types, fcn->name, NULL)
+		|| sdb_const_getf (anal->sdb_types, NULL, "func.%s.prototype", fcn->name);
 	RAnalFunctionSignature *actual = r_anal_function_get_signature (fcn);
 	*same = profile_signature_equal (actual, expected);
 	const char *cc = r_anal_cc_default (anal);
-	bool empty = actual && !actual->ret_type && r_list_empty (actual->params) && !actual->noreturn
+	bool empty = actual && actual->prototype == R_TYPE_FUNC_PROTOTYPE_UNKNOWN
+		&& !actual->ret_type && r_list_empty (actual->params) && !actual->noreturn
 		&& (!actual->callconv || (cc && !strcmp (actual->callconv, cc)));
 	bool admitted = !conflict && RVecAnalVarPtr_empty (&fcn->vars)
 		&& (*same || (!occupied && empty));

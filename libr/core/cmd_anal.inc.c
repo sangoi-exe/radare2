@@ -4429,11 +4429,22 @@ static void rename_fcnsig(RAnalFunction *fcn, const char *oname, const char *nna
 		free (linked);
 		return;
 	}
+	char *prototype_old = r_str_newf ("func.%s.prototype", oname);
+	char *prototype_new = r_str_newf ("func.%s.prototype", nname);
+	if (!prototype_old || !prototype_new) {
+		free (prototype_old);
+		free (prototype_new);
+		R_LOG_ERROR ("Cannot prepare signature metadata rename");
+		return;
+	}
 	// rename type
 	const char *type = sdb_const_get (DB, oname, 0);
 	if (type && !strcmp (type, "func")) {
 		sdb_rename (DB, oname, nname, 0);
 	}
+	sdb_rename (DB, prototype_old, prototype_new, 0);
+	free (prototype_old);
+	free (prototype_new);
 	// rename args
 	char *k = r_str_newf ("func.%s.args", oname);
 	char *v;
@@ -5188,67 +5199,46 @@ static void cmd_afsr(RCore *core, const char *input) {
 
 static void printfcnjson(RCore *core, RAnalFunction *fcn) {
 	RAnal *a = fcn->anal;
-	PJ *pj = a->coreb.pjWithEncoding (core);
-	const char *realname = NULL, *import_substring = NULL;
-
-	RFlagItem *flag = a->flag_get (a->flb.f, false, fcn->addr);
-	// Can't access R_FLAGS_FS_IMPORTS, since it is defined in r_core.h
-	if (flag && flag->space && !strcmp (flag->space->name, "imports")) {
-		// Get substring after last dot
-		import_substring = r_str_rchr (fcn->name, NULL, '.');
-		if (import_substring) {
-			realname = import_substring + 1;
-		}
-	} else {
-		realname = fcn->name;
+	RAnalFunctionSignature *signature = r_anal_function_get_signature (fcn);
+	if (!signature) {
+		r_core_return_code (core, R_CMD_RC_FAILURE);
+		return;
 	}
-
-	unsigned int i;
-	const char *ret_type = sdb_const_getf (a->sdb_types, NULL, "func.%s.ret", realname);
-	const char *argc_str = sdb_const_getf (a->sdb_types, NULL, "func.%s.args", realname);
-
-	int argc = argc_str? atoi (argc_str): 0;
-
+	PJ *pj = a->coreb.pjWithEncoding (core);
 	pj_o (pj);
 	pj_ks (pj, "name", fcn->name);
-	const bool no_return = r_anal_noreturn_at_addr (a, fcn->addr);
-	pj_kb (pj, "noreturn", no_return);
-	pj_ks (pj, "ret", r_str_get_fail (ret_type, "void"));
-	const char *fcncc = r_anal_function_cc (fcn);
+	pj_kb (pj, "noreturn", signature->noreturn);
+	pj_ks (pj, "ret", r_str_get_fail (signature->ret_type, "void"));
+	pj_ks (pj, "prototype", r_type_func_prototype_name (signature->prototype));
+	const char *fcncc = signature->callconv;
 	if (fcncc) {
 		pj_ks (pj, "callconv", fcncc);
 	}
-	pj_kn (pj, "argc", argc);
-	pj_k (pj, "args");
-	pj_a (pj);
-	for (i = 0; i < argc; i++) {
-		const char *value = sdb_const_getf (a->sdb_types, NULL, "func.%s.arg.%d", realname, i);
-		char *arg_i = value? strdup (value): NULL;
-		if (!arg_i) {
-			continue;
-		}
+	pj_kn (pj, "argc", r_list_length (signature->params));
+	pj_ka (pj, "args");
+	RListIter *iter;
+	RAnalFunctionParam *param;
+	int i = 0;
+	r_list_foreach (signature->params, iter, param) {
 		pj_o (pj);
-		char *comma = strchr (arg_i, ',');
-		if (comma) {
-			*comma = 0;
-			pj_ks (pj, "name", comma + 1);
-			pj_ks (pj, "type", arg_i);
-			const char *rn = fcncc? r_anal_cc_argloc (a, fcncc, i, 0, -1): NULL;
-			if (!rn) {
-				rn = r_reg_alias_getname (a->reg, R_REG_ALIAS_A0 + i);
-			}
-			if (rn) {
-				pj_ks (pj, "cc", rn);
-			}
+		pj_ks (pj, "name", r_str_get_fail (param->name, ""));
+		pj_ks (pj, "type", r_str_get_fail (param->type, ""));
+		const char *rn = fcncc? r_anal_cc_argloc (a, fcncc, i, 0, -1): NULL;
+		if (!rn) {
+			rn = r_reg_alias_getname (a->reg, R_REG_ALIAS_A0 + i);
 		}
-		free (arg_i);
+		if (rn) {
+			pj_ks (pj, "cc", rn);
+		}
 		pj_end (pj);
+		i++;
 	}
 	pj_end (pj);
 	pj_end (pj);
-	char *s = pj_drain (pj);
-	r_cons_println (core->cons, s);
-	free (s);
+	char *text = pj_drain (pj);
+	r_cons_println (core->cons, text);
+	free (text);
+	r_anal_function_signature_free (signature);
 }
 
 static void cmd_afsj(RCore *core, const char *arg) {

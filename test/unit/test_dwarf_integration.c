@@ -162,6 +162,9 @@ static bool test_dwarf_function_parsing_cpp(void) {
 	char *typed_main_kind = strdup (typed_main);
 	check_kv (typed_main_kind, "func");
 	free (typed_main_kind);
+	RTypeFunctionPrototype prototype;
+	mu_assert_true (r_type_func_get_prototype (sdb, typed_main, &prototype), "read the real C++ fixture main parameter-list knowledge");
+	mu_assert_eq (prototype, R_TYPE_FUNC_PROTOTYPE_UNKNOWN, "main has no explicit prototyped attribute; language/count do not supply erased knowledge");
 	char *typed_main_ret = r_str_newf ("func.%s.ret", typed_main);
 	check_kv (typed_main_ret, "int");
 	free (typed_main_ret);
@@ -324,7 +327,88 @@ static bool test_dwarf_function_parsing_rust(void) {
 		teardown (); \
 	} while (0)
 
+static void prototype_test_die(RBinDwarfCompUnit *unit, ut64 offset, ut16 tag, const RBinDwarfAttrValue *attrs, size_t count) {
+	RBinDwarfDie die = { .offset = offset, .tag = tag, .attr_idx = RVecDwarfAttrValue_length (unit->attrs), .attr_count = count };
+	size_t i;
+	for (i = 0; i < count; i++) {
+		RVecDwarfAttrValue_push_back (unit->attrs, &attrs[i]);
+	}
+	RVecDwarfDie_push_back (unit->dies, &die);
+}
+
+static bool test_dwarf_prototype_attributes(void) {
+	const struct {
+		int local;
+		ut16 reference;
+		ut8 inherited;
+		bool chain;
+		RTypeFunctionPrototype expected;
+	} cases[] = {
+		{ -1, 0, 0, false, R_TYPE_FUNC_PROTOTYPE_UNKNOWN },
+		{ 0, 0, 0, false, R_TYPE_FUNC_PROTOTYPE_UNSPECIFIED },
+		{ 1, 0, 0, false, R_TYPE_FUNC_PROTOTYPE_FIXED },
+		{ -1, DW_AT_specification, 1, false, R_TYPE_FUNC_PROTOTYPE_FIXED },
+		{ -1, DW_AT_abstract_origin, 0, false, R_TYPE_FUNC_PROTOTYPE_UNSPECIFIED },
+		{ 0, DW_AT_specification, 1, false, R_TYPE_FUNC_PROTOTYPE_UNSPECIFIED },
+		{ -1, DW_AT_specification, 1, true, R_TYPE_FUNC_PROTOTYPE_FIXED }
+	};
+	size_t i;
+	for (i = 0; i < R_ARRAY_SIZE (cases); i++) {
+		RAnal *scenario = r_anal_new ();
+		RBinDwarfDebugInfo *info = R_NEW0 (RBinDwarfDebugInfo);
+		info->comp_units = RVecDwarfCompUnit_new ();
+		RBinDwarfCompUnit unit = { .dies = RVecDwarfDie_new (), .attrs = RVecDwarfAttrValue_new () };
+		RBinDwarfAttrValue language[] = { { .attr_name = DW_AT_language, .kind = DW_AT_KIND_CONSTANT, .uconstant = DW_LANG_C_plus_plus_14 } };
+		prototype_test_die (&unit, 1, DW_TAG_compile_unit, language, R_ARRAY_SIZE (language));
+		RBinDwarfAttrValue source[] = {
+			{ .attr_name = DW_AT_name, .kind = DW_AT_KIND_STRING, .string.content = "dwarf_case" },
+			{ .attr_name = DW_AT_declaration, .kind = DW_AT_KIND_FLAG, .flag = 1 },
+			{ .attr_name = DW_AT_prototyped, .kind = DW_AT_KIND_FLAG, .flag = cases[i].inherited }
+		};
+		prototype_test_die (&unit, 10, DW_TAG_subprogram, source, R_ARRAY_SIZE (source));
+		RBinDwarfAttrValue middle[] = {
+			{ .attr_name = DW_AT_name, .kind = DW_AT_KIND_STRING, .string.content = "dwarf_case" },
+			{ .attr_name = DW_AT_declaration, .kind = DW_AT_KIND_FLAG, .flag = 1 },
+			{ .attr_name = DW_AT_abstract_origin, .kind = DW_AT_KIND_REFERENCE, .reference = 10 }
+		};
+		prototype_test_die (&unit, 20, DW_TAG_subprogram, middle, R_ARRAY_SIZE (middle));
+		RBinDwarfAttrValue actual[5] = {
+			{ .attr_name = DW_AT_name, .kind = DW_AT_KIND_STRING, .string.content = "dwarf_case" },
+			{ .attr_name = DW_AT_low_pc, .kind = DW_AT_KIND_ADDRESS, .address = 0x1000 },
+			{ .attr_name = DW_AT_high_pc, .kind = DW_AT_KIND_ADDRESS, .address = 0x1001 }
+		};
+		size_t count = 3;
+		if (cases[i].local >= 0) {
+			actual[count++] = (RBinDwarfAttrValue){ .attr_name = DW_AT_prototyped, .kind = DW_AT_KIND_FLAG, .flag = cases[i].local };
+		}
+		if (cases[i].reference) {
+			actual[count++] = (RBinDwarfAttrValue){ .attr_name = cases[i].reference, .kind = DW_AT_KIND_REFERENCE, .reference = cases[i].chain? 20: 10 };
+		}
+		prototype_test_die (&unit, 30, DW_TAG_subprogram, actual, count);
+		RVecDwarfCompUnit_push_back (info->comp_units, &unit);
+		RAnalDwarfContext ctx = { .info = info };
+		r_anal_dwarf_process_info (scenario, &ctx);
+		RTypeFunctionPrototype prototype = R_TYPE_FUNC_PROTOTYPE_UNKNOWN;
+		mu_assert_true (r_type_func_get_prototype (scenario->sdb_types, "dwarf_case", &prototype), "read actual-DIE importer specificity");
+		mu_assert_eq (prototype, cases[i].expected, "direct flags override inherited flags; absence remains unknown even in a C++ unit");
+		mu_assert_nullable_streq (sdb_const_get (scenario->sdb_types, "func.dwarf_case.prototype", NULL), r_type_func_prototype_name (cases[i].expected), "DWARF emits explicit known or unavailable knowledge");
+		r_anal_dwarf_process_info (scenario, &ctx);
+		mu_assert_nullable_streq (sdb_const_get (scenario->sdb_types, "fcnlink.00001000", NULL), "dwarf_case", "matching specificity preserves importer identity on repeat");
+		if (!i) {
+			r_type_func_set_prototype (scenario->sdb_types, "dwarf_case", R_TYPE_FUNC_PROTOTYPE_FIXED);
+			r_anal_dwarf_process_info (scenario, &ctx);
+			mu_assert_nullable_streq (sdb_const_get (scenario->sdb_types, "func.dwarf_case.prototype", NULL), "fixed", "DWARF does not overwrite conflicting manual parameter-list knowledge");
+			mu_assert_nullable_streq (sdb_const_get (scenario->sdb_types, "func.dwarf_case_1000.prototype", NULL), "unknown", "conflicting source knowledge gets the existing distinct typed identity");
+			mu_assert_nullable_streq (sdb_const_get (scenario->sdb_types, "fcnlink.00001000", NULL), "dwarf_case_1000", "address lookup selects the matching source fact");
+		}
+		r_bin_dwarf_free_debug_info (info);
+		r_anal_free (scenario);
+	}
+	mu_end;
+}
+
 int all_tests(void) {
+	mu_run_test (test_dwarf_prototype_attributes);
 	run_test_with_setup (test_parse_dwarf_types);
 	run_test_with_setup (test_dwarf_function_parsing_cpp);
 	run_test_with_setup (test_dwarf_function_parsing_rust);

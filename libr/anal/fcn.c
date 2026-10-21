@@ -2913,6 +2913,7 @@ R_API bool r_anal_function_del_signature(RAnal *a, const char *name) {
 	sdb_unset (db, sdb_ret, 0);
 	sdb_unset (db, sdb_cc, 0);
 	sdb_unset (db, sdb_noreturn, 0);
+	sdb_unsetf (db, 0, "func.%s.prototype", type_name);
 	sdb_unset (db, sdb_args, 0);
 	sdb_unset (db, sdb_func, 0);
 	for (i = 0; i < argc; i++) {
@@ -3100,7 +3101,7 @@ static const RAnalFunctionParam *function_signature_default_param(const RAnalFun
 	return tmp;
 }
 
-static char *function_signature_string(const char *name, const char *ret_type, RList *params, bool sanitize_name, bool fill_defaults) {
+static char *function_signature_string(const char *name, const char *ret_type, RList *params, RTypeFunctionPrototype prototype, bool sanitize_name, bool fill_defaults) {
 	RListIter *iter;
 	RAnalFunctionParam *param;
 	char *sane = NULL;
@@ -3115,6 +3116,7 @@ static char *function_signature_string(const char *name, const char *ret_type, R
 	}
 	RTypeDeclNode *function = R_NEW0 (RTypeDeclNode);
 	function->kind = R_TYPE_DECL_FUNCTION;
+	function->function.prototype = prototype == R_TYPE_FUNC_PROTOTYPE_FIXED;
 	function->child = decl->type;
 	function->function.parameters = r_list_newf ((RListFree)r_type_decl_free);
 	decl->type = function;
@@ -3235,7 +3237,7 @@ static void function_signature_sync(RAnalFunction *fcn, const RAnalFunctionSigna
 	fcn->is_noreturn = signature->noreturn;
 }
 
-static bool function_signature_set_attrs(RAnal *anal, const char *type_name, const char *callconv, bool noreturn) {
+static bool function_signature_set_attrs(RAnal *anal, const char *type_name, const char *callconv, bool noreturn, RTypeFunctionPrototype prototype) {
 	char *cc_key;
 	char *noreturn_key;
 
@@ -3259,7 +3261,7 @@ static bool function_signature_set_attrs(RAnal *anal, const char *type_name, con
 	}
 	free (cc_key);
 	free (noreturn_key);
-	return true;
+	return r_type_func_set_prototype (anal->sdb_types, type_name, prototype);
 }
 
 R_API void r_anal_function_signature_free(RAnalFunctionSignature *signature) {
@@ -3289,6 +3291,9 @@ R_API RAnalFunctionSignature *r_anal_function_get_signature(RAnalFunction *funct
 	signature = R_NEW0 (RAnalFunctionSignature);
 	signature->origin = origin;
 	signature->params = r_list_newf ((RListFree)function_param_free);
+	if (!r_type_func_get_prototype (anal->sdb_types, type_name, &signature->prototype)) {
+		goto beach;
+	}
 	const char *ret_type = r_type_func_ret (anal->sdb_types, type_name);
 	if (ret_type) {
 		signature->ret_type = strdup (ret_type);
@@ -3314,10 +3319,12 @@ R_API RAnalFunctionSignature *r_anal_function_get_signature(RAnalFunction *funct
 		}
 		signature->origin = R_ANAL_FUNCTION_SIGNATURE_ORIGIN_VARIABLES;
 	}
+	// An unavailable count cannot establish fixed-empty C syntax.
+	RTypeFunctionPrototype rendered_prototype = argc >= 0? signature->prototype: R_TYPE_FUNC_PROTOTYPE_UNKNOWN;
 	// the declaration carries the function's own name; the key is only a lookup handle
 	signature->signature = function_signature_string (
 		R_STR_ISNOTEMPTY (function->name)? function->name: type_name,
-		signature->ret_type, signature->params, true, false);
+		signature->ret_type, signature->params, rendered_prototype, true, false);
 	if (!signature->signature) {
 		goto beach;
 	}
@@ -3358,6 +3365,10 @@ R_API bool r_anal_function_set_signature(RAnal *anal, RAnalFunction *fcn, const 
 	bool ok = false;
 
 	R_RETURN_VAL_IF_FAIL (anal && fcn && anal->sdb_types && signature, false);
+	if (!r_type_func_prototype_name (signature->prototype)) {
+		R_LOG_ERROR ("Invalid signature parameter-list specificity");
+		return false;
+	}
 	type_name = function_signature_type_name (anal, fcn);
 	if (R_STR_ISEMPTY (type_name)) {
 		free (type_name);
@@ -3370,11 +3381,11 @@ R_API bool r_anal_function_set_signature(RAnal *anal, RAnalFunction *fcn, const 
 	if (callconv) {
 		resolved_callconv = strdup (callconv);
 	}
-	decl = function_signature_string (type_name, resolved_ret_type, signature->params, false, true);
+	decl = function_signature_string (type_name, resolved_ret_type, signature->params, signature->prototype, false, true);
 	if (decl) {
 		ok = r_anal_str_to_fcn (anal, fcn, decl);
 		if (ok) {
-			ok = function_signature_set_attrs (anal, type_name, resolved_callconv, signature->noreturn);
+			ok = function_signature_set_attrs (anal, type_name, resolved_callconv, signature->noreturn, signature->prototype);
 		}
 	}
 	free (decl);

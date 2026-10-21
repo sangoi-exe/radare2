@@ -872,7 +872,8 @@ static bool type_expand_function_refs(Sdb *db, RTypeDeclNode **slot, int depth) 
 		const char *name = node->base.name + 5;
 		const char *ret = r_type_func_ret (db, name);
 		int argc;
-		if (!ret || !r_type_func_args_count (db, name, &argc)) {
+		RTypeFunctionPrototype prototype;
+		if (!ret || !r_type_func_args_count (db, name, &argc) || !r_type_func_get_prototype (db, name, &prototype)) {
 			return false;
 		}
 		RTypeDecl *result = r_type_decl_parse (ret, R_TYPE_DECL_CONTEXT_ABSTRACT, NULL);
@@ -886,7 +887,7 @@ static bool type_expand_function_refs(Sdb *db, RTypeDeclNode **slot, int depth) 
 		result->type = NULL;
 		r_type_decl_free (result);
 		function->function.parameters = r_list_newf ((RListFree)r_type_decl_free);
-		function->function.prototype = true;
+		function->function.prototype = prototype == R_TYPE_FUNC_PROTOTYPE_FIXED;
 		int i;
 		bool ok = true;
 		for (i = 0; i < argc; i++) {
@@ -1790,6 +1791,10 @@ static void printFunctionTypeJson(TypePrintCtx *ctx, const char *input) {
 	Sdb *tdb = core->anal->sdb_types;
 	PJ *pj = ctx->pj;
 	const char *name = r_str_trim_head_ro (input);
+	RTypeFunctionPrototype prototype;
+	if (!r_type_func_get_prototype (tdb, name, &prototype)) {
+		return;
+	}
 	int i, args = sdb_num_getf (tdb, NULL, "func.%s.args", name);
 	const char *ret = sdb_const_getf (tdb, NULL, "func.%s.ret", name);
 	const char *cc = sdb_const_getf (tdb, NULL, "func.%s.cc", name);
@@ -1806,6 +1811,7 @@ static void printFunctionTypeJson(TypePrintCtx *ctx, const char *input) {
 
 	pj_o (pj);
 	pj_ks (pj, "name", name);
+	pj_ks (pj, "prototype", r_type_func_prototype_name (prototype));
 	pj_ks (pj, "ret", ret);
 	if (cc) {
 		pj_ks (pj, "cc", cc);

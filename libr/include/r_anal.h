@@ -282,9 +282,10 @@ typedef struct r_anal_function_signature_t {
 	char *signature;
 	char *ret_type;
 	char *callconv;
-	RList *params; // RList<RAnalFunctionParam *>
+	RList *params; // RList<RAnalFunctionParam *>: known records or inferred arguments, not completeness
 	bool noreturn;
 	RAnalFunctionSignatureOrigin origin;
+	RTypeFunctionPrototype prototype; // parameter-list knowledge, not count or lookup origin
 } RAnalFunctionSignature;
 
 typedef struct r_anal_diff_t {

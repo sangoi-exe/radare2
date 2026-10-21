@@ -53,7 +53,7 @@ static RAnalFunctionSignature writer_signature(void) {
 	for (i = 0; i < R_ARRAY_SIZE (params); i++) {
 		r_list_append (list, &params[i]);
 	}
-	return (RAnalFunctionSignature){ .ret_type = WRITER_RETURN, .callconv = WRITER_CC, .params = list };
+	return (RAnalFunctionSignature){ .prototype = R_TYPE_FUNC_PROTOTYPE_FIXED, .ret_type = WRITER_RETURN, .callconv = WRITER_CC, .params = list };
 }
 
 static bool writer_apply(BorlandProfileContext *ctx) {
@@ -99,6 +99,7 @@ static bool test_writer_install_and_reapply(void) {
 		mu_assert_notnull (actual, "native signature snapshot");
 		mu_assert_streq (actual->ret_type, WRITER_RETURN, "named analysis return");
 		mu_assert_streq (actual->callconv, WRITER_CC, "signature convention");
+		mu_assert_eq (actual->prototype, R_TYPE_FUNC_PROTOTYPE_FIXED, "the typed analysis contract has explicit fixed inputs");
 		mu_assert_eq (r_list_length (actual->params), 4, "all four inputs survive the native API");
 		const char *names[] = { "entry_bx", "entry_cx", "entry_dx", "entry_ds" };
 		int i;
@@ -142,7 +143,7 @@ static bool test_writer_independent_state(void) {
 		mu_end;
 	}
 	int scenario;
-	for (scenario = 0; scenario < 12; scenario++) {
+	for (scenario = 0; scenario < 15; scenario++) {
 		RCore *core = writer_core ();
 		mu_assert_notnull (core, "read-only original for independent state");
 		BorlandProfileContext ctx;
@@ -167,6 +168,9 @@ static bool test_writer_independent_state(void) {
 			break;
 		}
 		case 11: r_anal_hint_set_bits (core->anal, WRITER_ADDR + 1, 32); r_anal_hint_set_bits (core->anal, WRITER_ADDR + 2, 16); break;
+		case 12: sdb_set (core->anal->sdb_types, "func."WRITER_NAME".prototype", "unspecified", 0); break;
+		case 13: sdb_unset (core->anal->sdb_types, "func."WRITER_NAME".prototype", 0); break;
+		case 14: sdb_set (core->anal->sdb_types, "func."WRITER_NAME".prototype", "invalid", 0); break;
 		}
 		char *types = sdb_querys (core->anal->sdb_types, NULL, 0, "*");
 		char *name = strdup (fcn->name), *cc = strdup (fcn->callconv);
@@ -203,7 +207,7 @@ static bool test_writer_existing_storage(void) {
 		mu_end;
 	}
 	int scenario;
-	for (scenario = 0; scenario < 7; scenario++) {
+	for (scenario = 0; scenario < 10; scenario++) {
 		RCore *core = writer_core ();
 		mu_assert_notnull (core, "read-only original for type storage");
 		BorlandProfileContext ctx;
@@ -220,6 +224,9 @@ static bool test_writer_existing_storage(void) {
 			} else {
 				mu_assert_true (r_type_set_link (types, "independent_writer", WRITER_ADDR), "independent address prototype");
 			}
+		} else if (scenario >= 7) {
+			const char *states[] = { "unknown", "unspecified", "fixed" };
+			sdb_set (types, "func."WRITER_NAME".prototype", states[scenario - 7], 0);
 		} else {
 			sdb_set (types, WRITER_NAME, scenario == 3? "type": "func", 0);
 			if (scenario == 4) {

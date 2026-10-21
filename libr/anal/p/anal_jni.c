@@ -167,6 +167,7 @@ static void jni_function_set_signature(JniScanContext *ctx,
 		jni_function_add_param (params, argument->jni_name, name);
 	}
 	RAnalFunctionSignature signature = {
+		.prototype = R_TYPE_FUNC_PROTOTYPE_FIXED,
 		.ret_type = method->member->type->jni_name,
 		.params = params,
 	};

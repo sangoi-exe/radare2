@@ -616,6 +616,91 @@ bool test_r_anal_function_signature_parse_requires_a_named_function(void) {
 	mu_end;
 }
 
+bool test_r_anal_function_signature_prototype_roundtrip(void) {
+	RAnal *anal = r_anal_new ();
+	RAnalFunction *fcn = r_anal_create_function (anal, "roundtrip", 0x1000, 0, NULL);
+	mu_assert_true (r_type_func_set_prototype (anal->sdb_types, "roundtrip", R_TYPE_FUNC_PROTOTYPE_FIXED), "parameter-list knowledge can exist without a declaration or count");
+	mu_assert_false (r_type_func_prototype_exist (anal->sdb_types, "roundtrip"), "the specificity fact does not declare a prototype record");
+	int unavailable_count = 99;
+	mu_assert_false (r_type_func_args_count (anal->sdb_types, "roundtrip", &unavailable_count), "known specificity does not fabricate argument count zero");
+	mu_assert_eq (unavailable_count, 99, "unavailable count remains unavailable");
+	RAnalFunctionSignature *partial = r_anal_function_get_signature (fcn);
+	mu_assert_notnull (partial, "read available knowledge from a partial signature");
+	mu_assert_eq (partial->prototype, R_TYPE_FUNC_PROTOTYPE_FIXED, "missing count does not erase known specificity");
+	mu_assert_streq (partial->signature, "void roundtrip ();", "the C projection cannot invent fixed-empty inputs from an unavailable count");
+	r_anal_function_signature_free (partial);
+	RAnalFunctionSignature input = { .signature = "int not_the_authority(void);", .ret_type = "int", .params = r_list_new () };
+	RTypeFunctionPrototype states[] = { R_TYPE_FUNC_PROTOTYPE_UNKNOWN, R_TYPE_FUNC_PROTOTYPE_UNSPECIFIED, R_TYPE_FUNC_PROTOTYPE_FIXED };
+	size_t i;
+	for (i = 0; i < R_ARRAY_SIZE (states); i++) {
+		input.prototype = states[i];
+		mu_assert_true (r_anal_function_set_signature (anal, fcn, &input), "set the structured parameter-list fact");
+		RAnalFunctionSignature *actual = r_anal_function_get_signature (fcn);
+		mu_assert_notnull (actual, "read normalized structured signature");
+		mu_assert_eq (actual->prototype, states[i], "temporary C normalization cannot overwrite supplied knowledge");
+		mu_assert_streq (sdb_const_get (anal->sdb_types, "func.roundtrip.prototype", NULL), r_type_func_prototype_name (states[i]), "the canonical metadata stores the explicit state");
+		mu_assert_streq (actual->signature, states[i] == R_TYPE_FUNC_PROTOTYPE_FIXED? "int roundtrip (void);": "int roundtrip ();", "C text is a projection, with void only for known fixed-empty");
+		mu_assert_null (sdb_const_get (anal->sdb_types, "not_the_authority", NULL), "the setter never treats a derived string as its source");
+		r_anal_function_signature_free (actual);
+	}
+	mu_assert_true (r_type_func_set_prototype (anal->sdb_types, "__roundtrip", R_TYPE_FUNC_PROTOTYPE_UNSPECIFIED), "the shared setter follows the existing canonical function-name lookup");
+	RTypeFunctionPrototype canonical;
+	mu_assert_true (r_type_func_get_prototype (anal->sdb_types, "__roundtrip", &canonical), "the shared getter selects the same function owner");
+	mu_assert_eq (canonical, R_TYPE_FUNC_PROTOTYPE_UNSPECIFIED, "canonical lookup preserves the written state");
+	mu_assert_null (sdb_const_get (anal->sdb_types, "func.__roundtrip.prototype", NULL), "the setter does not create a shadow metadata owner");
+	RAnalFunctionParam value = { .name = "value", .type = "int" };
+	r_list_append (input.params, &value);
+	input.prototype = R_TYPE_FUNC_PROTOTYPE_UNKNOWN;
+	mu_assert_true (r_anal_function_set_signature (anal, fcn, &input), "unknown knowledge does not discard known parameter types");
+	RAnalFunctionSignature *actual = r_anal_function_get_signature (fcn);
+	mu_assert_notnull (actual, "read known parameters with unknown completeness");
+	mu_assert_eq (actual->prototype, R_TYPE_FUNC_PROTOTYPE_UNKNOWN, "typed presentation is not evidence of a fixed contract");
+	mu_assert_eq (r_list_length (actual->params), 1, "known parameters survive normalization");
+	r_anal_function_signature_free (actual);
+	sdb_unset (anal->sdb_types, "func.roundtrip.prototype", 0);
+	actual = r_anal_function_get_signature (fcn);
+	mu_assert_notnull (actual, "missing source knowledge still permits a signature snapshot");
+	mu_assert_eq (actual->prototype, R_TYPE_FUNC_PROTOTYPE_UNKNOWN, "missing metadata is not inferred from argument count");
+	r_anal_function_signature_free (actual);
+	RTypeFunctionPrototype unchanged = R_TYPE_FUNC_PROTOTYPE_FIXED;
+	sdb_set (anal->sdb_types, "func.roundtrip.prototype", "invalid", 0);
+	mu_assert_false (r_type_func_get_prototype (anal->sdb_types, "roundtrip", &unchanged), "invalid metadata fails visibly");
+	mu_assert_eq (unchanged, R_TYPE_FUNC_PROTOTYPE_FIXED, "failed reads do not normalize invalid metadata");
+	mu_assert_null (r_anal_function_get_signature (fcn), "invalid knowledge cannot become an invented signature state");
+	ut64 epoch = r_anal_types_dirty_epoch (anal);
+	input.prototype = (RTypeFunctionPrototype)99;
+	mu_assert_false (r_anal_function_set_signature (anal, fcn, &input), "the structured setter refuses invalid enum values");
+	mu_assert_eq (r_anal_types_dirty_epoch (anal), epoch, "invalid structured input cannot mutate metadata");
+	mu_assert_streq (sdb_const_get (anal->sdb_types, "func.roundtrip.prototype", NULL), "invalid", "invalid source metadata is preserved for correction");
+	mu_assert_true (r_anal_function_del_signature (anal, "roundtrip"), "remove a named signature");
+	mu_assert_null (sdb_const_get (anal->sdb_types, "func.roundtrip.prototype", NULL), "signature deletion removes specificity metadata");
+	mu_assert_true (r_anal_import_c_decls (anal, "int roundtrip(void);", NULL), "reimport a declared signature");
+	r_type_del (anal->sdb_types, "roundtrip");
+	mu_assert_null (sdb_const_get (anal->sdb_types, "func.roundtrip.prototype", NULL), "type deletion also removes specificity metadata");
+	r_list_free (input.params);
+	r_anal_free (anal);
+	mu_end;
+}
+
+bool test_r_anal_function_signature_empty_list_specificity(void) {
+	RAnal *anal = r_anal_new ();
+	mu_assert_true (r_anal_import_c_decls (anal, "int unspecified();int fixed(void);", NULL), "import both empty parameter-list forms");
+	RAnalFunction *unspecified = r_anal_create_function (anal, "unspecified", 0x1000, 0, NULL);
+	RAnalFunction *fixed = r_anal_create_function (anal, "fixed", 0x2000, 0, NULL);
+	RAnalFunctionSignature *first = r_anal_function_get_signature (unspecified);
+	RAnalFunctionSignature *second = r_anal_function_get_signature (fixed);
+	mu_assert_notnull (first, "read unspecified signature");
+	mu_assert_notnull (second, "read fixed signature");
+	mu_assert_streq (first->signature, "int unspecified ();", "unspecified empty list retains parentheses");
+	mu_assert_streq (second->signature, "int fixed (void);", "fixed zero-input signature retains void");
+	mu_assert_eq (first->prototype, R_TYPE_FUNC_PROTOTYPE_UNSPECIFIED, "unspecified is an explicit structured fact");
+	mu_assert_eq (second->prototype, R_TYPE_FUNC_PROTOTYPE_FIXED, "fixed is independent of the zero count");
+	r_anal_function_signature_free (first);
+	r_anal_function_signature_free (second);
+	r_anal_free (anal);
+	mu_end;
+}
+
 bool test_r_anal_function_signature_grouped_name(void) {
 	char *error = NULL;
 	RTypeDecl *decl = r_anal_function_signature_parse ("int (grouped)(int)", &error);
@@ -656,6 +741,21 @@ bool test_r_core_afs_rejects_grouped_object_without_mutation(void) {
 	mu_assert_null (sdb_const_get (core->anal->sdb_types, "func.int.ret", NULL), "rejection does not install a keyword-named prototype");
 	mu_assert_eq (r_anal_function_dirty_epoch (fcn), function_epoch, "rejection leaves function metadata unchanged");
 	mu_assert_eq (r_anal_types_dirty_epoch (core->anal), types_epoch, "rejection leaves type metadata unchanged");
+	char *json_text = r_core_cmd_str (core, "afsj");
+	RJson *json = r_json_parsedup (json_text);
+	mu_assert_notnull (json, "signature JSON is valid");
+	mu_assert_streq (r_json_get_str (json, "prototype"), "fixed", "signature JSON carries the structured specificity");
+	r_json_free (json);
+	free (json_text);
+	json_text = r_core_cmd_str (core, "afij");
+	json = r_json_parsedup (json_text);
+	mu_assert_notnull (json, "function-info JSON is valid");
+	mu_assert_streq (r_json_get_str (r_json_item (json, 0), "prototype"), "fixed", "function-info JSON carries the same specificity");
+	r_json_free (json);
+	free (json_text);
+	r_core_cmd0 (core, "afn renamed");
+	mu_assert_streq (sdb_const_get (core->anal->sdb_types, "func.renamed.prototype", NULL), "fixed", "rename transfers the specificity owner");
+	mu_assert_null (sdb_const_get (core->anal->sdb_types, "func.keep.prototype", NULL), "rename leaves no stale specificity owner");
 	r_core_free (core);
 	mu_end;
 }
@@ -697,7 +797,7 @@ bool test_r_core_afs_preserves_compound_return_name_and_flags(void) {
 	RAnalFunctionSignature *signature = r_anal_function_get_signature (fcn);
 	mu_assert_notnull (signature, "read manual compound signature");
 	mu_assert_streq (signature->ret_type, "uint16_t far *(near *)[3]", "manual afs preserves the return graph");
-	mu_assert_streq (signature->signature, "uint16_t far *(near *returns_table ())[3];", "render the named compound declaration");
+	mu_assert_streq (signature->signature, "uint16_t far *(near *returns_table (void))[3];", "render the named compound declaration");
 	r_anal_function_signature_free (signature);
 	ut64 function_epoch = r_anal_function_dirty_epoch (fcn);
 	ut64 types_epoch = r_anal_types_dirty_epoch (core->anal);
@@ -809,7 +909,7 @@ bool test_r_core_function_json_uses_typed_signature(void) {
 		int nargs;
 	} cases[] = {
 		{ "record_copy", "copy_proto", "void record_copy (FarAddress16 src, FarAddress16 dst, uint16_t count);", 5, 3 },
-		{ "no_args", NULL, "int no_args ();", 1, 0 },
+		{ "no_args", NULL, "int no_args (void);", 1, 0 },
 		{ "from_vars", NULL, "void from_vars (int32_t word0, int32_t word1);", 2, 2 },
 		{ "fcn.00003000", NULL, "int fcn.00003000 (const char *fmt);", 2, 1 },
 		{ "dbg.by_name", NULL, "char dbg.by_name (char value);", 2, 1 },
@@ -870,6 +970,7 @@ bool test_r_core_function_json_uses_typed_signature(void) {
 			mu_assert_eq (json->children.count, 1, "one function in JSON output");
 			const RJson *entry = r_json_item (json, 0);
 			mu_assert_streq (r_json_get_str (entry, "signature"), cases[i].signature, "JSON uses canonical signature, not inferred storage");
+			mu_assert_streq (r_json_get_str (entry, "prototype"), !strcmp (cases[i].name, "from_vars")? "unknown": "fixed", "JSON preserves source knowledge independently of lookup origin and recovered variables");
 			const RJson *nargs = r_json_get (entry, "nargs");
 			mu_assert_notnull (nargs, "JSON retains argument count field");
 			mu_assert_eq (nargs->num.u_value, cases[i].nargs, "JSON counts logical parameters");
@@ -1243,6 +1344,8 @@ int all_tests(void) {
 	mu_run_test (test_r_anal_function_set_signature_rejects_invalid_declarators);
 	mu_run_test (test_r_anal_str_to_fcn_defaults_omitted_return_type);
 	mu_run_test (test_r_anal_function_signature_parse_requires_a_named_function);
+	mu_run_test (test_r_anal_function_signature_prototype_roundtrip);
+	mu_run_test (test_r_anal_function_signature_empty_list_specificity);
 	mu_run_test (test_r_anal_function_signature_grouped_name);
 	mu_run_test (test_r_core_afs_rejects_grouped_object_without_mutation);
 	mu_run_test (test_r_anal_str_to_fcn_does_not_retry_rejected_header);

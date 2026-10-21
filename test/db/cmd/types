@@ -756,6 +756,7 @@ func.foo=bar
 func.foo.arg.0=int,bar
 func.foo.args=1
 func.foo.cc=cdecl
+func.foo.prototype=fixed
 func.foo.ret=int
 EOF
 RUN
@@ -2235,6 +2236,7 @@ func.main=argc
 func.main.arg.0=int,argc
 func.main.args=1
 func.main.cc=cdecl
+func.main.prototype=fixed
 func.main.ret=int
 EOF
 RUN
@@ -2293,6 +2295,7 @@ int main (int argc, char **argv, char **envp);
   "name": "main",
   "noreturn": false,
   "ret": "int",
+  "prototype": "unknown",
   "callconv": "amd64",
   "argc": 3,
   "args": [
@@ -2318,6 +2321,7 @@ char *sym.imp.strcpy (char *dest, const char *src);
   "name": "sym.imp.strcpy",
   "noreturn": false,
   "ret": "char *",
+  "prototype": "unknown",
   "callconv": "amd64",
   "argc": 2,
   "args": [
@@ -5476,6 +5480,7 @@ func.S.cb.arg.0=int *,n
 func.S.cb.arg.1=char *,s
 func.S.cb.args=2
 func.S.cb.cc=cdecl
+func.S.cb.prototype=fixed
 func.S.cb.ret=int
 EOF
 RUN
@@ -5491,9 +5496,11 @@ EOF
 EXPECT=<<EOF
 func.voidfn.args=0
 func.voidfn.cc=cdecl
+func.voidfn.prototype=fixed
 func.voidfn.ret=int
 func.spacedfn.args=0
 func.spacedfn.cc=cdecl
+func.spacedfn.prototype=unspecified
 func.spacedfn.ret=int
 EOF
 RUN
@@ -5511,6 +5518,7 @@ EOF
 EXPECT=<<EOF
 func.A2.m.args=0
 func.A2.m.cc=cdecl
+func.A2.m.prototype=fixed
 func.A2.m.ret=float
 0
 8
@@ -5562,6 +5570,7 @@ func.myvarfn.arg.0=const char *,fmt
 func.myvarfn.arg.1=,...
 func.myvarfn.args=2
 func.myvarfn.cc=cdecl
+func.myvarfn.prototype=fixed
 func.myvarfn.ret=int
 EOF
 RUN
@@ -5581,17 +5590,20 @@ func.once=cb
 func.once.arg.0=void (*)(int),cb
 func.once.args=1
 func.once.cc=cdecl
+func.once.prototype=fixed
 func.once.ret=void
 func.apply=fn,seed
 func.apply.arg.0=int (*)(int, int),fn
 func.apply.arg.1=int,seed
 func.apply.args=2
 func.apply.cc=cdecl
+func.apply.prototype=fixed
 func.apply.ret=int
 func.qual=q
 func.qual.arg.0=void (* const )(int),q
 func.qual.args=1
 func.qual.cc=cdecl
+func.qual.prototype=fixed
 func.qual.ret=void
 EOF
 RUN
@@ -5608,6 +5620,7 @@ func.N.cb.arg.0=int (*)(int, int),inner
 func.N.cb.arg.1=char,c
 func.N.cb.args=2
 func.N.cb.cc=cdecl
+func.N.cb.prototype=fixed
 func.N.cb.ret=int
 EOF
 RUN
@@ -6327,6 +6340,49 @@ int grouped (int arg0);
 foo.bar
 void foo.bar ();
 returns_table
-uint16_t far *(near *returns_table ())[3];
+uint16_t far *(near *returns_table (void))[3];
+EOF_EXPECT
+RUN
+
+NAME=parameter-list knowledge survives metadata C callback and JSON rendering
+FILE=-
+ARGS=-a x86 -b 64
+CMDS=<<EOF_CMDS
+'td int Empty();int Zero(void);typedef int (*A)();typedef int (*B)(void);
+tk func.Empty.prototype
+tk func.Zero.prototype
+tfc Empty
+tfc Zero
+ttc A
+ttc B
+tfj Zero
+EOF_CMDS
+EXPECT=<<EOF_EXPECT
+unspecified
+fixed
+int Empty();
+int Zero(void);
+typedef int (*A)();
+typedef int (*B)(void);
+{"name":"Zero","prototype":"fixed","ret":"int","cc":"cdecl","args":[],"size":0}
+EOF_EXPECT
+RUN
+
+NAME=missing prototype knowledge is not inferred from zero arguments
+FILE=malloc://64
+ARGS=-a x86 -b 64
+CMDS=<<EOF_CMDS
+wx c3
+af
+afn Legacy
+'tk Legacy=func
+'tk func.Legacy.ret=int
+'tk func.Legacy.args=0
+afs
+afsj
+EOF_CMDS
+EXPECT=<<EOF_EXPECT
+int Legacy ();
+{"name":"Legacy","noreturn":false,"ret":"int","prototype":"unknown","callconv":"amd64","argc":0,"args":[]}
 EOF_EXPECT
 RUN

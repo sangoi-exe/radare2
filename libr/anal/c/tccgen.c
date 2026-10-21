@@ -1476,11 +1476,15 @@ old_proto:
 				}
 			}
 		}
-		tcc_appendf (s1, "func.%s.args=%d\n", symname, narg);
 		/* if no parameters, then old type prototype */
 		if (l == 0) {
 			l = FUNC_OLD;
 		}
+		if (l == FUNC_ELLIPSIS) {
+			tcc_appendf (s1, "func.%s.arg.%d=,...\n", symname, narg++);
+		}
+		tcc_appendf (s1, "func.%s.args=%d\n", symname, narg);
+		tcc_appendf (s1, "func.%s.prototype=%s\n", symname, l == FUNC_OLD? "unspecified": "fixed");
 		skip (s1, ')');
 		/* NOTE: const is ignored in returned type as it has a special meaning in gcc / C++ */
 		type->t &= ~VT_CONSTANT;

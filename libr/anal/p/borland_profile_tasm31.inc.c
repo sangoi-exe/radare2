@@ -461,7 +461,7 @@ static bool tasm31_function(BorlandProfileContext *ctx, size_t index) {
 	for (i = 0; i < count; i++) {
 		r_list_append (list, &params[i]);
 	}
-	RAnalFunctionSignature signature = { .ret_type = (char *)ret, .callconv = (char *)cc, .params = list };
+	RAnalFunctionSignature signature = { .prototype = R_TYPE_FUNC_PROTOTYPE_FIXED, .ret_type = (char *)ret, .callconv = (char *)cc, .params = list };
 	const BorlandProfileRange range = { start, size };
 	bool applied = profile_function_ranges_contract (ctx, &range, 1, tasm31_functions[index].name, 0, tasm31_functions[index].comment, &signature);
 	r_list_free (list);

@@ -464,6 +464,7 @@ static void emit_func_signature(KVCParser *kvc, const char *name, const RTypeDec
 		return;
 	}
 	r_strbuf_appendf (kvc->sb, "func.%s.cc=cdecl\nfunc.%s=%s\nfunc.%s.args=%d\nfunc.%s.ret=%s\n", name, name, r_strbuf_get (names), name, index, name, ret);
+	r_strbuf_appendf (kvc->sb, "func.%s.prototype=%s\n", name, function->function.prototype? "fixed": "unspecified");
 	if (is_static) {
 		r_strbuf_appendf (kvc->sb, "func.%s.@.static=true\n", name);
 	}

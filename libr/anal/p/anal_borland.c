@@ -369,7 +369,7 @@ static bool borland_generic_name(const char *name) {
 }
 
 static bool borland_signature_equal(RAnalFunctionSignature *sig, const HelperContract *helper) {
-	if (!sig || !sig->ret_type || strcmp (sig->ret_type, helper->ret) || !sig->callconv
+	if (!sig || sig->prototype != R_TYPE_FUNC_PROTOTYPE_FIXED || !sig->ret_type || strcmp (sig->ret_type, helper->ret) || !sig->callconv
 			|| strcmp (sig->callconv, helper->cc) || sig->noreturn || r_list_length (sig->params) != helper->argc) {
 		return false;
 	}
@@ -471,7 +471,7 @@ static bool borland_apply(RAnal *anal, ut64 family, const HelperContract *helper
 		values[i] = (RAnalFunctionParam){ .name = (char *)helper->args[i].name, .type = (char *)helper->args[i].type };
 		r_list_append (params, &values[i]);
 	}
-	RAnalFunctionSignature signature = { .ret_type = (char *)helper->ret, .callconv = (char *)helper->cc, .params = params };
+	RAnalFunctionSignature signature = { .prototype = R_TYPE_FUNC_PROTOTYPE_FIXED, .ret_type = (char *)helper->ret, .callconv = (char *)helper->cc, .params = params };
 	bool result = r_anal_function_set_signature (anal, fcn, &signature);
 	r_list_free (params);
 	if (result) {
@@ -577,7 +577,7 @@ static bool borland_tlink_writer(BorlandProfileContext *ctx, ut64 physical, cons
 	for (i = 0; i < R_ARRAY_SIZE (params); i++) {
 		r_list_append (list, &params[i]);
 	}
-	RAnalFunctionSignature signature = { .ret_type = "NearWriterAnalysisState7", .callconv = "tlink_writer_state_16near", .params = list };
+	RAnalFunctionSignature signature = { .prototype = R_TYPE_FUNC_PROTOTYPE_FIXED, .ret_type = "NearWriterAnalysisState7", .callconv = "tlink_writer_state_16near", .params = list };
 	const BorlandProfileRange range = { physical, 150 };
 	bool applied = profile_function_ranges_contract (ctx, &range, 1, name, 0, comment, &signature);
 	r_list_free (list);

@@ -169,7 +169,7 @@ e asm.os=android
 tfj JNINativeInterface.FindClass
 EOF
 EXPECT=<<EOF
-{"name":"JNINativeInterface.FindClass","ret":"jclass","cc":"arm64","ret_reg":"x0","args":[{"type":"JNIEnv *","name":"env","size":8,"offset":0,"loc":"x0"},{"type":"const char *","name":"name","size":8,"offset":8,"loc":"x1"}],"size":16}
+{"name":"JNINativeInterface.FindClass","prototype":"unknown","ret":"jclass","cc":"arm64","ret_reg":"x0","args":[{"type":"JNIEnv *","name":"env","size":8,"offset":0,"loc":"x0"},{"type":"const char *","name":"name","size":8,"offset":8,"loc":"x1"}],"size":16}
 EOF
 RUN
 

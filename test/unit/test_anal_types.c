@@ -921,6 +921,39 @@ static bool test_anal_cparse_lazy_alias_layout(void) {
 	mu_end;
 }
 
+static bool test_anal_tcc_prototype_metadata(void) {
+	RAnal *anal = r_anal_new ();
+	anal->opt.tparser = strdup ("tcc");
+	mu_assert_true (r_anal_import_c_decls (anal, "int old();int fixed(void);int typed(int value);int variadic(int value,...);", NULL), "the optional TCC producer emits parameter-list facts");
+	mu_assert_nullable_streq (sdb_const_get (anal->sdb_types, "func.old.prototype", NULL), "unspecified", "TCC FUNC_OLD retains unspecified inputs");
+	mu_assert_nullable_streq (sdb_const_get (anal->sdb_types, "func.fixed.prototype", NULL), "fixed", "TCC void retains fixed-empty inputs");
+	mu_assert_nullable_streq (sdb_const_get (anal->sdb_types, "func.typed.prototype", NULL), "fixed", "TCC typed arguments retain a fixed contract");
+	mu_assert_nullable_streq (sdb_const_get (anal->sdb_types, "func.variadic.prototype", NULL), "fixed", "TCC ellipsis does not turn the prototype unspecified");
+	mu_assert_true (r_type_func_is_variadic (anal->sdb_types, "variadic", 2), "TCC preserves explicit ellipsis separately");
+	mu_assert_false (r_type_func_is_variadic (anal->sdb_types, "old", 0), "TCC does not invent literal ellipsis for FUNC_OLD");
+	r_anal_free (anal);
+	mu_end;
+}
+
+static bool test_anal_cparse_prototype_metadata(void) {
+	RAnal *anal = r_anal_new ();
+	char *error = NULL;
+	mu_assert_true (r_anal_import_c_decls (anal,
+		"int unspecified();int fixed(void);int typed(int value);int variadic(int value,...);"
+		"typedef int (*UnspecifiedCallback)();typedef int (*FixedCallback)(void);", &error), "import declarations with actual parameter-list syntax");
+	mu_assert_null (error, "parameter-list declarations parse successfully");
+	mu_assert_nullable_streq (sdb_const_get (anal->sdb_types, "func.unspecified.prototype", NULL), "unspecified", "empty parentheses preserve unspecified inputs");
+	mu_assert_nullable_streq (sdb_const_get (anal->sdb_types, "func.fixed.prototype", NULL), "fixed", "void preserves a fixed zero-input contract");
+	mu_assert_nullable_streq (sdb_const_get (anal->sdb_types, "func.typed.prototype", NULL), "fixed", "typed inputs preserve a fixed contract");
+	mu_assert_nullable_streq (sdb_const_get (anal->sdb_types, "func.variadic.prototype", NULL), "fixed", "explicit ellipsis is separate from unspecified inputs");
+	mu_assert_nullable_streq (sdb_const_get (anal->sdb_types, "func.UnspecifiedCallback.prototype", NULL), "unspecified", "callback metadata retains empty-parentheses syntax");
+	mu_assert_nullable_streq (sdb_const_get (anal->sdb_types, "func.FixedCallback.prototype", NULL), "fixed", "callback metadata retains void syntax");
+	mu_assert_true (r_type_func_is_variadic (anal->sdb_types, "variadic", 2), "ellipsis retains its separate argument marker");
+	mu_assert_false (r_type_func_is_variadic (anal->sdb_types, "unspecified", 0), "unspecified input is not an explicit ellipsis");
+	r_anal_free (anal);
+	mu_end;
+}
+
 static bool test_anal_cparse_grouped_names(void) {
 	RAnal *anal = r_anal_new ();
 	anal->config->bits = 64;
@@ -1450,6 +1483,8 @@ int all_tests(void) {
 	mu_run_test (test_anal_cparse_callback_array_layout);
 	mu_run_test (test_anal_cparse_lazy_alias_layout);
 	mu_run_test (test_anal_cparse_definition_alias);
+	mu_run_test (test_anal_cparse_prototype_metadata);
+	mu_run_test (test_anal_tcc_prototype_metadata);
 	mu_run_test (test_anal_cparse_grouped_names);
 	mu_run_test (test_anal_cparse_forward_identity);
 	mu_run_test (test_anal_cparse_forward_completion);
