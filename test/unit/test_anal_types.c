@@ -750,6 +750,73 @@ static bool test_anal_cparse_multiline_fnptr(void) {
 	mu_end;
 }
 
+static bool test_anal_cparse_attribute_capacity(void) {
+	RAnal *anal = r_anal_new ();
+	int form, count;
+	for (form = 0; form < 2; form++) {
+		for (count = 10; count <= 11; count++) {
+			RStrBuf *header = r_strbuf_new ("int before(int value);\n");
+			if (!form) {
+				r_strbuf_append (header, "///");
+			}
+			int i;
+			for (i = 0; i < count; i++) {
+				r_strbuf_appendf (header, form? "__attribute__((a%d(%d))) ": " @a%d(%d)", i, i);
+			}
+			r_strbuf_append (header, "\nint annotated(int value);\nint after(int value);\n");
+			char *error = NULL;
+			char *kv = r_anal_cparse (anal, r_strbuf_get (header), &error);
+			r_strbuf_free (header);
+			mu_assert_null (error, "parse attributes at and above the former capacity");
+			mu_assert_notnull (kv, "serialize all attributes without truncation");
+			for (i = 0; i < count; i++) {
+				char *expected = r_str_newf ("func.annotated.@.a%d=%d\n", i, i);
+				mu_assert_notnull (strstr (kv, expected), "retain each attribute value and key");
+				free (expected);
+			}
+			mu_assert_null (strstr (kv, "func.before.@."), "attributes do not affect the preceding declaration");
+			mu_assert_null (strstr (kv, "func.after.@."), "applying attributes resets the collection");
+			mu_assert_notnull (strstr (kv, "func.annotated.arg.0=int,value\n"), "attributes preserve the annotated signature");
+			mu_assert_notnull (strstr (kv, "func.after.arg.0=int,value\n"), "the next ordinary signature is retained");
+			free (kv);
+		}
+	}
+	r_anal_free (anal);
+	mu_end;
+}
+
+static bool test_anal_cparse_attribute_duplicates(void) {
+	RAnal *anal = r_anal_new ();
+	r_anal_types_reload (anal, R2_PREFIX, NULL, NULL);
+	char *error = NULL;
+	char *kv = r_anal_cparse (anal,
+		"/// @a0(0) @a1(1) @a2(2) @a3(3) @a4(4) @a5(5) @a6(6) @value(first) @value(last) @flag\n"
+		"__attribute__((value(gnu))) __attribute__((value(again))) int mixed(void);\n"
+		"struct Mixed __attribute__((aligned(8))) {\n"
+		"int member __attribute__((value(gnu))); /// @value(comment) @memberflag\n"
+		"char tail;};\n"
+		"int ordinary(void);", &error);
+	mu_assert_null (error, "parse duplicate and mixed-form attributes");
+	mu_assert_notnull (kv, "serialize duplicate and mixed-form attributes");
+	mu_assert_notnull (strstr (kv, "func.mixed.@.a6=6\n"), "mixed-form accumulation retains earlier attributes beyond the former capacity");
+	mu_assert_notnull (strstr (kv,
+		"func.mixed.@.value=last\nfunc.mixed.@.flag=true\n"
+		"func.mixed.@.value=gnu\nfunc.mixed.@.value=again\n"),
+		"comment duplicates replace the first entry while GNU duplicates append in order");
+	mu_assert_null (strstr (kv, "func.mixed.@.value=first\n"), "the replaced comment value is not applied");
+	mu_assert_notnull (strstr (kv, "struct.Mixed.@.aligned=8\n"), "aggregate attributes retain their scope");
+	mu_assert_notnull (strstr (kv, "struct.Mixed.member.@.value=comment\nstruct.Mixed.member.@.memberflag=true\n"),
+		"trailing comment replaces a matching GNU attribute and retains a bare flag");
+	mu_assert_null (strstr (kv, "struct.Mixed.member.@.value=gnu\n"), "mixed-form replacement does not append a duplicate");
+	mu_assert_null (strstr (kv, "struct.Mixed.tail.@."), "member attributes reset before the next member");
+	mu_assert_null (strstr (kv, "func.ordinary.@."), "attributes reset before the next function");
+	r_anal_save_parsed_type (anal, kv);
+	mu_assert_eq (r_anal_type_bitsize (anal, "Mixed"), 64, "attribute lookup retains aggregate alignment");
+	free (kv);
+	r_anal_free (anal);
+	mu_end;
+}
+
 static bool test_anal_cparse_nested_layout(void) {
 	int bits;
 	for (bits = 32; bits <= 64; bits += 32) {
@@ -1118,6 +1185,8 @@ int all_tests(void) {
 	mu_run_test (test_anal_save_base_type_union_redefine);
 	mu_run_test (test_anal_base_type_to_kv);
 	mu_run_test (test_anal_cparse_multiline_fnptr);
+	mu_run_test (test_anal_cparse_attribute_capacity);
+	mu_run_test (test_anal_cparse_attribute_duplicates);
 	mu_run_test (test_anal_cparse_nested_layout);
 	mu_run_test (test_anal_cparse_callback_array_layout);
 	mu_run_test (test_anal_cparse_lazy_alias_layout);

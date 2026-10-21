@@ -4,10 +4,11 @@
 #include <r_anal.h>
 
 typedef struct {
-	RStrs keys[10];
-	RStrs values[10];
-	size_t count;
-} AttrList;
+	RStrs key;
+	RStrs value;
+} KVCAttr;
+
+R_VEC_TYPE (RVecKVCAttr, KVCAttr);
 
 typedef struct {
 	Sdb *types;
@@ -16,7 +17,7 @@ typedef struct {
 	size_t synced;
 	RStrBuf *sb;
 	int line;
-	AttrList attrs;
+	RVecKVCAttr attrs;
 	RStrs s;
 	const char *error;
 	char *error_msg;
@@ -198,13 +199,24 @@ static const char *consume_word(KVCParser *kvc) {
 
 static const char *kvc_attr(KVCParser *kvc, const char *k) {
 	RStrs s = r_strs_from (k);
-	int i;
-	for (i = 0; i < kvc->attrs.count; i++) {
-		if (r_strs_equals (kvc->attrs.keys[i], s)) {
-			return r_strs_tostring (kvc->attrs.values[i]);
+	KVCAttr *attr;
+	R_VEC_FOREACH (&kvc->attrs, attr) {
+		if (r_strs_equals (attr->key, s)) {
+			return r_strs_tostring (attr->value);
 		}
 	}
 	return NULL;
+}
+
+static bool kvc_attr_add(KVCParser *kvc, RStrs key, RStrs value) {
+	KVCAttr *attr = RVecKVCAttr_emplace_back (&kvc->attrs);
+	if (!attr) {
+		kvc_error (kvc, "Cannot allocate attribute");
+		return false;
+	}
+	attr->key = key;
+	attr->value = value;
+	return true;
 }
 
 static bool parse_attributes(KVCParser *kvc) {
@@ -215,7 +227,6 @@ static bool parse_attributes(KVCParser *kvc) {
 	}
 	kvc_skipn (kvc, 3);
 
-	// kvc->attrs.count = 0;
 	while (true) {
 		int line = kvc->line;
 		skip_spaces (kvc);
@@ -254,23 +265,19 @@ static bool parse_attributes(KVCParser *kvc) {
 		} else {
 			attr_value = R_STRS_LIT ("true");
 		}
-		int atidx = kvc->attrs.count;
-		bool duppedkey = false;
-		{
-			int i;
-			for (i = 0; i < kvc->attrs.count; i++) {
-				if (r_strs_equals (kvc->attrs.keys[i], attr_name)) {
-					duppedkey = true;
-					atidx = i;
-					break;
-				}
+		KVCAttr *existing = NULL;
+		KVCAttr *attr;
+		R_VEC_FOREACH (&kvc->attrs, attr) {
+			if (r_strs_equals (attr->key, attr_name)) {
+				existing = attr;
+				break;
 			}
 		}
-		if (!duppedkey) {
-			kvc->attrs.count++;
-			kvc->attrs.keys[atidx] = attr_name;
+		if (existing) {
+			existing->value = attr_value;
+		} else if (!kvc_attr_add (kvc, attr_name, attr_value)) {
+			return false;
 		}
-		kvc->attrs.values[atidx] = attr_value;
 	}
 	skip_until (kvc, '\n');
 	return true;
@@ -286,17 +293,17 @@ static bool parse_trailing_attributes(KVCParser *kvc) {
 }
 
 static void apply_attributes(KVCParser *kvc, const char *type, const char *scope) {
-	int i;
-	for (i = 0; i < kvc->attrs.count; i++) {
-		RStrs key = kvc->attrs.keys[i];
-		RStrs val = kvc->attrs.values[i];
+	KVCAttr *attr;
+	R_VEC_FOREACH (&kvc->attrs, attr) {
+		RStrs key = attr->key;
+		RStrs val = attr->value;
 		r_strbuf_appendf (kvc->sb, "%s.%s.@.", type, scope);
 		r_strbuf_append_n (kvc->sb, key.a, r_strs_len (key));
 		r_strbuf_append (kvc->sb, "=");
 		r_strbuf_append_n (kvc->sb, val.a, r_strs_len (val));
 		r_strbuf_append (kvc->sb, "\n");
 	}
-	kvc->attrs.count = 0; // Reset after applying
+	RVecKVCAttr_clear (&kvc->attrs);
 }
 
 static void trim_underscores(RStrs *t) {
@@ -354,9 +361,9 @@ static bool parse_c_attributes(KVCParser *kvc) {
 	}
 	skip_spaces (kvc);
 	// Store attribute
-	int idx = kvc->attrs.count++;
-	kvc->attrs.keys[idx] = attr_name;
-	kvc->attrs.values[idx] = attr_value;
+	if (!kvc_attr_add (kvc, attr_name, attr_value)) {
+		return false;
+	}
 	kvc_getch (kvc);
 	return true;
 }
@@ -566,6 +573,9 @@ static bool parse_typedef(KVCParser *kvc, const char *unused) {
 			skip_spaces (kvc);
 		}
 		parse_c_attributes (kvc);
+		if (kvc->error) {
+			return false;
+		}
 		skip_spaces (kvc);
 		if (kvc_peek (kvc, 0) != '{') {
 			char *tag_str = has_tag? r_strs_tostring (tag): strdup ("");
@@ -703,6 +713,9 @@ static bool parse_struct(KVCParser *kvc, const char *type) {
 	struct_name.b = kvc->s.a;
 	skip_spaces (kvc);
 	parse_c_attributes (kvc);
+	if (kvc->error) {
+		return false;
+	}
 	skip_spaces (kvc);
 	const char p0 = kvc_peek (kvc, 0);
 	if (p0 == ';') {
@@ -749,6 +762,9 @@ static bool parse_struct_body(KVCParser *kvc, const char *type, const char *sn, 
 	int off = 0;
 	while (true) {
 		parse_attributes (kvc);
+		if (kvc->error) {
+			break;
+		}
 		skip_spaces (kvc);
 		if (kvc_peek (kvc, 0) == '}') {
 			kvc_getch (kvc);
@@ -940,6 +956,9 @@ static bool parse_function(KVCParser *kvc) {
 	while (parse_c_attributes (kvc)) {
 		skip_spaces (kvc);
 	}
+	if (kvc->error) {
+		return false;
+	}
 	const char *prefix = kvc_peekn (kvc, 7);
 	bool is_static = prefix && !strncmp (prefix, "static", 6) && isspace ((ut8)prefix[6]);
 	if (is_static) {
@@ -969,6 +988,7 @@ static bool parse_function(KVCParser *kvc) {
 }
 
 static void kvcparser_init(KVCParser *kvc, const char *data) {
+	RVecKVCAttr_init (&kvc->attrs);
 	kvc->types = sdb_new0 ();
 	kvc->line = 1;
 	kvc->sb = r_strbuf_new ("");
@@ -977,6 +997,7 @@ static void kvcparser_init(KVCParser *kvc, const char *data) {
 }
 
 static void kvcparser_fini(KVCParser *kvc) {
+	RVecKVCAttr_fini (&kvc->attrs);
 	sdb_free (kvc->types);
 	r_strbuf_free (kvc->sb);
 	free (kvc->error_msg);
