@@ -12,6 +12,8 @@ This directory contains `k=v` source files for code analysis and type propagatio
 - `Makefile` concatenates the Windows fragments and invokes `sdb -r .` to generate the databases, installed under the versioned `fcnsign` data directory.
 - `meson.build` lists the database inputs and Windows fragments, generates the databases, and includes generated C sources when `sdb_cgen` is enabled.
 
+Actual C tags use `tags/NAME`, `tags/struct.NAME`, `tags/union.NAME` or `tags/enum.NAME` query paths in serialized source records. The host loader places those records in the existing SDB `tags` child map. Ordinary typedefs and named analysis records remain in the parent map; source references to tags retain their explicit C tag spelling. Do not infer a tag or add a typedef from a record's display name. The shared APIs in `libr/util/utype.c` and `libr/anal/type.c` own lookup, replacement, deletion and serialization.
+
 ## dlang calling convention example
 
 - narg = 1: edi
