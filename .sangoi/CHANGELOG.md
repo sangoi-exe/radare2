@@ -2,7 +2,7 @@
 
 ## 2026-10-21
 
-- Implemented the confirmed native C type-contract corrections and ABI157 propagation: canonical target-width array expressions, contextual declaration admission, incomplete aggregates and flexible tails, recursive aliases, parameter-list specificity, safe attributes, removal of declared-type substitution, and direct typed MCP signature application. Matching private validation passes184 host units,54 focused CLI controls,91 bridge controls,51 native controls,ten preparation controls,XML/reuse and50 actual MCP requests. Original-backed C/XML is retained; the unresolved F_SCOPY printed byte-width limitation and separate baseline sanitizer observations remain explicit. The local Code Gate is pending; no global installation or push is claimed.
+- Implemented the initial confirmed native C type-contract corrections and ABI157 propagation. Matching private validation passes184 host units,54 focused CLI controls,91 cases across the two declared bridge type files,51 native controls,ten preparation controls,XML/reuse and50 actual MCP requests. Original-backed C/XML is retained. The final local Code Gate returned DO_NOT_PROCEED with complete admitted coverage: seven residual semantic defects, bounded metadata/test followers and shared-link command policy require a current-user decision. Three actual Claude quota failures received only contribution-specific dispensations; no absent approval is implied. The task is on hold, with no post-review runtime corrections, global installation or push. The review record retains the unresolved F_SCOPY rendering limitation and separate baseline observations.
 
 ## 2026-10-20
 

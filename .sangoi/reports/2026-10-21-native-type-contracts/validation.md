@@ -1,6 +1,6 @@
 # Native type-contract validation
 
-This report records the candidate and observed coverage. It is not a Code Gate verdict, a whole-decompiler correctness claim or rebuild-ready game source. The original executables were opened for analysis without execution, write mode or saved-project mutation.
+This report records the candidate and observed coverage. It is not a Code Gate verdict, a whole-decompiler correctness claim or rebuild-ready game source. The subsequent [local Code Gate](review.md) returned DO_NOT_PROCEED for residual defects despite these bounded passes. The original executables were opened for analysis without execution, write mode or saved-project mutation.
 
 ## Candidate and runtime
 
@@ -21,7 +21,7 @@ The private runtime is `/home/lucas/.cache/codex/radare2/native-type-contract-20
 | --- | --- | --- |
 | Host units | 184 passed across 15 suites: declarations (15), types (43), functions (41), variables (7), JNI (2), DWARF (5), Borland (10), BCC20 (8), SimTower (4), BCC (7), TASM (12), contract (4), TLINK401 (5), TLINK51 (5), profiles (16) | `host/unit-*.log`; DWARF final result is `unit-dwarf-corrected.log` |
 | Host CLI | 43 type controls and 11 signature controls passed | `host/cli.log`, `host/cli-vars.log` and status files |
-| Bridge | One complete run passed 91/91, including PowerPC; no timeouts | `bridge/suite.json`, stdout/stderr and status |
+| Bridge | One complete run of `r2ghidra_types` and `r2ghidra_type_resolution` passed 91/91, including their PowerPC controls; no timeouts. This is not all of `test/db/extras`. | `bridge/suite.json`, stdout/stderr and status |
 | Native | 51/51 native controls, ten preparation controls and p-code XML test passed | `bridge/registered-tests.log`, `bridge/build/meson-logs/testlog.txt` |
 | Preparation reuse | Matching bounded build passed after language generation | `bridge/reuse.log` |
 | Typed native MCP signature boundary | 22 requests, exactly one response per ID, none for initialization notification; expected success/refusal and unchanged seek observations passed | `mcp/signature.*` |

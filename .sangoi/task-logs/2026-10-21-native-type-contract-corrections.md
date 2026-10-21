@@ -1,6 +1,6 @@
 # Native type-contract corrections
 
-Status: implementation and directed validation complete; local Code Gate pending.
+Status: on hold after the final local Code Gate returned DO_NOT_PROCEED. Required material remediation and shared-link command policy await the current user.
 
 Authority: [Intent Contract](../planning/2026-10-21-native-type-contract-corrections.md), epoch2. The confirmed public-interface authorization permits the task-required ABI157 break and matching rebuild, not compatibility wrappers, saved-analysis migration, global installation or another push. Exact current-user anchors remain in that contract.
 
@@ -41,4 +41,12 @@ These observations are not silent risk acceptances or claims of approval. They d
 
 ## Review
 
-No Code Gate disposition has been produced for this candidate. The selected default local procedure will review fixed committed source partitions and the integration evidence. Current user decisions remain closed unless that review or new execution establishes a material boundary requiring a decision.
+The final `/root/type_gate_integration_senior` disposition is DO_NOT_PROCEED, with complete semantic coverage of the fixed host `d2728414f3549a1c1ab18812d29626507fa0909e` and listed child candidates. Five Senior/Claude source pairs and the integration Senior found seven material type/signature/import defects, one bounded library-data follower, required test/status followers and an unresolved shared-link edit policy. The [review record](../reports/2026-10-21-native-type-contracts/review.md) preserves locations, evidence, falsifiers, recommendations and exact remaining decisions. No implementation changed during review. The registered transition is user-decision with the same lifecycle, not Closeout.
+
+Root independently reproduced the incomplete-tag formatter, partial snapshot reapplication, both generic Borland fact conflicts, three aggregate-return states and shared link/fcnlink cross-function effects. Root also traced the DWARF/UNSPECIFIED/zero-object chains, checked the Linux strlen foundation, and resolved the synthetic fmovmem filter and SLEIGHHOME objections from actual output/source. Initial invalid probe setups were discarded rather than treated as product evidence.
+
+Actual Claude quota failures removed only its BRIDGE reciprocal, PREPARATION fixture-path continuation and INTEGRATION initial/dependent exchange under the resident's narrow exception. All received points were considered; no absent answer is approval or agreement. Separate unauthorized review scratch locations were preserved: `/tmp/rv-probe/`, `/tmp/r2review/`, `/tmp/claude_types_diff.txt`, `/home/lucas/.claude/plans/.r2r-unrun.log`. Permitted native plan files are a distinct class. No source-state change or cleanup was inferred from these files.
+
+Additional review observations remain deferred: existing enum/pointer-typedef namespace reuse, member-attribute and first-lookup/last-record duplicate policies, syntax-only typedef ambiguity, the separately reported 32-bit/Windows long database limit, and inherited non-function name collisions. No blanket new refusal or schema redesign was selected. The duplicate-alignment assertion does not independently prove alignment consistency. Historical sanitizer snapshots do not replace current final-source proof. The older root map date was not treated as evidence that the new owner pointer is wrong.
+
+The current bookkeeping is `bookkeeping memorialization`, and the two-file 91-case clarification is `bundle/proof correction`. Runtime/producer/status corrections remain `substantive runtime/contract fix`; test-route/snapshot corrections are pending `bundle/proof correction`; broader observations are `deferred observation`. No material correction is authorized until the current user decides the recorded package.
