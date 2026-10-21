@@ -124,6 +124,37 @@ static char *decl_identifier(DeclParser *parser, bool base) {
 	return word;
 }
 
+enum {
+	DECL_BUILTIN_VOID, DECL_BUILTIN_CHAR, DECL_BUILTIN_SHORT, DECL_BUILTIN_INT,
+	DECL_BUILTIN_LONG, DECL_BUILTIN_FLOAT, DECL_BUILTIN_DOUBLE,
+	DECL_BUILTIN_SIGNED, DECL_BUILTIN_UNSIGNED, DECL_BUILTIN_BOOL, DECL_BUILTIN_CBOOL,
+	DECL_BUILTIN_COUNT
+};
+
+static bool decl_builtin_valid(const unsigned int *counts) {
+	if ((counts[DECL_BUILTIN_SIGNED] && counts[DECL_BUILTIN_UNSIGNED])
+			|| (counts[DECL_BUILTIN_SHORT] && counts[DECL_BUILTIN_LONG])) {
+		return false;
+	}
+	unsigned int primary = counts[DECL_BUILTIN_VOID] + counts[DECL_BUILTIN_CHAR] + counts[DECL_BUILTIN_INT]
+		+ counts[DECL_BUILTIN_FLOAT] + counts[DECL_BUILTIN_DOUBLE] + counts[DECL_BUILTIN_BOOL] + counts[DECL_BUILTIN_CBOOL];
+	if (primary > 1) {
+		return false;
+	}
+	if (counts[DECL_BUILTIN_CHAR]) {
+		return !counts[DECL_BUILTIN_SHORT] && !counts[DECL_BUILTIN_LONG];
+	}
+	if (counts[DECL_BUILTIN_DOUBLE]) {
+		return !counts[DECL_BUILTIN_SIGNED] && !counts[DECL_BUILTIN_UNSIGNED]
+			&& !counts[DECL_BUILTIN_SHORT] && counts[DECL_BUILTIN_LONG] <= 1;
+	}
+	if (counts[DECL_BUILTIN_VOID] || counts[DECL_BUILTIN_FLOAT] || counts[DECL_BUILTIN_BOOL] || counts[DECL_BUILTIN_CBOOL]) {
+		return !counts[DECL_BUILTIN_SIGNED] && !counts[DECL_BUILTIN_UNSIGNED]
+			&& !counts[DECL_BUILTIN_SHORT] && !counts[DECL_BUILTIN_LONG];
+	}
+	return true;
+}
+
 static RTypeDeclNode *decl_base(DeclParser *parser) {
 	static const char *const builtins[] = {
 		"void", "char", "short", "int", "long", "float", "double", "signed", "unsigned", "bool", "_Bool", NULL
@@ -134,6 +165,7 @@ static RTypeDeclNode *decl_base(DeclParser *parser) {
 	r_strbuf_init (&name);
 	bool have_type = false;
 	bool builtin = false;
+	unsigned int counts[DECL_BUILTIN_COUNT] = { 0 };
 	while (true) {
 		unsigned int qualifier = decl_qualifier (parser);
 		if (qualifier) {
@@ -148,6 +180,10 @@ static RTypeDeclNode *decl_base(DeclParser *parser) {
 			}
 		}
 		if (builtins[i] && (!have_type || builtin)) {
+			if (++counts[i] > (i == DECL_BUILTIN_LONG? 2: 1)) {
+				decl_error (parser, "Repeated fundamental type specifier");
+				break;
+			}
 			if ((have_type && !r_strbuf_append (&name, " ")) || !r_strbuf_append (&name, builtins[i])) {
 				decl_error (parser, "Cannot allocate base type");
 				break;
@@ -177,6 +213,9 @@ static RTypeDeclNode *decl_base(DeclParser *parser) {
 			break;
 		}
 		have_type = true;
+	}
+	if (!parser->error && builtin && !decl_builtin_valid (counts)) {
+		decl_error (parser, "Contradictory fundamental type specifiers");
 	}
 	if (!parser->error) {
 		base->base.name = r_strbuf_drain_nofree (&name);

@@ -1028,6 +1028,7 @@ static bool test_anal_type_bitsize_struct_recorded(void) {
 
 static bool test_anal_type_bitsize_struct_cycle(void) {
 	RAnal *anal = r_anal_new ();
+	r_anal_types_reload (anal, R2_PREFIX, NULL, NULL);
 	Sdb *TDB = anal->sdb_types;
 	sdb_set (TDB, "int32_t", "type", 0);
 	sdb_num_set (TDB, "type.int32_t.size", 32, 0);
@@ -1079,9 +1080,130 @@ static bool test_anal_type_bitsize_arrays(void) {
 	mu_assert_eq (r_anal_type_bitsize (anal, "word (*)[3]"), 64, "A pointer to an array is one word");
 	mu_assert_eq (r_anal_type_bitsize (anal, "word[2]junk"), 0, "Trailing array text is rejected");
 	mu_assert_eq (r_anal_type_bitsize (anal, "word[18446744073709551615]"), 0, "Overflowing dimensions are rejected");
+	RTypeLayout unsized;
+	mu_assert_true (r_type_get_layout (types, "word[]", &unsized), "an unsized bound retains its separate layout representation");
+	mu_assert_eq (unsized.bits, 0, "an unsized array is not one element or a positive bound");
+	char *format = r_type_format (types, "char[]");
+	mu_assert_null (format, "formatting cannot invent an element count for an unsized array");
 	sdb_set (types, "Recursive", "typedef", 0);
 	sdb_set (types, "typedef.Recursive", "Recursive[2]", 0);
 	mu_assert_eq (r_anal_type_bitsize (anal, "Recursive"), 0, "Recursive array aliases are rejected");
+	r_anal_free (anal);
+	mu_end;
+}
+
+static bool test_anal_cparse_array_bounds(void) {
+	const char *bounds[] = { "8", "010", "0x8", "1|2+3", "2+3", "(2+3)*2", "1<<3", "8/2", "7%3", "2|4", "010+1", "8U" };
+	const int counts[] = { 8, 8, 8, 5, 5, 10, 8, 4, 1, 6, 9, 8 };
+	size_t i;
+	for (i = 0; i < R_ARRAY_SIZE (bounds); i++) {
+		RAnal *anal = r_anal_new ();
+		r_arch_config_use (anal->config, "x86");
+		anal->config->bits = 16;
+		r_anal_types_reload (anal, R2_PREFIX, NULL, NULL);
+		char *header = r_str_newf (
+			"typedef char Row[%s];typedef Row Grid[2];typedef int near *NearRow[%s];typedef int far *FarRow[%s];"
+			"struct Bounds {char direct[%s];char nested[2][%s];Row alias;NearRow nearptrs;FarRow farptrs;char tail;};",
+			bounds[i], bounds[i], bounds[i], bounds[i], bounds[i]);
+		char *error = NULL;
+		mu_assert_true (r_anal_import_c_decls (anal, header, &error), bounds[i]);
+		mu_assert_null (error, "supported bounds reach the real c2 importer");
+		free (header);
+		char *expected = r_str_newf ("char,0,%d", counts[i]);
+		mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.Bounds.direct", NULL), expected, "direct member count uses shared evaluation");
+		free (expected);
+		expected = r_str_newf ("char,%d,0", 10 * counts[i]);
+		mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.Bounds.tail", NULL), expected, "nested, alias, near and far arrays have the expected combined extent");
+		free (expected);
+		mu_assert_eq (r_anal_type_bitsize (anal, "Bounds"), (10 * counts[i] + 2) * 8, "record extent retains target two-byte pointer alignment");
+		mu_assert_eq (r_anal_type_bitsize (anal, "Grid"), counts[i] * 16, "nested typedef arrays multiply both dimensions");
+		mu_assert_eq (r_anal_type_bitsize (anal, "NearRow"), counts[i] * 16, "near pointer elements retain two-byte target width");
+		mu_assert_eq (r_anal_type_bitsize (anal, "FarRow"), counts[i] * 32, "far pointer elements retain four-byte target width");
+		char *format = r_type_format (anal->sdb_types, "Grid");
+		expected = r_str_newf ("%dc", counts[i] * 2);
+		mu_assert_streq (format, expected, "formatting uses the same count through nested aliases");
+		free (expected);
+		free (format);
+		format = r_type_format (anal->sdb_types, "NearRow");
+		expected = counts[i] == 1? strdup ("p"): r_str_newf ("%dp", counts[i]);
+		mu_assert_streq (format, expected, "formatting retains near pointer element width and count");
+		free (expected);
+		free (format);
+		format = r_type_format (anal->sdb_types, "FarRow");
+		expected = counts[i] == 1? strdup ("p4"): r_str_newf ("%dp4", counts[i]);
+		mu_assert_streq (format, expected, "formatting retains far pointer element width and count");
+		free (expected);
+		free (format);
+		r_anal_free (anal);
+	}
+	mu_end;
+}
+
+static bool test_anal_array_bound_target_model(void) {
+	int bits;
+	for (bits = 16; bits <= 64; bits *= 4) {
+		RAnal *anal = r_anal_new ();
+		r_arch_config_use (anal->config, "x86");
+		anal->config->bits = bits;
+		r_anal_types_reload (anal, R2_PREFIX, NULL, NULL);
+		ut64 count = 0;
+		const char *diagnostic = NULL;
+		mu_assert_eq (sdb_num_get (anal->sdb_types, "type.int.size", NULL), bits == 16? 16: 32, "selected target database provides int width");
+		mu_assert_eq (sdb_num_get (anal->sdb_types, "type.long.size", NULL), bits == 16? 32: 64, "selected target database provides long width");
+		mu_assert_true (r_type_array_bound_from_db (anal->sdb_types, "0xffff+2", &count, &diagnostic), "read the selected target model for literal typing");
+		mu_assert_eq (count, bits == 16? 1: 65537, "hex literal type follows target int range, not host sizeof");
+		char *error = NULL;
+		mu_assert_true (r_anal_import_c_decls (anal, "struct TargetBound {char items[0xffff+2];char tail;};", &error), "c2 uses the actual selected integer model");
+		mu_assert_null (error, "target-width expression imports successfully");
+		mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.TargetBound.tail", NULL), bits == 16? "char,1,0": "char,65537,0", "target integer wrap governs the next field offset");
+		char *format = r_type_format (anal->sdb_types, "char[0xffff+2]");
+		mu_assert_streq (format, bits == 16? "c": "65537c", "formatting uses the same target-dependent count");
+		free (format);
+		char *kv = r_anal_cparse (anal, "struct SignedOverflow {char items[32767+1];};", &error);
+		if (bits == 16) {
+			mu_assert_null (kv, "signed 16-bit arithmetic overflow is rejected");
+			mu_assert_notnull (error, "overflow produces a parser diagnostic");
+		} else {
+			mu_assert_notnull (kv, "the same addition fits a 32-bit int");
+			mu_assert_null (error, "representable target arithmetic is valid");
+		}
+		free (kv);
+		free (error);
+		r_anal_free (anal);
+	}
+	mu_end;
+}
+
+static bool test_anal_cparse_invalid_bounds_and_builtins(void) {
+	RAnal *anal = r_anal_new ();
+	r_anal_types_reload (anal, R2_PREFIX, NULL, NULL);
+	const char *bounds[] = { "0", "-1", "2+BOGUS", "8junk", "1+8/0", "1+8%0" };
+	size_t i;
+	for (i = 0; i < R_ARRAY_SIZE (bounds); i++) {
+		char *type = r_str_newf ("char [%s]", bounds[i]);
+		RTypeLayout layout;
+		mu_assert_false (r_type_get_layout (anal->sdb_types, type, &layout), "layout refuses an invalid bound instead of inventing a count");
+		char *format = r_type_format (anal->sdb_types, type);
+		mu_assert_null (format, "formatting refuses the same invalid bound");
+		free (type);
+		char *header = r_str_newf ("struct InvalidBound {char items[%s];};", bounds[i]);
+		char *error = NULL;
+		char *kv = r_anal_cparse (anal, header, &error);
+		mu_assert_null (kv, "real c2 rejects invalid array evaluation");
+		mu_assert_notnull (error, "invalid evaluation reports a parser error");
+		free (error);
+		free (header);
+	}
+	const char *builtins[] = { "unsigned float", "signed unsigned int", "short double", "long long long" };
+	for (i = 0; i < R_ARRAY_SIZE (builtins); i++) {
+		char *header = r_str_newf ("%s invalid(void);", builtins[i]);
+		char *error = NULL;
+		char *kv = r_anal_cparse (anal, header, &error);
+		mu_assert_null (kv, "real c2 rejects contradictory builtin tokens");
+		mu_assert_notnull (error, "invalid builtin tokens report a parser error");
+		free (error);
+		free (header);
+	}
 	r_anal_free (anal);
 	mu_end;
 }
@@ -1199,6 +1321,9 @@ int all_tests(void) {
 	mu_run_test (test_anal_type_bitsize_struct_cycle);
 	mu_run_test (test_anal_type_bitsize_struct_recorded);
 	mu_run_test (test_anal_type_bitsize_arrays);
+	mu_run_test (test_anal_cparse_array_bounds);
+	mu_run_test (test_anal_array_bound_target_model);
+	mu_run_test (test_anal_cparse_invalid_bounds_and_builtins);
 	mu_run_test (test_anal_save_base_type_typedef);
 	mu_run_test (test_anal_get_base_type_atomic);
 	mu_run_test (test_anal_save_base_type_atomic);

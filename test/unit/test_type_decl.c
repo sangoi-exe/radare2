@@ -221,6 +221,89 @@ static bool test_type_decl_reject_malformed(void) {
 	mu_end;
 }
 
+static bool test_type_decl_fundamental_specifiers(void) {
+	const char *valid[] = {
+		"void", "signed char", "unsigned char", "short", "unsigned short int", "signed",
+		"int", "unsigned int", "long", "long int", "unsigned long long int", "long long",
+		"float", "double", "long double", "bool", "_Bool", "const volatile unsigned int",
+		"uint32_t", "size_t", "UnknownType", "pair<int, char>"
+	};
+	const char *invalid[] = {
+		"unsigned float", "signed unsigned int", "short double", "long long long",
+		"int char", "void int", "short long", "long long double", "unsigned _Bool", "int int"
+	};
+	size_t i;
+	for (i = 0; i < R_ARRAY_SIZE (valid); i++) {
+		char *error = NULL;
+		RTypeDecl *decl = r_type_decl_parse (valid[i], &error);
+		mu_assert_null (error, valid[i]);
+		mu_assert_notnull (decl, valid[i]);
+		r_type_decl_free (decl);
+	}
+	for (i = 0; i < R_ARRAY_SIZE (invalid); i++) {
+		char *error = NULL;
+		RTypeDecl *decl = r_type_decl_parse (invalid[i], &error);
+		mu_assert_null (decl, invalid[i]);
+		mu_assert_notnull (error, "contradictory fundamental specifiers report an error");
+		free (error);
+	}
+	mu_end;
+}
+
+static bool test_type_array_bound(void) {
+	const RTypeIntegerModel model = { 32, 64, 64 };
+	const char *valid[] = { "8", "010", "0x8", "1|2+3", "8U", "010U", "2+3", "(2+3)*2", "1<<3", "8/2", "7%3", "2|4", "010+1", "1+2<<2", "8>>1+1", "7&3^2|8", "(-8/3)+5", "(-8%3)+5", "0x8uLL" };
+	const ut64 values[] = { 8, 8, 8, 5, 8, 8, 5, 10, 8, 4, 1, 6, 9, 12, 2, 9, 3, 3, 8 };
+	const char *invalid[] = {
+		"0", "-1", "1-2", "2+BOGUS", "8junk", "08", "0x", "8/0", "1+8/0", "1+8%0", "8Ujunk",
+		"2+", "2 3", "1<<-1", "1U<<32", "2147483647+1", "9223372036854775807LL*2",
+		"18446744073709551616ULL", "18446744073709551615", "~0", "-1>>1", "-1&3",
+		"sizeof(int)", "(int)8", "1||2", "8lL", "++8"
+	};
+	ut64 count = 99;
+	const char *error = NULL;
+	mu_assert_true (r_type_array_bound (NULL, " \t", &count, &error), "empty array bounds are unsized, not invalid numeric zero");
+	mu_assert_eq (count, 0, "unsized bounds return a distinct zero count");
+	size_t i;
+	for (i = 0; i < R_ARRAY_SIZE (valid); i++) {
+		mu_assert_true (r_type_array_bound (&model, valid[i], &count, &error), valid[i]);
+		mu_assert_null (error, "valid integer expressions have no diagnostic");
+		mu_assert_eq (count, values[i], "shared bounds use C bases and operator precedence");
+	}
+	for (i = 0; i < R_ARRAY_SIZE (invalid); i++) {
+		count = 99;
+		mu_assert_false (r_type_array_bound (&model, invalid[i], &count, &error), invalid[i]);
+		mu_assert_notnull (error, "invalid or unsupported evaluation reports failure");
+		mu_assert_eq (count, 99, "failed bound interpretation does not publish a partial count");
+	}
+	mu_assert_false (r_type_array_bound (NULL, "8", &count, &error), "a sized bound needs a target integer model");
+	Sdb *incomplete = sdb_new0 ();
+	mu_assert_false (r_type_array_bound_from_db (incomplete, "8", &count, &error), "an incomplete database cannot invent a target integer model");
+	mu_assert_notnull (error, "missing target context has a diagnostic");
+	sdb_free (incomplete);
+	mu_end;
+}
+
+static bool test_type_array_bound_integer_model(void) {
+	const RTypeIntegerModel narrow = { 16, 32, 64 };
+	const RTypeIntegerModel wide = { 32, 64, 64 };
+	const char *expressions[] = { "0xffff+2", "65535+2", "0xffffU+2", "0xffffL+2", "~0U>>12", "(0UL-1)+2LL" };
+	const ut64 narrow_values[] = { 1, 65537, 1, 65537, 15, 4294967297ULL };
+	const ut64 wide_values[] = { 65537, 65537, 65537, 65537, 1048575, 1 };
+	ut64 count;
+	size_t i;
+	for (i = 0; i < R_ARRAY_SIZE (expressions); i++) {
+		mu_assert_true (r_type_array_bound (&narrow, expressions[i], &count, NULL), expressions[i]);
+		mu_assert_eq (count, narrow_values[i], "literal selection and arithmetic conversions use supplied 16/32/64 widths");
+		mu_assert_true (r_type_array_bound (&wide, expressions[i], &count, NULL), expressions[i]);
+		mu_assert_eq (count, wide_values[i], "the same expression uses supplied 32/64/64 widths and ranks");
+	}
+	mu_assert_false (r_type_array_bound (&narrow, "32767+1", &count, NULL), "signed target-int overflow is rejected before array sizing");
+	mu_assert_true (r_type_array_bound (&wide, "32767+1", &count, NULL), "the same addition is representable in a wider int");
+	mu_assert_eq (count, 32768, "valid signed addition retains its mathematical result");
+	mu_end;
+}
+
 static bool test_type_decl_utility_qualifiers(void) {
 	const char *inputs[] = { "atomic int", "int atomic", "_Atomic int", "int _Atomic" };
 	size_t i;
@@ -311,6 +394,9 @@ int all_tests(void) {
 	mu_run_test (test_type_decl_roundtrip);
 	mu_run_test (test_type_decl_contextual_names);
 	mu_run_test (test_type_decl_reject_malformed);
+	mu_run_test (test_type_decl_fundamental_specifiers);
+	mu_run_test (test_type_array_bound);
+	mu_run_test (test_type_array_bound_integer_model);
 	mu_run_test (test_type_decl_utility_qualifiers);
 	mu_run_test (test_type_decl_dotted_names);
 	mu_run_test (test_type_decl_opaque_base);

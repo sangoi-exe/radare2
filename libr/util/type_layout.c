@@ -117,15 +117,13 @@ static bool type_layout_node(Sdb *db, const RTypeDeclNode *node, RTypeLayout *la
 		if (!type_layout_node (db, node->child, layout, chain, depth + 1)) {
 			return false;
 		}
-		if (!*node->array.count) {
+		ut64 count;
+		if (!r_type_array_bound_from_db (db, node->array.count, &count, NULL)) {
+			return false;
+		}
+		if (!count) {
 			layout->bits = 0;
 			return true;
-		}
-		char *end;
-		errno = 0;
-		ut64 count = strtoull (node->array.count, &end, 0);
-		if (errno == ERANGE || !isdigit ((ut8)*node->array.count) || !count || *r_str_trim_head_ro (end)) {
-			return false;
 		}
 		return !r_mul_overflow (layout->bits, count, &layout->bits);
 	}

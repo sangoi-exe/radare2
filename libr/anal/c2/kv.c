@@ -799,9 +799,10 @@ static bool parse_struct_body(KVCParser *kvc, const char *type, const char *sn, 
 		int count = 0;
 		RTypeDeclNode *outer = decl->type;
 		if (outer->kind == R_TYPE_DECL_ARRAY && *outer->array.count) {
-			ut64 dimension = r_num_math (NULL, outer->array.count);
-			if (!dimension || dimension > INT_MAX) {
-				kvc_error (kvc, "Invalid array dimension");
+			ut64 dimension;
+			const char *error = NULL;
+			if (!r_type_array_bound_from_db (kvc->host_types, outer->array.count, &dimension, &error) || !dimension || dimension > INT_MAX) {
+				kvc_error (kvc, error? error: "Array dimension exceeds parser limit");
 				r_type_decl_free (decl);
 				break;
 			}

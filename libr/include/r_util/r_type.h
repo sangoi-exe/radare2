@@ -6,6 +6,8 @@ extern "C" {
 #endif
 
 #include <sdb/sdb.h>
+#include <r_util/r_assert.h>
+#include <r_util/r_type_expr.h>
 
 typedef struct r_type_enum {
 	char *name;
@@ -81,6 +83,22 @@ R_API R_OWNED RTypeDecl *r_type_decl_parse(const char * R_NONNULL text, char ** 
 // Render canonical syntax without a semicolon; include_name affects only the top-level name.
 R_API R_OWNED char *r_type_decl_render(const RTypeDecl * R_NONNULL decl, bool include_name);
 R_API void r_type_decl_free(RTypeDecl * R_NULLABLE decl);
+
+// Use the selected database's integer widths; no host-size or default-model fallback.
+static inline bool r_type_array_bound_from_db(Sdb * R_NULLABLE db, const char * R_NONNULL text, ut64 * R_NONNULL count, const char ** R_NULLABLE error) {
+	RTypeIntegerModel model = { 0, 0, 0 };
+	if (db) {
+		ut64 int_bits = sdb_num_get (db, "type.int.size", NULL);
+		ut64 long_bits = sdb_num_get (db, "type.long.size", NULL);
+		ut64 long_long_bits = sdb_num_get (db, "type.long long.size", NULL);
+		if (int_bits <= 64 && long_bits <= 64 && long_long_bits <= 64) {
+			model.int_bits = int_bits;
+			model.long_bits = long_bits;
+			model.long_long_bits = long_long_bits;
+		}
+	}
+	return r_type_array_bound (&model, text, count, error);
+}
 
 typedef struct r_type_layout_t {
 	ut64 bits;

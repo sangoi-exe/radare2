@@ -525,14 +525,10 @@ static RTypeDecl *type_format_resolve(Sdb *db, const char *text, RTypeDeclNode *
 	for (depth = 0; decl && !decl->name && depth < TYPE_CHAIN_MAX; depth++) {
 		RTypeDeclNode *node = decl->type;
 		while (node->kind == R_TYPE_DECL_ARRAY) {
-			if (*node->array.count) {
-				char *end;
-				errno = 0;
-				ut64 count = strtoull (node->array.count, &end, 0);
-				if (errno == ERANGE || !isdigit ((ut8)*node->array.count) || !count || *end || r_mul_overflow (*elements, count, elements)) {
-					r_type_decl_free (decl);
-					return NULL;
-				}
+			ut64 count;
+			if (!r_type_array_bound_from_db (db, node->array.count, &count, NULL) || !count || r_mul_overflow (*elements, count, elements)) {
+				r_type_decl_free (decl);
+				return NULL;
 			}
 			node = node->child;
 		}
