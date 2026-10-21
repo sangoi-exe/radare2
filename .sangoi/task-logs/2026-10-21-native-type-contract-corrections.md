@@ -1,6 +1,6 @@
 # Native type-contract corrections
 
-Status: active Remediation review after the current user selected the bounded SIGNATURE-F4 correction. Its implementation and focused proof are committed; the new proportional Code Gate remains pending. Earlier negative verdicts remain factual for their candidates.
+Status: complete locally. The final focused Remediation delta review returned PROCEED with complete coverage and no findings, closing SIGNATURE-F4. Earlier negative verdicts remain factual for their candidates. No global installation or push occurred.
 
 Authority: [Intent Contract](../planning/2026-10-21-native-type-contract-corrections.md), epoch2. The confirmed public-interface authorization permits the task-required ABI157 break and matching rebuild, not compatibility wrappers, saved-analysis migration, global installation or another push. Exact current-user anchors remain in that contract.
 
@@ -72,3 +72,9 @@ Two actual fresh Claude calls failed with HTTP429 account quota exhaustion and n
 User message `msg_01a15efc-a298-7dd1-8d71-1577497f4199` at `2026-10-21T12:02:57.433-03:00` (`America/Sao_Paulo`) confirms the narrow selector correction and both existing-boundary regressions. Host `4b8fc8f5f67b9571117e721d2fac5f74dd2f45cb` reserves candidate names referenced by peer link/fcnlink rows before the current name probe. No deletion, shared setter, rename, interface, ABI or child-source change was needed.
 
 One fresh canonical private host build passes44 function/Core tests and both exact CLI witnesses; the retained valid baseline fails on the reported peer activation. Root's new matching MCP build passes54 requests, including both dormant-binding scenarios, with unique responses and preserved peer/source state. Current primary host CLI54/54 and a full unchanged-bridge type run94/94 pass against the corrected SDK. Evidence is `r-f4-dormant-lzUGvC/`. Earlier native/game/other-host proof remains explicitly tied to its unchanged inputs, not described as rerun. The new review uses one Senior because the correction is small and cohesive; this is not a Claude-quota waiver or a downgrade of the previous completed broad Gate.
+
+## Final closure
+
+`/root/type_gate_integration_senior` reviewed host `1c062e75897c31596aae0115e72846e229e42cf3..5eca6c4577e0fdf0aad08b0425e519a3baf8d686` and returned PROCEED. The two changed source/test files, direct selector/lookup/Core/rename seams, six documentary followers, baseline/current proof and private linkage are fully reviewed. No finding, local fix or required evidence gap remains. Root applied the registered transition to Closeout; the plan records completion. Only factual final records and Git inspection follow the verdict, not a new source change or review turn.
+
+Final runtime source commits are host `4b8fc8f5f67b9571117e721d2fac5f74dd2f45cb`, bridge `40dbd80` with guidance through `82d150dcbfffc0f03a91a3e4c3debde8dfd803a5`, native `6a4d8bf` with guidance through `6f7438da7a942c7a1dd728e2dda08faabe8644b4`, and unchanged MCP `51df6714dc5b40822ab421ac685caa4d3da2a0ae`. Source/tests and independent documentation remain separate coherent commits. Qualified private builds and referenced evidence are retained for reproducibility and subsequent operational use. The pre-existing untracked `.refs/` is preserved. No global runtime activation, saved-analysis migration, remote publication or whole-game byte-equality claim follows from this closure; the deferred limitations above remain explicit.

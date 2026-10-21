@@ -1,6 +1,6 @@
-# Local Code Gate: DO_NOT_PROCEED
+# Local Code Gate: PROCEED
 
-The latest completed Remediation delta review closes the previous seven defects but returns DO_NOT_PROCEED for SIGNATURE-F4. The user subsequently selected the focused F4 correction; its implementation and proof are recorded in the final section, with the new review pending. Earlier verdicts remain historical evidence, not claims that their findings are still uncorrected in later candidates.
+The final focused Remediation delta review returns PROCEED and closes SIGNATURE-F4, with complete required coverage and no findings. The earlier seven defects were closed by the preceding broad review. Earlier negative verdicts remain historical evidence for their candidates; none was relabeled as an approval.
 
 ## Initial Task change-set review
 
@@ -98,7 +98,7 @@ All required Senior source and integration coverage is complete, and no semantic
 
 The registered transition returns the material correction to the current user and keeps lifecycle Remediation review. The canonical plan is on hold. This disposition and its documentation are bookkeeping only; no correction, new Gate or source mutation is authorized by them.
 
-## Selected SIGNATURE-F4 correction — awaiting review
+## Final SIGNATURE-F4 review — PROCEED
 
 The current user confirmed the proposed bounded correction in message `msg_01a15efc-a298-7dd1-8d71-1577497f4199` at `2026-10-21T12:02:57.433-03:00` (`America/Sao_Paulo`). The canonical plan resumed active Remediation review without changing Scope or epoch. This is remediation selection, not an override or approval of the preceding candidate.
 
@@ -106,4 +106,10 @@ Host runtime `4b8fc8f5f67b9571117e721d2fac5f74dd2f45cb` changes only `libr/anal/
 
 Root's current proof adds primary CLI54/54, a full unchanged-bridge type run94/94 with corrected-host linkage, and54 actual MCP requests across retained/normal-sharing/dormant-sharing sessions. Evidence is `/home/lucas/.cache/codex/radare2/native-type-contract-2026-10-21/r-f4-dormant-lzUGvC/`. No original executable, saved analysis, global installation or remote was changed.
 
-The new Gate uses the resident's proportional single-Senior procedure: this is a small cohesive private selector correction, one direct test boundary and factual documentary followers, with no new architecture/API/state or independent source owner. The previously completed broad partitions are unchanged. This is a new committed-candidate review, not a downgrade of the old crossed Gate or reuse of its Claude quota dispensation. Formal closure remains pending.
+The new Gate uses the resident's proportional single-Senior procedure: this is a small cohesive private selector correction, one direct test boundary and factual documentary followers, with no new architecture/API/state or independent source owner. The previously completed broad partitions are unchanged. This is a new committed-candidate review, not a downgrade of the old crossed Gate or reuse of its Claude quota dispensation.
+
+`/root/type_gate_integration_senior` reviewed host `1c062e75897c31596aae0115e72846e229e42cf3..5eca6c4577e0fdf0aad08b0425e519a3baf8d686` and issued the final **PROCEED** disposition. Route condition: `not-applicable`; registered transition: enter Closeout. No reportable finding, required local correction or indispensable proof gap remains in the admitted object.
+
+The reviewer inspected the complete two-source-file delta, selector/canonical lookup/FUNCTION-SHARED/Core seams, adjacent isolation/rename controls, all six factual documentary followers, exact baseline/current witnesses and private linkage. It confirmed44/44 function/Core units,54/54 primary CLI, one complete94/94 bridge type run and54 MCP requests across five sessions with unique replies within each session and none for notifications. The source/test candidate matches the qualified snapshot; scoped whitespace checks pass. No source was changed during review, and only excluded host `.refs/` remained untracked.
+
+SIGNATURE-F4 is closed: the peer's literal link/fcnlink references reserve prospective names before the existing probe, conflicts follow the existing suffix path, and both observed peers remain unknown/void with unchanged bindings. Deletion, SHARED updates, standalone `afn`, parser admission and ABI157 remain intact. No unchanged broad review was restarted and no Claude participation was required by this small-delta procedure. Previously disclosed F_SCOPY, sanitizer, alternate-Make, TypeCode, persistence, processor and whole-game limits remain excluded rather than silently approved. Post-verdict changes only memorialize this result.

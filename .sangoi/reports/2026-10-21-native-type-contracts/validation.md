@@ -1,6 +1,6 @@
 # Native type-contract validation
 
-This report records the native type-contract qualification and the subsequent focused SIGNATURE-F4 correction. It is not a whole-decompiler correctness claim or rebuild-ready game source. The preceding [local review](review.md) found the dormant-binding failure despite the broader passes; the user selected its correction, whose new review remains pending. The original executables were opened for analysis without execution, write mode or saved-project mutation.
+This report records the native type-contract qualification and the subsequent focused SIGNATURE-F4 correction. The final [local review](review.md) returns PROCEED for the admitted correction and closes F4. It is not a whole-decompiler correctness claim or rebuild-ready game source. The original executables were opened for analysis without execution, write mode or saved-project mutation.
 
 ## Focused SIGNATURE-F4 correction
 
