@@ -1,5 +1,9 @@
 # Local Code Gate: DO_NOT_PROCEED
 
+The current Remediation delta review closes the previous seven defects but returns DO_NOT_PROCEED for new SIGNATURE-F4. Its complete disposition appears in the final section below. The earlier review is retained as historical evidence, not as a claim that its seven findings remain uncorrected.
+
+## Initial Task change-set review
+
 The final cumulative `Senior Code Reviewer / Task change-set review` returned **DO_NOT_PROCEED**, with route condition **user-decision**. The integration owner was `/root/type_gate_integration_senior`. Semantic coverage of the admitted object is complete; the result is not an approval, a review override or authorization to apply material remediation.
 
 ## Fixed reviewed object
@@ -65,4 +69,31 @@ Actual native responses and root analysis remain under `/home/lucas/.cache/codex
 
 ## Post-review current-user selection
 
-The user confirmed the recommended correction batch and per-function `afs`/MCP isolation in message `msg_01a15e6f-791f-7d33-b9a7-45a6538715c2` at `2026-10-21T09:28:46.248-03:00` (`America/Sao_Paulo`). The structured setter keeps its intentional shared-type behavior. The canonical plan is active in Remediation review, epoch2; the existing execution annex owns bounded Worker corrections. This later decision supersedes the pending-decision state described by the review above without changing its DO_NOT_PROCEED disposition. The next candidate requires its own registered Remediation delta review after implementation, validation and commit.
+The user confirmed the recommended correction batch and per-function `afs`/MCP isolation in message `msg_01a15e6f-791f-7d33-b9a7-45a6538715c2` at `2026-10-21T09:28:46.248-03:00` (`America/Sao_Paulo`). The structured setter keeps its intentional shared-type behavior. That decision activated Remediation review in epoch2, with bounded Worker corrections in the existing execution annex. It superseded the earlier pending-decision state without changing that candidate's DO_NOT_PROCEED disposition. The resulting candidate received the separate Remediation delta review below.
+
+## Remediation delta review — current
+
+Final authority: `/root/type_gate_integration_senior`, Senior Code Reviewer / Remediation delta review. Verdict: **DO_NOT_PROCEED**. Route condition: **user-decision**. Required semantic coverage is complete; no required source partition is unread or evidence-blocked.
+
+The fixed candidate is host `1c062e75897c31596aae0115e72846e229e42cf3`, bridge `82d150dcbfffc0f03a91a3e4c3debde8dfd803a5`, native `6f7438da7a942c7a1dd728e2dda08faabe8644b4`, and unchanged MCP `51df6714dc5b40822ab421ac685caa4d3da2a0ae`. No candidate files changed during review. The four Senior source partitions (TYPES, SIGNATURE, BRIDGE, NATIVE), independent integration and final root synthesis close all seven prior findings and their bounded followers. Normal validation remains190 units,54 primary CLI plus42 overlapping followers,94 compositionally covered bridge type controls,12 bridge followers,native54/preparation10/XML/reuse,38 typed/isolation and28 original-game MCP requests. Those passes do not falsify the new witness.
+
+### SIGNATURE-F4: dormant peer bindings defeat function-local edits
+
+- Class and priority: `verified_defect`, P2; follow-up class `substantive runtime/contract fix`.
+- Location: `libr/anal/fcn.c:3540–3598`, `function_signature_unused_type_name`, particularly the candidate-only probe at lines3542,3572 and3584.
+- Observed fact: normal `t- future` can leave a peer's `link` or `fcnlink` row dormant. Prospective-key selection checks name/prefix records and peers against a probe without those rows. Creating `future` for an edit to another function activates the peer's old reference.
+- Required property: the already-selected `afs`/MCP operation changes only the addressed function's effective contract. This policy is closed; the finding does not request a new policy or broader deletion semantics.
+- Impact: both actual private-runtime witnesses change the peer from return void / specificity unknown to char / fixed after `afs char future(void)` edits `original`. Each run exits0 with empty stderr, and the peer's binding row remains unchanged. The unchanged MCP setter reaches the same Core owner.
+- Recommended closure: `modify_existing_owner`. Account for peer `link`/`fcnlink` references in prospective-key occupancy and retain the existing suffix-selection path. Extend the existing isolation controls for both demonstrated binding kinds. Preserve `t-`, intentional SHARED updates and standalone `afn`; no registry, reference graph or transaction framework is justified.
+- Falsifier: both witnesses leave the peer's void/unknown contract and binding intact while applying the addressed declaration.
+- Current-user decision needed: select this correction, another evidenced closure or an explicit residual-risk disposition. No selection or risk acceptance has occurred after this new finding.
+
+Exact commands and full observations are retained under `/home/lucas/.cache/codex/radare2/native-type-contract-2026-10-21/remediation-code-gate/dormant-link/{link,fcnlink}.{invocation.json,stdout,stderr,status}`. Root, SIGNATURE and integration reviewed the live causal chain and retained results. The material finding is not eligible for automatic non-substantive correction.
+
+### Review availability and remaining limits
+
+Two fresh native Claude calls, TYPES and SIGNATURE, actually failed with exit1/HTTP429 `usage_limit_reached`, empty modelUsage and no semantic assessment. Both reported quota reset at `2026-10-21T13:20:00-03:00` (`America/Sao_Paulo`). Root directly checked these envelopes and applied the current-Gate failure exception to affected Claude contributions and dependent exchanges. BRIDGE, NATIVE and integration were uncalled while the same observed account outage still applied; they are not described as failed calls or completed reviews. No absent Claude opinion is approval or agreement. This is not a task-level override or a standing exception for later Gates.
+
+All required Senior source and integration coverage is complete, and no semantic disagreement remains among those assessments. No new proof matrix is required. Previously disclosed F_SCOPY rendering, sanitizer, alternate Make, full TypeCode restoration, all-processor, global activation, remote pin and persistence/whole-game limits remain unchanged. Root synthesis and actual error envelopes are in the task cache's `remediation-code-gate/` directory.
+
+The registered transition returns the material correction to the current user and keeps lifecycle Remediation review. The canonical plan is on hold. This disposition and its documentation are bookkeeping only; no correction, new Gate or source mutation is authorized by them.

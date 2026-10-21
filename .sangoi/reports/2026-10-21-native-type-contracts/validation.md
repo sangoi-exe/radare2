@@ -1,6 +1,6 @@
 # Native type-contract validation
 
-This report records the current remediation candidate and observed coverage. It is not a Code Gate verdict, a whole-decompiler correctness claim or rebuild-ready game source. The initial [local Code Gate](review.md) returned DO_NOT_PROCEED; the current user then selected the recorded corrections. The new remediation review remains pending. The original executables were opened for analysis without execution, write mode or saved-project mutation.
+This report records the current remediation candidate and observed coverage. It is not a whole-decompiler correctness claim or rebuild-ready game source. The current [local Remediation delta review](review.md) closes the previous seven defects but returns DO_NOT_PROCEED for the new dormant-binding isolation failure, SIGNATURE-F4. Passing results below do not close that reproduced case. The original executables were opened for analysis without execution, write mode or saved-project mutation.
 
 ## Candidate and runtime
 
