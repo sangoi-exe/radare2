@@ -1,6 +1,6 @@
 /* radare - LGPL - Copyright 2026 - pancake, Codex */
 
-static bool kvc_type_layout(KVCParser *kvc, const char *name, int *size, int *align) {
+static void kvc_sync_types(KVCParser *kvc) {
 	if (!kvc->layout_ready) {
 		Sdb *types = sdb_new0 ();
 		if (kvc->host_types) {
@@ -13,6 +13,10 @@ static bool kvc_type_layout(KVCParser *kvc, const char *name, int *size, int *al
 	const char *records = r_strbuf_get (kvc->sb);
 	sdb_query_lines (kvc->types, records + kvc->synced);
 	kvc->synced = r_strbuf_length (kvc->sb);
+}
+
+static bool kvc_type_layout(KVCParser *kvc, const char *name, int *size, int *align) {
+	kvc_sync_types (kvc);
 	RTypeLayout layout;
 	if (!r_type_get_layout (kvc->types, name, &layout) || layout.bits % 8 || layout.bits / 8 > INT_MAX || layout.align > INT_MAX) {
 		return false;

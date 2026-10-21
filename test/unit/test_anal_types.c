@@ -921,6 +921,124 @@ static bool test_anal_cparse_lazy_alias_layout(void) {
 	mu_end;
 }
 
+static bool test_anal_cparse_forward_identity(void) {
+	RAnal *anal = r_anal_new ();
+	anal->config->bits = 16;
+	r_anal_use (anal, "x86");
+	r_anal_types_reload (anal, R2_PREFIX, "windows", "x86");
+	char *error = NULL;
+	mu_assert_true (r_anal_import_c_decls (anal,
+		"struct Opaque;union Choice;struct Opaque;union Choice;"
+		"typedef struct Opaque near *OpaqueNear;typedef union Choice far *ChoiceFar;"
+		"struct Handles {OpaqueNear first;ChoiceFar second;};struct Opaque;union Choice;", &error), "import real incomplete tags and pointer declarations");
+	mu_assert_null (error, "opaque pointer headers do not need pointee layout");
+	const char *names[] = { "Opaque", "Choice" };
+	int i;
+	for (i = 0; i < R_ARRAY_SIZE (names); i++) {
+		RAnalBaseType *base = r_anal_get_base_type (anal, names[i]);
+		mu_assert_notnull (base, "a forward declaration has a readable base identity");
+		mu_assert_eq (base->kind, i? R_ANAL_BASE_TYPE_KIND_UNION: R_ANAL_BASE_TYPE_KIND_STRUCT, "the tag retains its aggregate kind");
+		mu_assert_true (RVecAnalTypeMember_empty (r_anal_base_type_members (base)), "an incomplete tag has no invented members");
+		mu_assert_eq (base->size, 0, "an incomplete identity has no recorded extent");
+		r_anal_save_base_type (anal, base);
+		char *serialized = r_anal_base_type_to_kv (base);
+		r_anal_save_parsed_type (anal, serialized);
+		free (serialized);
+		r_anal_base_type_free (base);
+		RTypeLayout layout;
+		mu_assert_false (r_type_get_layout (anal->sdb_types, names[i], &layout), "save roundtrip must not make an incomplete tag a zero-byte object");
+	}
+	mu_assert_streq (sdb_const_get (anal->sdb_types, "Opaque", NULL), "struct", "save retains the struct identity");
+	mu_assert_streq (sdb_const_get (anal->sdb_types, "Choice", NULL), "union", "save retains the union identity");
+	mu_assert_streq (sdb_const_get (anal->sdb_types, "typedef.OpaqueNear", NULL), "struct Opaque near *", "near pointer retains its explicit opaque target");
+	mu_assert_streq (sdb_const_get (anal->sdb_types, "typedef.ChoiceFar", NULL), "union Choice far *", "far pointer retains its explicit opaque target");
+	mu_assert_eq (r_anal_type_bitsize (anal, "OpaqueNear"), 16, "near opaque pointer has target width");
+	mu_assert_eq (r_anal_type_bitsize (anal, "ChoiceFar"), 32, "far opaque pointer has target width");
+	mu_assert_eq (r_anal_type_bitsize (anal, "Handles"), 48, "pointer members compose without completing either tag");
+	r_anal_free (anal);
+	mu_end;
+}
+
+static bool test_anal_cparse_forward_completion(void) {
+	RAnal *anal = r_anal_new ();
+	anal->config->bits = 64;
+	r_anal_types_reload (anal, R2_PREFIX, NULL, NULL);
+	char *error = NULL;
+	mu_assert_true (r_anal_import_c_decls (anal, "struct Opaque;union Choice;", &error), "import incomplete identities");
+	mu_assert_true (r_anal_import_c_decls (anal,
+		"struct Opaque;struct Opaque {int value;};struct Opaque;"
+		"union Choice;union Choice {int value;};union Choice;", &error), "complete each tag and then forward declare it in one input");
+	mu_assert_true (r_anal_import_c_decls (anal, "struct Opaque;union Choice;struct Opaque;union Choice;", &error), "later imports may repeat forward declarations");
+	mu_assert_null (error, "forward declarations do not invalidate complete definitions");
+	const char *names[] = { "Opaque", "Choice" };
+	int i;
+	for (i = 0; i < R_ARRAY_SIZE (names); i++) {
+		RAnalBaseType *base = r_anal_get_base_type (anal, names[i]);
+		mu_assert_notnull (base, "complete definition remains retrievable");
+		RAnalTypeMember *member = RVecAnalTypeMember_at (r_anal_base_type_members (base), 0);
+		mu_assert_notnull (member, "a repeated forward does not remove existing members");
+		mu_assert_streq (member->name, "value", "completed member identity survives");
+		mu_assert_eq (r_anal_type_bitsize (anal, names[i]), 32, "completed extent survives repeated forwards");
+		r_anal_base_type_free (base);
+	}
+	r_anal_free (anal);
+	mu_end;
+}
+
+static bool test_anal_cparse_forward_typedef(void) {
+	RAnal *anal = r_anal_new ();
+	anal->config->bits = 64;
+	r_anal_types_reload (anal, R2_PREFIX, NULL, NULL);
+	char *error = NULL;
+	mu_assert_true (r_anal_import_c_decls (anal,
+		"typedef struct Opaque Opaque;typedef union Choice Choice;"
+		"typedef struct Distinct Alias;typedef union DistinctUnion UnionAlias;"
+		"struct Links {Opaque *first;Choice *second;struct Distinct *third;Alias *fourth;};", &error), "typedef-only declarations retain the introduced tag");
+	mu_assert_null (error, "same-name aliases do not create recursive typedefs");
+	mu_assert_streq (sdb_const_get (anal->sdb_types, "Opaque", NULL), "struct", "same-name struct typedef coalesces with the tag");
+	mu_assert_streq (sdb_const_get (anal->sdb_types, "Choice", NULL), "union", "same-name union typedef coalesces with the tag");
+	mu_assert_null (sdb_const_get (anal->sdb_types, "typedef.Opaque", NULL), "coalesced identity has no self-referential alias");
+	mu_assert_streq (sdb_const_get (anal->sdb_types, "Distinct", NULL), "struct", "a distinct explicit tag owns its identity");
+	mu_assert_streq (sdb_const_get (anal->sdb_types, "Alias", NULL), "typedef", "a distinct alias is not mistaken for the explicit tag");
+	mu_assert_streq (sdb_const_get (anal->sdb_types, "typedef.Alias", NULL), "struct Distinct", "a distinct typedef retains its actual target");
+	mu_assert_streq (sdb_const_get (anal->sdb_types, "DistinctUnion", NULL), "union", "a distinct union tag owns its identity");
+	mu_assert_streq (sdb_const_get (anal->sdb_types, "typedef.UnionAlias", NULL), "union DistinctUnion", "a distinct union alias retains its actual target");
+	mu_assert_true (r_anal_import_c_decls (anal, "struct Opaque {int value;};union Choice {int value;};", &error), "complete coalesced typedef tags");
+	mu_assert_true (r_anal_import_c_decls (anal, "typedef struct Opaque Opaque;typedef union Choice Choice;", &error), "a later same-name typedef preserves completed layouts");
+	mu_assert_eq (r_anal_type_bitsize (anal, "Opaque"), 32, "same-name struct typedef does not clobber a complete definition");
+	mu_assert_eq (r_anal_type_bitsize (anal, "Choice"), 32, "same-name union typedef does not clobber a complete definition");
+	mu_assert_true (r_anal_import_c_decls (anal, "struct Inline;typedef struct Inline Inline;struct Inline {int value;};typedef struct Inline Inline;", &error), "same-input forwards and same-name typedefs preserve completion");
+	mu_assert_eq (r_anal_type_bitsize (anal, "Inline"), 32, "same-input coalescing retains completed extent");
+	r_anal_free (anal);
+	mu_end;
+}
+
+static bool test_anal_cparse_incomplete_member(void) {
+	RAnal *anal = r_anal_new ();
+	anal->config->bits = 64;
+	r_anal_types_reload (anal, R2_PREFIX, NULL, NULL);
+	char *error = NULL;
+	mu_assert_true (r_anal_import_c_decls (anal, "struct Opaque;typedef struct Opaque Opaque;union Choice;", &error), "establish incomplete tags");
+	const char *headers[] = {
+		"struct Broken {struct Opaque value;};",
+		"struct Broken {Opaque value;};",
+		"union Broken {union Choice value;};",
+		"struct Broken {struct Opaque values[2];};"
+	};
+	int i;
+	for (i = 0; i < R_ARRAY_SIZE (headers); i++) {
+		mu_assert_false (r_anal_import_c_decls (anal, headers[i], &error), "incomplete by-value members have no usable layout");
+		mu_assert_notnull (error, "an incomplete member reports a diagnostic");
+		mu_assert_notnull (strstr (error, "Cannot measure member type"), "failure identifies the missing member layout");
+		free (error);
+		error = NULL;
+		mu_assert_null (sdb_const_get (anal->sdb_types, "Broken", NULL), "failed import must not invent a containing aggregate");
+	}
+	mu_assert_streq (sdb_const_get (anal->sdb_types, "Opaque", NULL), "struct", "failed by-value imports preserve the opaque identity");
+	r_anal_free (anal);
+	mu_end;
+}
+
 static bool test_anal_cparse_definition_alias(void) {
 	RAnal *anal = r_anal_new ();
 	anal->config->bits = 64;
@@ -1313,6 +1431,10 @@ int all_tests(void) {
 	mu_run_test (test_anal_cparse_callback_array_layout);
 	mu_run_test (test_anal_cparse_lazy_alias_layout);
 	mu_run_test (test_anal_cparse_definition_alias);
+	mu_run_test (test_anal_cparse_forward_identity);
+	mu_run_test (test_anal_cparse_forward_completion);
+	mu_run_test (test_anal_cparse_forward_typedef);
+	mu_run_test (test_anal_cparse_incomplete_member);
 	mu_run_test (test_anal_get_base_type_union);
 	mu_run_test (test_anal_save_base_type_union);
 	mu_run_test (test_anal_get_base_type_enum);

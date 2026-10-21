@@ -427,9 +427,10 @@ static RAnalBaseType *get_composite_type(RAnal *anal, const char *sname, RAnalBa
 	}
 
 	const char *kindstr = (kind == R_ANAL_BASE_TYPE_KIND_UNION)? "union": "struct";
+	base_type->size = sdb_num_getf (anal->sdb_types, NULL, "type.%s.size", sname);
 	char *sdb_members = get_type_data (anal->sdb_types, kindstr, sname);
 	if (!sdb_members) {
-		goto error;
+		return base_type;
 	}
 
 	RVecAnalTypeMember *members = r_anal_base_type_members (base_type);
@@ -462,7 +463,6 @@ static RAnalBaseType *get_composite_type(RAnal *anal, const char *sname, RAnalBa
 		sdb_aforeach_next (cur);
 	}
 	free (sdb_members);
-	base_type->size = sdb_num_getf (anal->sdb_types, NULL, "type.%s.size", sname);
 
 	return base_type;
 

@@ -6223,3 +6223,38 @@ EXPECT=<<EOF
 done
 EOF
 RUN
+
+NAME=td retains opaque tags and coalesced aliases without erasing completed definitions
+FILE=-
+ARGS=-b 64
+CMDS=<<EOF_CMDS
+'td struct HeaderOpaque;union HeaderChoice;struct HeaderOpaque;union HeaderChoice;
+tk HeaderOpaque
+tk HeaderChoice
+'td typedef struct HeaderOpaque HeaderOpaque;typedef union HeaderChoice HeaderChoice;typedef struct OtherTag Alias;
+tk HeaderOpaque
+tk HeaderChoice
+tk OtherTag
+tk Alias
+tk typedef.Alias
+'td struct HeaderOpaque {int value;};union HeaderChoice {int value;};struct HeaderOpaque;union HeaderChoice;
+'td struct HeaderOpaque;union HeaderChoice;
+tk struct.HeaderOpaque
+tk union.HeaderChoice
+tss struct HeaderOpaque
+tss union HeaderChoice
+EOF_CMDS
+EXPECT=<<EOF_EXPECT
+struct
+union
+struct
+union
+struct
+typedef
+struct OtherTag
+value
+value
+4
+4
+EOF_EXPECT
+RUN

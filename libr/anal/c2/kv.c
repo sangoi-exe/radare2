@@ -498,6 +498,22 @@ static char *kvc_object_type(KVCParser *kvc, RTypeDecl *decl, const char *scope)
 	return type;
 }
 
+#include "layout.inc.c"
+
+static bool kvc_forward_declaration(KVCParser *kvc, const char *kind, const char *name) {
+	kvc_sync_types (kvc);
+	const char *existing = sdb_const_get (kvc->types, name, NULL);
+	if (existing) {
+		if (strcmp (existing, kind)) {
+			kvc_error (kvc, "Conflicting aggregate tag");
+			return false;
+		}
+		return true;
+	}
+	r_strbuf_appendf (kvc->sb, "%s=%s\n", name, kind);
+	return true;
+}
+
 static bool emit_typedef_declaration(KVCParser *kvc, const char *prefix) {
 	const char *start = kvc->s.a;
 	const char *end = scan_to_semicolon (kvc);
@@ -522,8 +538,13 @@ static bool emit_typedef_declaration(KVCParser *kvc, const char *prefix) {
 		r_type_decl_free (decl);
 		return false;
 	}
-	r_strbuf_appendf (kvc->sb, "typedef.%s=%s\n%s=typedef\n", decl->name, type, decl->name);
-	kvc_register_typedef (kvc, decl->name, type);
+	bool same_tag = decl->type->kind == R_TYPE_DECL_BASE
+		&& (r_str_startswith (type, "struct ") || r_str_startswith (type, "union "))
+		&& !strcmp (strchr (type, ' ') + 1, decl->name);
+	if (!same_tag) {
+		r_strbuf_appendf (kvc->sb, "typedef.%s=%s\n%s=typedef\n", decl->name, type, decl->name);
+		kvc_register_typedef (kvc, decl->name, type);
+	}
 	free (type);
 	r_type_decl_free (decl);
 	kvc_getch (kvc);
@@ -548,8 +569,6 @@ static char *lookahead_alias_after_brace(KVCParser *kvc, const char *anon_prefix
 	}
 	return r_str_newf ("%s_%d", anon_prefix, kvc->line);
 }
-
-#include "layout.inc.c"
 
 static bool parse_struct_body(KVCParser *kvc, const char *type, const char *sn, bool is_typedef);
 
@@ -580,7 +599,8 @@ static bool parse_typedef(KVCParser *kvc, const char *unused) {
 		if (kvc_peek (kvc, 0) != '{') {
 			char *tag_str = has_tag? r_strs_tostring (tag): strdup ("");
 			char *prefix = r_str_newf ("%s %s ", kind, tag_str);
-			bool res = emit_typedef_declaration (kvc, prefix);
+			bool res = kvc_forward_declaration (kvc, kind, tag_str)
+				&& emit_typedef_declaration (kvc, prefix);
 			free (prefix);
 			free (tag_str);
 			return res;
@@ -719,9 +739,11 @@ static bool parse_struct(KVCParser *kvc, const char *type) {
 	skip_spaces (kvc);
 	const char p0 = kvc_peek (kvc, 0);
 	if (p0 == ';') {
-		// forward declaration: struct Foo;
+		char *name = r_strs_tostring (struct_name);
+		bool res = kvc_forward_declaration (kvc, type, name);
+		free (name);
 		kvc_getch (kvc);
-		return true;
+		return res;
 	}
 	if (p0 != '{') {
 		char *sn = r_strs_tostring (struct_name);
