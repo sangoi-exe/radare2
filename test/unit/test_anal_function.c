@@ -605,7 +605,7 @@ bool test_r_anal_function_signature_parse_requires_a_named_function(void) {
 		mu_assert_eq (decl->type->kind, R_TYPE_DECL_FUNCTION, "prepared signature starts at its function");
 		r_type_decl_free (decl);
 	}
-	const char *invalid[] = { "int (*)(int)", "int object", "int malformed(" };
+	const char *invalid[] = { "int (*)(int)", "int object", "int (object)", "Result (object)", "int()", "void()", "const()", "struct()", "if()", "int malformed(" };
 	for (i = 0; i < R_ARRAY_SIZE (invalid); i++) {
 		char *error = NULL;
 		RTypeDecl *decl = r_anal_function_signature_parse (invalid[i], &error);
@@ -613,6 +613,66 @@ bool test_r_anal_function_signature_parse_requires_a_named_function(void) {
 		mu_assert_notnull (error, "invalid named signature reports its failure");
 		free (error);
 	}
+	mu_end;
+}
+
+bool test_r_anal_function_signature_grouped_name(void) {
+	char *error = NULL;
+	RTypeDecl *decl = r_anal_function_signature_parse ("int (grouped)(int)", &error);
+	mu_assert_notnull (decl, "grouped function identifier is a named signature");
+	mu_assert_null (error, "grouped function name has no diagnostic");
+	mu_assert_streq (decl->name, "grouped", "signature preparation retains the actual grouped function name");
+	mu_assert_eq (decl->type->kind, R_TYPE_DECL_FUNCTION, "the named declaration is a function");
+	mu_assert_streq (decl->type->child->base.name, "int", "the return type is not promoted to the function name");
+	RTypeDecl *param = r_list_first (decl->type->function.parameters);
+	mu_assert_notnull (param, "the grouped function retains its argument");
+	mu_assert_null (param->name, "an unnamed int parameter remains unnamed");
+	mu_assert_streq (param->type->base.name, "int", "the parameter retains its type");
+	r_type_decl_free (decl);
+	decl = r_anal_function_signature_parse ("int (object)", &error);
+	mu_assert_null (decl, "a grouped object declaration must not become a signature named int");
+	mu_assert_notnull (error, "a grouped object reports signature rejection");
+	free (error);
+	mu_end;
+}
+
+bool test_r_core_afs_rejects_grouped_object_without_mutation(void) {
+	RCore *core = r_core_new ();
+	RAnalFunction *fcn = r_anal_create_function (core->anal, "keep", 0, R_ANAL_FCN_TYPE_FCN, NULL);
+	RAnalBlock *block = r_anal_create_block (core->anal, 0, 1);
+	r_anal_function_add_block (fcn, block);
+	r_unref (block);
+	mu_assert_true (r_anal_str_to_fcn (core->anal, fcn, "int keep(int value);"), "seed the existing function contract");
+	RFlagItem *flag = r_flag_set_inspace (core->flags, R_FLAGS_FS_FUNCTIONS, "keep", 0, 1);
+	mu_assert_notnull (flag, "seed the function-owned flag");
+	ut64 function_epoch = r_anal_function_dirty_epoch (fcn);
+	ut64 types_epoch = r_anal_types_dirty_epoch (core->anal);
+	r_core_cmd0 (core, "afs int (object)");
+	mu_assert_streq (fcn->name, "keep", "a rejected grouped object cannot rename the function");
+	mu_assert_ptreq (r_flag_get (core->flags, "keep"), flag, "a rejected grouped object cannot rename the function flag");
+	mu_assert_null (r_flag_get (core->flags, "int"), "the return keyword must not become a function flag");
+	mu_assert_streq (r_type_func_ret (core->anal->sdb_types, "keep"), "int", "the original prototype return type survives rejection");
+	mu_assert_streq (sdb_const_get (core->anal->sdb_types, "func.keep.arg.0", NULL), "int,value", "the original prototype argument survives rejection");
+	mu_assert_null (sdb_const_get (core->anal->sdb_types, "func.int.ret", NULL), "rejection does not install a keyword-named prototype");
+	mu_assert_eq (r_anal_function_dirty_epoch (fcn), function_epoch, "rejection leaves function metadata unchanged");
+	mu_assert_eq (r_anal_types_dirty_epoch (core->anal), types_epoch, "rejection leaves type metadata unchanged");
+	r_core_free (core);
+	mu_end;
+}
+
+bool test_r_anal_str_to_fcn_does_not_retry_rejected_header(void) {
+	RAnal *anal = r_anal_new ();
+	r_anal_types_reload (anal, R2_PREFIX, NULL, NULL);
+	RAnalFunction *fcn = r_anal_create_function (anal, "keep", 0x3000, 0, NULL);
+	mu_assert_true (r_anal_str_to_fcn (anal, fcn, "int keep(int value);"), "seed the existing signature");
+	ut64 function_epoch = r_anal_function_dirty_epoch (fcn);
+	ut64 types_epoch = r_anal_types_dirty_epoch (anal);
+	mu_assert_false (r_anal_str_to_fcn (anal, fcn, "struct Unexpected {int member;};"), "a rejected signature must not retry as an unrelated header");
+	mu_assert_null (sdb_const_get (anal->sdb_types, "Unexpected", NULL), "rejected signature input cannot import an unrelated aggregate");
+	mu_assert_streq (r_type_func_ret (anal->sdb_types, "keep"), "int", "rejection preserves the original function contract");
+	mu_assert_eq (r_anal_function_dirty_epoch (fcn), function_epoch, "refused header leaves the function unchanged");
+	mu_assert_eq (r_anal_types_dirty_epoch (anal), types_epoch, "refused header leaves the type database unchanged");
+	r_anal_free (anal);
 	mu_end;
 }
 
@@ -1183,6 +1243,9 @@ int all_tests(void) {
 	mu_run_test (test_r_anal_function_set_signature_rejects_invalid_declarators);
 	mu_run_test (test_r_anal_str_to_fcn_defaults_omitted_return_type);
 	mu_run_test (test_r_anal_function_signature_parse_requires_a_named_function);
+	mu_run_test (test_r_anal_function_signature_grouped_name);
+	mu_run_test (test_r_core_afs_rejects_grouped_object_without_mutation);
+	mu_run_test (test_r_anal_str_to_fcn_does_not_retry_rejected_header);
 	mu_run_test (test_r_core_afs_preserves_compound_return_name_and_flags);
 	mu_run_test (test_r_anal_function_get_signature_string_resolves_import_flag_prototype);
 	mu_run_test (test_r_anal_function_get_signature_uses_basename_for_dbg_prefixed_function);

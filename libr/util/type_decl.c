@@ -155,10 +155,35 @@ static bool decl_builtin_valid(const unsigned int *counts) {
 	return true;
 }
 
-static RTypeDeclNode *decl_base(DeclParser *parser) {
-	static const char *const builtins[] = {
-		"void", "char", "short", "int", "long", "float", "double", "signed", "unsigned", "bool", "_Bool", NULL
+static const char *const decl_builtins[] = {
+	"void", "char", "short", "int", "long", "float", "double", "signed", "unsigned", "bool", "_Bool", NULL
+};
+
+static bool decl_name_keyword(DeclParser *parser) {
+	static const char *const keywords[] = {
+		"auto", "break", "case", "continue", "default", "do", "else", "enum", "extern", "for", "goto", "if",
+		"inline", "register", "return", "sizeof", "static", "struct", "switch", "typedef", "union", "while",
+		"_Alignas", "_Alignof", "_Complex", "_Generic", "_Imaginary", "_Noreturn", "_Static_assert", "_Thread_local", NULL
 	};
+	DeclParser lookahead = *parser;
+	if (decl_qualifier (&lookahead)) {
+		return true;
+	}
+	int i;
+	for (i = 0; decl_builtins[i]; i++) {
+		if (decl_word (&lookahead, decl_builtins[i])) {
+			return true;
+		}
+	}
+	for (i = 0; keywords[i]; i++) {
+		if (decl_word (&lookahead, keywords[i])) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static RTypeDeclNode *decl_base(DeclParser *parser) {
 	RTypeDeclNode *base = R_NEW0 (RTypeDeclNode);
 	base->kind = R_TYPE_DECL_BASE;
 	RStrBuf name;
@@ -174,17 +199,17 @@ static RTypeDeclNode *decl_base(DeclParser *parser) {
 		}
 		const char *start = parser->cursor;
 		int i;
-		for (i = 0; builtins[i]; i++) {
-			if (decl_word (parser, builtins[i])) {
+		for (i = 0; decl_builtins[i]; i++) {
+			if (decl_word (parser, decl_builtins[i])) {
 				break;
 			}
 		}
-		if (builtins[i] && (!have_type || builtin)) {
+		if (decl_builtins[i] && (!have_type || builtin)) {
 			if (++counts[i] > (i == DECL_BUILTIN_LONG? 2: 1)) {
 				decl_error (parser, "Repeated fundamental type specifier");
 				break;
 			}
-			if ((have_type && !r_strbuf_append (&name, " ")) || !r_strbuf_append (&name, builtins[i])) {
+			if ((have_type && !r_strbuf_append (&name, " ")) || !r_strbuf_append (&name, decl_builtins[i])) {
 				decl_error (parser, "Cannot allocate base type");
 				break;
 			}
@@ -236,7 +261,7 @@ static void decl_chain_append(DeclChain *chain, RTypeDeclNode *node) {
 	chain->tail = &node->child;
 }
 
-static RTypeDecl *decl_parse(DeclParser *parser);
+static RTypeDecl *decl_parse(DeclParser *parser, RTypeDeclContext context, bool require_name);
 
 static bool decl_parameters(DeclParser *parser, RTypeDeclNode *node) {
 	node->function.parameters = r_list_newf ((RListFree)r_type_decl_free);
@@ -258,7 +283,7 @@ static bool decl_parameters(DeclParser *parser, RTypeDeclNode *node) {
 			parser->cursor++;
 			return true;
 		}
-		RTypeDecl *param = decl_parse (parser);
+		RTypeDecl *param = decl_parse (parser, R_TYPE_DECL_CONTEXT_NAMED, false);
 		if (!param) {
 			return false;
 		}
@@ -327,7 +352,7 @@ static RTypePointerKind decl_pointer_kind(DeclParser *parser) {
 	return R_TYPE_POINTER_DEFAULT;
 }
 
-static bool decl_declarator(DeclParser *parser, DeclChain *chain, char **name) {
+static bool decl_declarator(DeclParser *parser, DeclChain *chain, char **name, RTypeDeclContext context) {
 	if (parser->depth >= 64) {
 		return decl_error (parser, "Declaration nesting is too deep");
 	}
@@ -369,10 +394,11 @@ static bool decl_declarator(DeclParser *parser, DeclChain *chain, char **name) {
 		lookahead.cursor++;
 		decl_skip_space (&lookahead);
 		bool grouped = *lookahead.cursor == '*' || *lookahead.cursor == '&' || *lookahead.cursor == '(' || *lookahead.cursor == '['
-			|| decl_pointer_kind (&lookahead) != R_TYPE_POINTER_DEFAULT;
+			|| decl_pointer_kind (&lookahead) != R_TYPE_POINTER_DEFAULT
+			|| (context == R_TYPE_DECL_CONTEXT_NAMED && decl_ident_start (*lookahead.cursor) && !decl_name_keyword (&lookahead));
 		if (grouped) {
 			parser->cursor++;
-			if (decl_declarator (parser, chain, name)) {
+			if (decl_declarator (parser, chain, name, context)) {
 				if (*parser->cursor == ')') {
 					parser->cursor++;
 				} else {
@@ -380,8 +406,12 @@ static bool decl_declarator(DeclParser *parser, DeclChain *chain, char **name) {
 				}
 			}
 		}
-	} else if (!parser->error && decl_ident_start (*parser->cursor)) {
-		*name = decl_identifier (parser, false);
+	} else if (!parser->error && context == R_TYPE_DECL_CONTEXT_NAMED && decl_ident_start (*parser->cursor)) {
+		if (decl_name_keyword (parser)) {
+			decl_error (parser, "A declaration name cannot be a keyword");
+		} else {
+			*name = decl_identifier (parser, false);
+		}
 	}
 	decl_skip_space (parser);
 	while (!parser->error) {
@@ -408,7 +438,7 @@ static bool decl_declarator(DeclParser *parser, DeclChain *chain, char **name) {
 	return !parser->error;
 }
 
-static RTypeDecl *decl_parse(DeclParser *parser) {
+static RTypeDecl *decl_parse(DeclParser *parser, RTypeDeclContext context, bool require_name) {
 	RTypeDeclNode *base = decl_base (parser);
 	if (!base) {
 		return NULL;
@@ -416,7 +446,10 @@ static RTypeDecl *decl_parse(DeclParser *parser) {
 	RTypeDecl *decl = R_NEW0 (RTypeDecl);
 	DeclChain chain = { 0 };
 	chain.tail = &chain.head;
-	bool ok = decl_declarator (parser, &chain, &decl->name);
+	bool ok = decl_declarator (parser, &chain, &decl->name, context);
+	if (ok && require_name && !decl->name) {
+		ok = decl_error (parser, "Expected a declaration name");
+	}
 	*chain.tail = base;
 	decl->type = chain.head;
 	if (!ok) {
@@ -426,8 +459,8 @@ static RTypeDecl *decl_parse(DeclParser *parser) {
 	return decl;
 }
 
-R_API R_OWNED RTypeDecl *r_type_decl_parse(const char *text, char **error) {
-	R_RETURN_VAL_IF_FAIL (text, NULL);
+R_API R_OWNED RTypeDecl *r_type_decl_parse(const char *text, RTypeDeclContext context, char **error) {
+	R_RETURN_VAL_IF_FAIL (text && (context == R_TYPE_DECL_CONTEXT_NAMED || context == R_TYPE_DECL_CONTEXT_ABSTRACT), NULL);
 	if (error) {
 		*error = NULL;
 	}
@@ -438,7 +471,7 @@ R_API R_OWNED RTypeDecl *r_type_decl_parse(const char *text, char **error) {
 		return NULL;
 	}
 	DeclParser parser = { .text = text, .cursor = text };
-	RTypeDecl *decl = decl_parse (&parser);
+	RTypeDecl *decl = decl_parse (&parser, context, context == R_TYPE_DECL_CONTEXT_NAMED);
 	if (decl) {
 		if (*parser.cursor == ';') {
 			parser.cursor++;

@@ -6258,3 +6258,75 @@ value
 4
 EOF_EXPECT
 RUN
+
+NAME=td uses named context for grouped function typedef and member identifiers
+FILE=-
+ARGS=-b 64
+CMDS=<<EOF_CMDS
+'td int (grouped)(int);typedef int (Number);struct Grouped {int (object);int (*callback)(int);};
+tk grouped
+tk func.grouped.ret
+tk func.grouped.arg.0
+tk typedef.Number
+tk struct.Grouped.object
+tk struct.Grouped.callback
+EOF_CMDS
+EXPECT=<<EOF_EXPECT
+func
+int
+int,arg0
+int
+int,0,0
+func.Grouped.callback *,8,0
+EOF_EXPECT
+RUN
+
+NAME=afs grouped object rejection preserves the existing function contract
+FILE=malloc://64
+ARGS=-a x86 -b 64
+CMDS=<<EOF_CMDS
+wx c3
+af
+afn keep
+'afs int keep(int value)
+'afs int (object)
+afn
+afs
+tk func.keep.arg.0
+EOF_CMDS
+EXPECT=<<EOF_EXPECT
+keep
+int keep (int value);
+int,value
+EOF_EXPECT
+EXPECT_ERR=<<EOF_EXPECT_ERR
+ERROR: Expected a named function signature
+EOF_EXPECT_ERR
+RUN
+
+NAME=afs retains grouped dotted omitted-return and compound-return names
+FILE=malloc://64
+ARGS=-a x86 -b 16
+CMDS=<<EOF_CMDS
+wx c3
+af
+afn original
+'afs int (grouped)(int)
+afn
+afs
+'afs foo.bar();;
+afn
+afs
+'afs uint16_t far *(near *returns_table(void))[3]
+afn
+afs
+EOF_CMDS
+EXPECT=<<EOF_EXPECT
+grouped
+int grouped (int arg0);
+foo.bar
+void foo.bar ();
+returns_table
+uint16_t far *(near *returns_table ())[3];
+EOF_EXPECT
+RUN

@@ -7,7 +7,7 @@
 static bool type_layout_node(Sdb *db, const RTypeDeclNode *node, RTypeLayout *layout, const char **chain, int depth);
 
 static bool type_layout_text(Sdb *db, const char *text, RTypeLayout *layout, const char **chain, int depth) {
-	RTypeDecl *decl = r_type_decl_parse (text, NULL);
+	RTypeDecl *decl = r_type_decl_parse (text, R_TYPE_DECL_CONTEXT_ABSTRACT, NULL);
 	bool ok = decl && !decl->name && type_layout_node (db, decl->type, layout, chain, depth);
 	r_type_decl_free (decl);
 	return ok;
@@ -156,7 +156,7 @@ static bool type_layout_node(Sdb *db, const RTypeDeclNode *node, RTypeLayout *la
 	}
 	if (kind && !strcmp (kind, "typedef")) {
 		const char *target = sdb_const_getf (db, NULL, "typedef.%s", name);
-		RTypeDecl *decl = target? r_type_decl_parse (target, NULL): NULL;
+		RTypeDecl *decl = target? r_type_decl_parse (target, R_TYPE_DECL_CONTEXT_ABSTRACT, NULL): NULL;
 		bool ok = decl && !decl->name && type_layout_node (db, decl->type, layout, chain, depth + 1);
 		ut64 recorded = sdb_num_getf (db, NULL, "type.%s.size", name);
 		if (ok && recorded && decl->type->kind == R_TYPE_DECL_BASE) {

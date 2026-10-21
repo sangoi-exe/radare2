@@ -53,7 +53,7 @@ static bool test_type_decl_mixed_pointers(void) {
 	size_t i;
 	for (i = 0; i < R_ARRAY_SIZE (inputs); i++) {
 		char *error = NULL;
-		RTypeDecl *decl = r_type_decl_parse (inputs[i], &error);
+		RTypeDecl *decl = r_type_decl_parse (inputs[i], R_TYPE_DECL_CONTEXT_NAMED, &error);
 		mu_assert_null (error, "mixed pointer spelling parses without an error");
 		mu_assert_notnull (decl, "parse a near pointer to a far pointer");
 		mu_assert_streq (decl->name, "p", "declaration name is separate from the type");
@@ -72,7 +72,7 @@ static bool test_type_decl_mixed_pointers(void) {
 		mu_assert_null (inner->child->child, "no invented base pointer layer");
 		char *rendered = r_type_decl_render (decl, true);
 		mu_assert_streq (rendered, inputs[i], "render the explicit mixed layers");
-		RTypeDecl *again = r_type_decl_parse (rendered, &error);
+		RTypeDecl *again = r_type_decl_parse (rendered, R_TYPE_DECL_CONTEXT_NAMED, &error);
 		mu_assert_notnull (again, "parse rendered mixed layers");
 		mu_assert_true (same_declaration (decl, again), "mixed layers survive parse/render/parse");
 		free (rendered);
@@ -84,13 +84,13 @@ static bool test_type_decl_mixed_pointers(void) {
 }
 
 static bool test_type_decl_array_precedence(void) {
-	RTypeDecl *array = r_type_decl_parse ("int *Pointers[2]", NULL);
+	RTypeDecl *array = r_type_decl_parse ("int *Pointers[2]", R_TYPE_DECL_CONTEXT_NAMED, NULL);
 	mu_assert_notnull (array, "parse established array-of-pointers typedef declarator");
 	mu_assert_eq (array->type->kind, R_TYPE_DECL_ARRAY, "array is the outermost layer");
 	mu_assert_streq (array->type->array.count, "2", "array bound is syntax, not a computed width");
 	mu_assert_eq (array->type->child->kind, R_TYPE_DECL_POINTER, "array elements are pointers");
 	mu_assert_eq (array->type->child->pointer.kind, R_TYPE_POINTER_DEFAULT, "unqualified pointer remains default");
-	RTypeDecl *pointer = r_type_decl_parse ("word (*)[3]", NULL);
+	RTypeDecl *pointer = r_type_decl_parse ("word (*)[3]", R_TYPE_DECL_CONTEXT_ABSTRACT, NULL);
 	mu_assert_notnull (pointer, "parse established pointer-to-array type");
 	mu_assert_null (pointer->name, "abstract declaration has no invented name");
 	mu_assert_eq (pointer->type->kind, R_TYPE_DECL_POINTER, "parentheses make pointer the outermost layer");
@@ -102,7 +102,7 @@ static bool test_type_decl_array_precedence(void) {
 }
 
 static bool test_type_decl_functions(void) {
-	RTypeDecl *decl = r_type_decl_parse ("int *lookup(const char *name, void (*cb)(int value), ...);", NULL);
+	RTypeDecl *decl = r_type_decl_parse ("int *lookup(const char *name, void (*cb)(int value), ...);", R_TYPE_DECL_CONTEXT_NAMED, NULL);
 	mu_assert_notnull (decl, "parse a function returning a pointer with a callback parameter");
 	const RTypeDeclNode *function = decl->type;
 	mu_assert_eq (function->kind, R_TYPE_DECL_FUNCTION, "function is distinct from its return pointer");
@@ -122,7 +122,7 @@ static bool test_type_decl_functions(void) {
 	mu_assert_streq (abstract, "int *(const char *name, void (*cb)(int value), ...)", "abstract rendering drops only the top-level name");
 	free (abstract);
 	r_type_decl_free (decl);
-	decl = r_type_decl_parse ("void (*(*xDlSym)(void *ctx, void *handle, const char *name))(void)", NULL);
+	decl = r_type_decl_parse ("void (*(*xDlSym)(void *ctx, void *handle, const char *name))(void)", R_TYPE_DECL_CONTEXT_NAMED, NULL);
 	mu_assert_notnull (decl, "parse current callback returning a callback");
 	mu_assert_streq (decl->name, "xDlSym", "nested callback name remains a declaration name");
 	const RTypeDeclKind kinds[] = { R_TYPE_DECL_POINTER, R_TYPE_DECL_FUNCTION, R_TYPE_DECL_POINTER, R_TYPE_DECL_FUNCTION, R_TYPE_DECL_BASE };
@@ -137,7 +137,7 @@ static bool test_type_decl_functions(void) {
 	mu_assert_eq (r_list_length (decl->type->child->function.parameters), 3, "first callback keeps all parameters");
 	mu_assert_true (decl->type->child->child->child->function.prototype, "returned callback retains (void)");
 	r_type_decl_free (decl);
-	decl = r_type_decl_parse ("int (far *CB)(int x[4])", NULL);
+	decl = r_type_decl_parse ("int (far *CB)(int x[4])", R_TYPE_DECL_CONTEXT_NAMED, NULL);
 	mu_assert_notnull (decl, "parse an explicit far callback pointer with an array parameter");
 	mu_assert_eq (decl->type->kind, R_TYPE_DECL_POINTER, "far applies to the callback pointer");
 	mu_assert_eq (decl->type->pointer.kind, R_TYPE_POINTER_FAR, "callback pointer identity is retained");
@@ -151,29 +151,48 @@ static bool test_type_decl_functions(void) {
 }
 
 static bool test_type_decl_roundtrip(void) {
-	const char *inputs[] = {
-		"int", "unsigned long int count", "const volatile struct Window *sunlight",
-		"WindowAlias", "func.Callback", "word[2][3]", "word (*)[3]", "int *Pointers[2]",
-		"int (**)()", "int (*CB)(int x[4])", "int (far *CB)(int x[4])",
-		"void once(void (*cb)(\n\tint\n))", "void*(*first)(int n)",
-		"void (*(*xDlSym)(void *ctx, void *handle, const char *name))(void)",
-		"BYTE far * near *fetch(int n)", "char * const * volatile p",
-		"int values[]", "Row rows[COUNT + 1]", "int f()", "int f(void)",
-		"int *lookup(const char *name, void (*cb)(int value), ...)",
-		"void near_far_params(float near, float far)", "int far_ok(int far)", "near value", "far value"
+	const struct {
+		const char *text;
+		RTypeDeclContext context;
+	} inputs[] = {
+		{ "int", R_TYPE_DECL_CONTEXT_ABSTRACT },
+		{ "unsigned long int count", R_TYPE_DECL_CONTEXT_NAMED },
+		{ "const volatile struct Window *sunlight", R_TYPE_DECL_CONTEXT_NAMED },
+		{ "WindowAlias", R_TYPE_DECL_CONTEXT_ABSTRACT },
+		{ "func.Callback", R_TYPE_DECL_CONTEXT_ABSTRACT },
+		{ "word[2][3]", R_TYPE_DECL_CONTEXT_ABSTRACT },
+		{ "word (*)[3]", R_TYPE_DECL_CONTEXT_ABSTRACT },
+		{ "int *Pointers[2]", R_TYPE_DECL_CONTEXT_NAMED },
+		{ "int (**)()", R_TYPE_DECL_CONTEXT_ABSTRACT },
+		{ "int (*CB)(int x[4])", R_TYPE_DECL_CONTEXT_NAMED },
+		{ "int (far *CB)(int x[4])", R_TYPE_DECL_CONTEXT_NAMED },
+		{ "void once(void (*cb)(\n\tint\n))", R_TYPE_DECL_CONTEXT_NAMED },
+		{ "void*(*first)(int n)", R_TYPE_DECL_CONTEXT_NAMED },
+		{ "void (*(*xDlSym)(void *ctx, void *handle, const char *name))(void)", R_TYPE_DECL_CONTEXT_NAMED },
+		{ "BYTE far * near *fetch(int n)", R_TYPE_DECL_CONTEXT_NAMED },
+		{ "char * const * volatile p", R_TYPE_DECL_CONTEXT_NAMED },
+		{ "int values[]", R_TYPE_DECL_CONTEXT_NAMED },
+		{ "Row rows[COUNT + 1]", R_TYPE_DECL_CONTEXT_NAMED },
+		{ "int f()", R_TYPE_DECL_CONTEXT_NAMED },
+		{ "int f(void)", R_TYPE_DECL_CONTEXT_NAMED },
+		{ "int *lookup(const char *name, void (*cb)(int value), ...)", R_TYPE_DECL_CONTEXT_NAMED },
+		{ "void near_far_params(float near, float far)", R_TYPE_DECL_CONTEXT_NAMED },
+		{ "int far_ok(int far)", R_TYPE_DECL_CONTEXT_NAMED },
+		{ "near value", R_TYPE_DECL_CONTEXT_NAMED },
+		{ "far value", R_TYPE_DECL_CONTEXT_NAMED },
 	};
 	size_t i;
 	for (i = 0; i < R_ARRAY_SIZE (inputs); i++) {
 		char *error = NULL;
-		RTypeDecl *decl = r_type_decl_parse (inputs[i], &error);
-		mu_assert_null (error, inputs[i]);
-		mu_assert_notnull (decl, inputs[i]);
+		RTypeDecl *decl = r_type_decl_parse (inputs[i].text, inputs[i].context, &error);
+		mu_assert_null (error, inputs[i].text);
+		mu_assert_notnull (decl, inputs[i].text);
 		char *text = r_type_decl_render (decl, true);
 		mu_assert_notnull (text, "render established declaration shape");
-		RTypeDecl *again = r_type_decl_parse (text, &error);
+		RTypeDecl *again = r_type_decl_parse (text, inputs[i].context, &error);
 		mu_assert_null (error, text);
 		mu_assert_notnull (again, text);
-		mu_assert_true (same_declaration (decl, again), inputs[i]);
+		mu_assert_true (same_declaration (decl, again), inputs[i].text);
 		char *canonical = r_type_decl_render (again, true);
 		mu_assert_streq (text, canonical, "canonical rendering is stable");
 		free (canonical);
@@ -186,7 +205,7 @@ static bool test_type_decl_roundtrip(void) {
 }
 
 static bool test_type_decl_contextual_names(void) {
-	RTypeDecl *decl = r_type_decl_parse ("void near_far_params(float near, float far)", NULL);
+	RTypeDecl *decl = r_type_decl_parse ("void near_far_params(float near, float far)", R_TYPE_DECL_CONTEXT_NAMED, NULL);
 	mu_assert_notnull (decl, "near and far remain ordinary parameter names without a following pointer star");
 	RTypeDecl *param = r_list_get_n (decl->type->function.parameters, 0);
 	mu_assert_streq (param->name, "near", "retain the near parameter name");
@@ -195,11 +214,73 @@ static bool test_type_decl_contextual_names(void) {
 	mu_assert_streq (param->name, "far", "retain the far parameter name");
 	mu_assert_eq (param->type->kind, R_TYPE_DECL_BASE, "far is not a pointer qualifier on a scalar parameter");
 	r_type_decl_free (decl);
-	decl = r_type_decl_parse ("char * *p", NULL);
+	decl = r_type_decl_parse ("char * *p", R_TYPE_DECL_CONTEXT_NAMED, NULL);
 	mu_assert_notnull (decl, "parse spaced default pointer layers");
 	char *text = r_type_decl_render (decl, true);
 	mu_assert_streq (text, "char **p", "adjacent unqualified default pointers render compactly");
 	free (text);
+	r_type_decl_free (decl);
+	mu_end;
+}
+
+static bool test_type_decl_explicit_context(void) {
+	char *error = NULL;
+	RTypeDecl *named = r_type_decl_parse ("int (grouped)(int)", R_TYPE_DECL_CONTEXT_NAMED, &error);
+	mu_assert_notnull (named, "named context recognizes a parenthesized function identifier");
+	mu_assert_null (error, "named grouped function parses without an error");
+	mu_assert_streq (named->name, "grouped", "the grouped identifier is the name, not a parameter type");
+	mu_assert_eq (named->type->kind, R_TYPE_DECL_FUNCTION, "the declaration names a function");
+	r_type_decl_free (named);
+	named = r_type_decl_parse ("int ((object))", R_TYPE_DECL_CONTEXT_NAMED, NULL);
+	mu_assert_notnull (named, "named context recognizes a multiply grouped object");
+	mu_assert_streq (named->name, "object", "the grouped object retains its actual name");
+	mu_assert_eq (named->type->kind, R_TYPE_DECL_BASE, "parentheses do not turn the object into a function");
+	mu_assert_streq (named->type->base.name, "int", "the grouped object keeps its base type");
+	r_type_decl_free (named);
+	RTypeDecl *abstract = r_type_decl_parse ("int (int)", R_TYPE_DECL_CONTEXT_ABSTRACT, NULL);
+	mu_assert_notnull (abstract, "abstract context recognizes a function type");
+	mu_assert_null (abstract->name, "abstract function has no invented name");
+	mu_assert_eq (abstract->type->kind, R_TYPE_DECL_FUNCTION, "abstract parentheses form the parameter list");
+	RTypeDecl *param = r_list_first (abstract->type->function.parameters);
+	mu_assert_notnull (param, "abstract function retains its parameter type");
+	mu_assert_null (param->name, "the int parameter remains abstract");
+	mu_assert_streq (param->type->base.name, "int", "the keyword is a type, not a name");
+	r_type_decl_free (abstract);
+	abstract = r_type_decl_parse ("int (object)", R_TYPE_DECL_CONTEXT_ABSTRACT, NULL);
+	mu_assert_notnull (abstract, "abstract context keeps an unresolved parameter type");
+	mu_assert_null (abstract->name, "abstract context does not borrow the grouped identifier as its outer name");
+	param = r_list_first (abstract->type->function.parameters);
+	mu_assert_streq (param->type->base.name, "object", "abstract context leaves the parameter type unresolved");
+	r_type_decl_free (abstract);
+	mu_assert_null (r_type_decl_parse ("int object", R_TYPE_DECL_CONTEXT_ABSTRACT, NULL), "abstract context forbids an outer name");
+	mu_assert_null (r_type_decl_parse ("int", R_TYPE_DECL_CONTEXT_NAMED, NULL), "named context requires an outer name");
+	mu_assert_null (r_type_decl_parse ("int (int)", R_TYPE_DECL_CONTEXT_NAMED, NULL), "named context cannot use a keyword as a name");
+	mu_end;
+}
+
+static bool test_type_decl_parameter_context(void) {
+	RTypeDecl *decl = r_type_decl_parse ("void parameters(int (value), int (int), void (*)(int), void (*cb)(int), int (T))", R_TYPE_DECL_CONTEXT_NAMED, NULL);
+	mu_assert_notnull (decl, "parameter grammar permits named and abstract declarators in one list");
+	RTypeDecl *param = r_list_get_n (decl->type->function.parameters, 0);
+	mu_assert_streq (param->name, "value", "an ordinary parenthesized identifier names its parameter");
+	mu_assert_eq (param->type->kind, R_TYPE_DECL_BASE, "grouped parameter remains an object");
+	param = r_list_get_n (decl->type->function.parameters, 1);
+	mu_assert_null (param->name, "the abstract function parameter has no name");
+	mu_assert_eq (param->type->kind, R_TYPE_DECL_FUNCTION, "a keyword starts an abstract parameter list");
+	param = r_list_get_n (decl->type->function.parameters, 2);
+	mu_assert_null (param->name, "an abstract callback parameter remains unnamed");
+	mu_assert_eq (param->type->kind, R_TYPE_DECL_POINTER, "the abstract callback retains its pointer");
+	mu_assert_eq (param->type->child->kind, R_TYPE_DECL_FUNCTION, "the abstract callback retains its function");
+	param = r_list_get_n (decl->type->function.parameters, 3);
+	mu_assert_streq (param->name, "cb", "the named callback retains its identifier");
+	param = r_list_get_n (decl->type->function.parameters, 4);
+	mu_assert_streq (param->name, "T", "parameter syntax treats an ordinary identifier as a name without typedef resolution");
+	char *text = r_type_decl_render (decl, true);
+	RTypeDecl *again = r_type_decl_parse (text, R_TYPE_DECL_CONTEXT_NAMED, NULL);
+	mu_assert_notnull (again, "rendered parameter declarations retain their grammatical context");
+	mu_assert_true (same_declaration (decl, again), "mixed named and abstract parameters preserve their graphs");
+	free (text);
+	r_type_decl_free (again);
 	r_type_decl_free (decl);
 	mu_end;
 }
@@ -213,7 +294,7 @@ static bool test_type_decl_reject_malformed(void) {
 	size_t i;
 	for (i = 0; i < R_ARRAY_SIZE (inputs); i++) {
 		char *error = NULL;
-		RTypeDecl *decl = r_type_decl_parse (inputs[i], &error);
+		RTypeDecl *decl = r_type_decl_parse (inputs[i], R_TYPE_DECL_CONTEXT_NAMED, &error);
 		mu_assert_null (decl, inputs[i]);
 		mu_assert_notnull (error, "malformed declaration has a diagnostic");
 		free (error);
@@ -235,14 +316,14 @@ static bool test_type_decl_fundamental_specifiers(void) {
 	size_t i;
 	for (i = 0; i < R_ARRAY_SIZE (valid); i++) {
 		char *error = NULL;
-		RTypeDecl *decl = r_type_decl_parse (valid[i], &error);
+		RTypeDecl *decl = r_type_decl_parse (valid[i], R_TYPE_DECL_CONTEXT_ABSTRACT, &error);
 		mu_assert_null (error, valid[i]);
 		mu_assert_notnull (decl, valid[i]);
 		r_type_decl_free (decl);
 	}
 	for (i = 0; i < R_ARRAY_SIZE (invalid); i++) {
 		char *error = NULL;
-		RTypeDecl *decl = r_type_decl_parse (invalid[i], &error);
+		RTypeDecl *decl = r_type_decl_parse (invalid[i], R_TYPE_DECL_CONTEXT_ABSTRACT, &error);
 		mu_assert_null (decl, invalid[i]);
 		mu_assert_notnull (error, "contradictory fundamental specifiers report an error");
 		free (error);
@@ -308,7 +389,7 @@ static bool test_type_decl_utility_qualifiers(void) {
 	const char *inputs[] = { "atomic int", "int atomic", "_Atomic int", "int _Atomic" };
 	size_t i;
 	for (i = 0; i < R_ARRAY_SIZE (inputs); i++) {
-		RTypeDecl *decl = r_type_decl_parse (inputs[i], NULL);
+		RTypeDecl *decl = r_type_decl_parse (inputs[i], R_TYPE_DECL_CONTEXT_ABSTRACT, NULL);
 		mu_assert_notnull (decl, "accept an existing utility type qualifier spelling");
 		mu_assert_eq (decl->type->kind, R_TYPE_DECL_BASE, "qualifier does not create another type layer");
 		mu_assert_eq (decl->type->qualifiers, R_TYPE_DECL_ATOMIC, "preserve atomic as syntax only");
@@ -327,7 +408,7 @@ static bool test_type_decl_dotted_names(void) {
 	for (i = 0; i < R_ARRAY_SIZE (names); i++) {
 		char *input = r_str_newf ("int %s(int x)", names[i]);
 		char *error = NULL;
-		RTypeDecl *decl = r_type_decl_parse (input, &error);
+		RTypeDecl *decl = r_type_decl_parse (input, R_TYPE_DECL_CONTEXT_NAMED, &error);
 		mu_assert_null (error, "accept an established dotted analysis name");
 		mu_assert_notnull (decl, "parse a dotted function declaration");
 		mu_assert_streq (decl->name, names[i], "retain the complete dotted function name");
@@ -337,7 +418,7 @@ static bool test_type_decl_dotted_names(void) {
 		mu_assert_streq (param->name, "x", "retain the parameter name");
 		char *text = r_type_decl_render (decl, true);
 		mu_assert_streq (text, input, "render the complete dotted function name");
-		RTypeDecl *again = r_type_decl_parse (text, &error);
+		RTypeDecl *again = r_type_decl_parse (text, R_TYPE_DECL_CONTEXT_NAMED, &error);
 		mu_assert_null (error, "reparse a rendered dotted analysis name");
 		mu_assert_notnull (again, "rendered dotted function is parseable");
 		mu_assert_true (same_declaration (decl, again), "dotted declaration retains its structure on reparse");
@@ -351,14 +432,14 @@ static bool test_type_decl_dotted_names(void) {
 }
 
 static bool test_type_decl_opaque_base(void) {
-	RTypeDecl *decl = r_type_decl_parse ("pair<int, char> p", NULL);
+	RTypeDecl *decl = r_type_decl_parse ("pair<int, char> p", R_TYPE_DECL_CONTEXT_NAMED, NULL);
 	mu_assert_notnull (decl, "parse an established opaque comma-bearing base name");
 	mu_assert_streq (decl->name, "p", "opaque base does not consume the declaration name");
 	mu_assert_eq (decl->type->kind, R_TYPE_DECL_BASE, "opaque spelling is one unresolved leaf");
 	mu_assert_streq (decl->type->base.name, "pair<int, char>", "preserve the opaque name and embedded comma verbatim");
 	char *text = r_type_decl_render (decl, true);
 	mu_assert_streq (text, "pair<int, char> p", "render the opaque base without interpreting its contents");
-	RTypeDecl *again = r_type_decl_parse (text, NULL);
+	RTypeDecl *again = r_type_decl_parse (text, R_TYPE_DECL_CONTEXT_NAMED, NULL);
 	mu_assert_notnull (again, "reparse the rendered opaque base");
 	mu_assert_true (same_declaration (decl, again), "opaque leaf survives rendering");
 	free (text);
@@ -372,12 +453,12 @@ static bool test_type_decl_reference_syntax(void) {
 	const RTypeDeclKind kinds[] = { R_TYPE_DECL_LVALUE_REFERENCE, R_TYPE_DECL_RVALUE_REFERENCE };
 	size_t i;
 	for (i = 0; i < R_ARRAY_SIZE (inputs); i++) {
-		RTypeDecl *decl = r_type_decl_parse (inputs[i], NULL);
+		RTypeDecl *decl = r_type_decl_parse (inputs[i], R_TYPE_DECL_CONTEXT_NAMED, NULL);
 		mu_assert_notnull (decl, "preserve established reference spelling at the shared syntax boundary");
 		mu_assert_eq (decl->type->kind, kinds[i], "reference syntax is distinct, not a pointer node");
 		char *text = r_type_decl_render (decl, true);
 		mu_assert_streq (text, inputs[i], "render the reference spelling without ABI inference");
-		RTypeDecl *again = r_type_decl_parse (text, NULL);
+		RTypeDecl *again = r_type_decl_parse (text, R_TYPE_DECL_CONTEXT_NAMED, NULL);
 		mu_assert_notnull (again, "reparse the reference spelling");
 		mu_assert_true (same_declaration (decl, again), "reference layer survives reparse");
 		r_type_decl_free (again);
@@ -393,6 +474,8 @@ int all_tests(void) {
 	mu_run_test (test_type_decl_functions);
 	mu_run_test (test_type_decl_roundtrip);
 	mu_run_test (test_type_decl_contextual_names);
+	mu_run_test (test_type_decl_explicit_context);
+	mu_run_test (test_type_decl_parameter_context);
 	mu_run_test (test_type_decl_reject_malformed);
 	mu_run_test (test_type_decl_fundamental_specifiers);
 	mu_run_test (test_type_array_bound);

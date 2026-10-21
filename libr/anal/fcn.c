@@ -3073,7 +3073,7 @@ static void function_param_free(RAnalFunctionParam *param) {
 
 static RTypeDecl *function_param_decl(const RAnalFunctionParam *param) {
 	R_RETURN_VAL_IF_FAIL (param && param->type, NULL);
-	RTypeDecl *decl = r_type_decl_parse (param->type, NULL);
+	RTypeDecl *decl = r_type_decl_parse (param->type, R_TYPE_DECL_CONTEXT_ABSTRACT, NULL);
 	if (decl && R_STR_ISNOTEMPTY (param->name)) {
 		free (decl->name);
 		decl->name = strdup (param->name);
@@ -3109,7 +3109,7 @@ static char *function_signature_string(const char *name, const char *ret_type, R
 	bool ok = true;
 
 	R_RETURN_VAL_IF_FAIL (name, NULL);
-	RTypeDecl *decl = r_type_decl_parse (r_str_get_fail (ret_type, "void"), NULL);
+	RTypeDecl *decl = r_type_decl_parse (r_str_get_fail (ret_type, "void"), R_TYPE_DECL_CONTEXT_ABSTRACT, NULL);
 	if (!decl) {
 		return NULL;
 	}
@@ -3405,22 +3405,29 @@ R_API R_OWNED RTypeDecl *r_anal_function_signature_parse(const char *sig, char *
 	while (length && (isspace ((ut8)text[length - 1]) || text[length - 1] == ';')) {
 		text[--length] = 0;
 	}
-	RTypeDecl *decl = r_type_decl_parse (text, error);
+	RTypeDecl *decl = r_type_decl_parse (text, R_TYPE_DECL_CONTEXT_NAMED, error);
+	if (!decl) {
+		const char *name = r_str_trim_head_ro (text);
+		const char *end = name;
+		if (isalpha ((ut8)*end) || *end == '_') {
+			while (isalnum ((ut8)*end) || *end == '_' || *end == '.') {
+				end++;
+			}
+		}
+		if (end > name && *r_str_trim_head_ro (end) == '(') {
+			// afs permits a bare function name and defaults its return type to void.
+			char *explicit_return = r_str_newf ("void %s", text);
+			if (error) {
+				free (*error);
+				*error = NULL;
+			}
+			decl = explicit_return? r_type_decl_parse (explicit_return, R_TYPE_DECL_CONTEXT_NAMED, error): NULL;
+			free (explicit_return);
+		}
+	}
 	free (text);
 	if (!decl) {
 		return NULL;
-	}
-	if (!decl->name && decl->type->kind == R_TYPE_DECL_FUNCTION
-			&& decl->type->child->kind == R_TYPE_DECL_BASE
-			&& !decl->type->child->qualifiers && !strchr (decl->type->child->base.name, ' ')) {
-		// afs permits a bare function name and defaults its return type to void.
-		RTypeDeclNode *result = decl->type->child;
-		decl->name = result->base.name;
-		result->base.name = strdup ("void");
-		if (!result->base.name) {
-			r_type_decl_free (decl);
-			return NULL;
-		}
 	}
 	if (!decl->name || decl->type->kind != R_TYPE_DECL_FUNCTION) {
 		if (error) {
@@ -3442,8 +3449,8 @@ R_API int r_anal_str_to_fcn(RAnal *a, RAnalFunction *f, const char *sig) {
 	char *normalized = text? r_str_newf ("%s;", text): NULL;
 	free (text);
 	char *out = NULL;
-	if (!decl || normalized) {
-		out = r_anal_cparse (a, normalized? normalized: sig, &error_msg);
+	if (normalized) {
+		out = r_anal_cparse (a, normalized, &error_msg);
 	}
 	r_type_decl_free (decl);
 	free (normalized);

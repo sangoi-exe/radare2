@@ -34,6 +34,11 @@ typedef enum {
 } RTypeDeclKind;
 
 typedef enum {
+	R_TYPE_DECL_CONTEXT_NAMED,
+	R_TYPE_DECL_CONTEXT_ABSTRACT
+} RTypeDeclContext;
+
+typedef enum {
 	R_TYPE_POINTER_DEFAULT,
 	R_TYPE_POINTER_NEAR,
 	R_TYPE_POINTER_FAR
@@ -73,12 +78,14 @@ typedef struct r_type_decl_t {
 	RTypeDeclNode * R_OWNED type; // outermost layer first, ending in a base node
 } RTypeDecl;
 
-// Parse one named or abstract declaration, not a header, definition or storage-class specifier.
+// Parse one declaration in explicit named (name required) or abstract (outer name forbidden) context.
+// Parameters permit either form; parenthesized ordinary identifiers are names, without typedef-name resolution.
+// This is not a header, definition or storage-class specifier parser.
 // near/far precede their associated star; qualifiers after a star qualify that pointer.
 // atomic and _Atomic are accepted qualifier spellings; rendering uses _Atomic, not _Atomic(type).
 // No name resolution, parameter decay, calling-convention selection or ABI sizing is performed.
 // The result owns all nodes, strings and parameters; error receives an owned diagnostic or NULL.
-R_API R_OWNED RTypeDecl *r_type_decl_parse(const char * R_NONNULL text, char ** R_NULLABLE error);
+R_API R_OWNED RTypeDecl *r_type_decl_parse(const char * R_NONNULL text, RTypeDeclContext context, char ** R_NULLABLE error);
 // Render canonical syntax without a semicolon; include_name affects only the top-level name.
 R_API R_OWNED char *r_type_decl_render(const RTypeDecl * R_NONNULL decl, bool include_name);
 R_API void r_type_decl_free(RTypeDecl * R_NULLABLE decl);

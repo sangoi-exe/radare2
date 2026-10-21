@@ -921,6 +921,25 @@ static bool test_anal_cparse_lazy_alias_layout(void) {
 	mu_end;
 }
 
+static bool test_anal_cparse_grouped_names(void) {
+	RAnal *anal = r_anal_new ();
+	anal->config->bits = 64;
+	r_anal_types_reload (anal, R2_PREFIX, NULL, NULL);
+	char *error = NULL;
+	mu_assert_true (r_anal_import_c_decls (anal,
+		"int (grouped)(int);typedef int (Number);"
+		"struct Grouped {int (object);int (*callback)(int);};", &error), "the header producer uses named declaration context");
+	mu_assert_null (error, "grouped function, typedef and member names are accepted");
+	mu_assert_streq (sdb_const_get (anal->sdb_types, "grouped", NULL), "func", "the real grouped identifier owns the function");
+	mu_assert_streq (r_type_func_ret (anal->sdb_types, "grouped"), "int", "the grouped function keeps its return type");
+	mu_assert_streq (sdb_const_get (anal->sdb_types, "typedef.Number", NULL), "int", "a grouped typedef name still names an object type");
+	mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.Grouped.object", NULL), "int,0,0", "a grouped scalar member is not an anonymous function");
+	mu_assert_null (sdb_const_get (anal->sdb_types, "Grouped.object", NULL), "a grouped scalar member does not install a callback signature");
+	mu_assert_streq (sdb_const_get (anal->sdb_types, "struct.Grouped.callback", NULL), "func.Grouped.callback *,8,0", "the separate callback member retains its function-pointer shape");
+	r_anal_free (anal);
+	mu_end;
+}
+
 static bool test_anal_cparse_forward_identity(void) {
 	RAnal *anal = r_anal_new ();
 	anal->config->bits = 16;
@@ -1431,6 +1450,7 @@ int all_tests(void) {
 	mu_run_test (test_anal_cparse_callback_array_layout);
 	mu_run_test (test_anal_cparse_lazy_alias_layout);
 	mu_run_test (test_anal_cparse_definition_alias);
+	mu_run_test (test_anal_cparse_grouped_names);
 	mu_run_test (test_anal_cparse_forward_identity);
 	mu_run_test (test_anal_cparse_forward_completion);
 	mu_run_test (test_anal_cparse_forward_typedef);
