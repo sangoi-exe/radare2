@@ -481,6 +481,7 @@ static bool test_dwarf_incomplete_formals(void) {
 				mu_assert_eq (argc, cases[i].known? 1: 0, "address ranges do not erase independently complete formals");
 			}
 			mu_assert_nullable_streq (sdb_const_get (scenario->sdb_types, "func.decoded_case.prototype", NULL), cases[i].prototyped? "fixed": "unspecified", "formal completeness does not replace source specificity");
+			mu_assert_null (sdb_const_get (scenario->sdb_types, "func.decoded_case.cc", NULL), "neither DWARF producer invents a convention without source evidence");
 			Sdb *dwarf = sdb_ns (scenario->sdb, "dwarf", 0);
 			mu_assert_notnull (dwarf, "actual decoded DIEs reached the importer");
 			mu_assert_nullable_streq (sdb_const_get (dwarf, "fcn.decoded_case.var.local", NULL), "g,8192,int", "independent local type and location facts survive incomplete formals");

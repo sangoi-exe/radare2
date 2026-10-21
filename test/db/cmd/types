@@ -761,7 +761,6 @@ foo=func
 func.foo=bar
 func.foo.arg.0=int,bar
 func.foo.args=1
-func.foo.cc=cdecl
 func.foo.prototype=fixed
 func.foo.ret=int
 EOF
@@ -3272,8 +3271,8 @@ tfv sym.foo
 EOF
 EXPECT=<<EOF
              ; XREF[x] 0x00000005 caller
-0x00000000 int sym.foo ( // cc:cdecl ret:?
-0x00000000   int myarg // stack
+0x00000000 int sym.foo ( // cc:amd64 ret:rax
+0x00000000   int myarg // rdi
 0x00000004 );
 EOF
 RUN
@@ -3295,8 +3294,8 @@ tfv sym.imp.bar
 EOF
 EXPECT=<<EOF
              ; XREF[x] 0x00000005 caller
-0x00000000 int sym.imp.bar ( // cc:cdecl ret:?
-0x00000000   int myarg // stack
+0x00000000 int sym.imp.bar ( // cc:amd64 ret:rax
+0x00000000   int myarg // rdi
 0x00000004 );
 EOF
 RUN
@@ -5496,7 +5495,6 @@ func.S.cb=n,s
 func.S.cb.arg.0=int *,n
 func.S.cb.arg.1=char *,s
 func.S.cb.args=2
-func.S.cb.cc=cdecl
 func.S.cb.prototype=fixed
 func.S.cb.ret=int
 EOF
@@ -5512,11 +5510,9 @@ tk~func.spacedfn
 EOF
 EXPECT=<<EOF
 func.voidfn.args=0
-func.voidfn.cc=cdecl
 func.voidfn.prototype=fixed
 func.voidfn.ret=int
 func.spacedfn.args=0
-func.spacedfn.cc=cdecl
 func.spacedfn.prototype=unspecified
 func.spacedfn.ret=int
 EOF
@@ -5534,7 +5530,6 @@ tss struct A2
 EOF
 EXPECT=<<EOF
 func.A2.m.args=0
-func.A2.m.cc=cdecl
 func.A2.m.prototype=fixed
 func.A2.m.ret=float
 0
@@ -5586,7 +5581,6 @@ func.myvarfn=fmt,...
 func.myvarfn.arg.0=const char *,fmt
 func.myvarfn.arg.1=,...
 func.myvarfn.args=2
-func.myvarfn.cc=cdecl
 func.myvarfn.prototype=fixed
 func.myvarfn.ret=int
 EOF
@@ -5606,20 +5600,17 @@ EXPECT=<<EOF
 func.once=cb
 func.once.arg.0=void (*)(int),cb
 func.once.args=1
-func.once.cc=cdecl
 func.once.prototype=fixed
 func.once.ret=void
 func.apply=fn,seed
 func.apply.arg.0=int (*)(int, int),fn
 func.apply.arg.1=int,seed
 func.apply.args=2
-func.apply.cc=cdecl
 func.apply.prototype=fixed
 func.apply.ret=int
 func.qual=q
 func.qual.arg.0=void (* const )(int),q
 func.qual.args=1
-func.qual.cc=cdecl
 func.qual.prototype=fixed
 func.qual.ret=void
 EOF
@@ -5636,7 +5627,6 @@ func.N.cb=inner,c
 func.N.cb.arg.0=int (*)(int, int),inner
 func.N.cb.arg.1=char,c
 func.N.cb.args=2
-func.N.cb.cc=cdecl
 func.N.cb.prototype=fixed
 func.N.cb.ret=int
 EOF
@@ -6382,7 +6372,7 @@ int Empty();
 int Zero(void);
 typedef int (*A)();
 typedef int (*B)(void);
-{"name":"Zero","prototype":"fixed","ret":"int","cc":"cdecl","args":[],"size":0}
+{"name":"Zero","prototype":"fixed","ret":"int","cc":"amd64","ret_reg":"rax","args":[],"size":0}
 EOF_EXPECT
 RUN
 
@@ -6399,7 +6389,7 @@ s 0
 EOF_CMDS
 EXPECT=<<EOF_EXPECT
 {"res":null,"error":true,"value":1,"logs":[{"type":"ERROR","origin":"r_type_func_get_prototype","message":"Invalid parameter-list specificity for Status: invalid"}],"code":1}
-{"res":{"name":"Status","prototype":"fixed","ret":"int","cc":"cdecl","args":[],"size":0},"error":false,"value":1,"code":0}
+{"res":{"name":"Status","prototype":"fixed","ret":"int","cc":"amd64","ret_reg":"rax","args":[],"size":0},"error":false,"value":1,"code":0}
 EOF_EXPECT
 RUN
 

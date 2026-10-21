@@ -671,6 +671,9 @@ add_tstr:
 		break;
 	case VT_FUNC:
 		s = type->ref;
+		if (FUNC_CALL_PRESENT (s->r)) {
+			TCC_ERR ("Cannot preserve an explicit calling convention in an inline function type");
+		}
 		type_to_str (s1, buf, buf_size, &s->type, varstr);
 		strcat2 (buf, buf_size, "(");
 		sa = s->next;
@@ -773,34 +776,27 @@ static void parse_attribute(TCCState *s1, AttributeDef *ad) {
 			case TOK_CDECL1:
 			case TOK_CDECL2:
 			case TOK_CDECL3:
+				if (ad->func_call_present && ad->func_call != FUNC_CDECL) {
+					TCC_ERR ("conflicting calling convention attributes");
+				}
 				ad->func_call = FUNC_CDECL;
+				ad->func_call_present = 1;
 				break;
 			case TOK_STDCALL1:
 			case TOK_STDCALL2:
 			case TOK_STDCALL3:
+				if (ad->func_call_present && ad->func_call != FUNC_STDCALL) {
+					TCC_ERR ("conflicting calling convention attributes");
+				}
 				ad->func_call = FUNC_STDCALL;
+				ad->func_call_present = 1;
 				break;
-#ifdef TCC_TARGET_I386
 			case TOK_REGPARM1:
 			case TOK_REGPARM2:
-				skip (s1, '(');
-				n = expr_const (s1);
-				if (n > 3) {
-					n = 3;
-				} else if (n < 0) {
-					n = 0;
-				}
-				if (n > 0) {
-					ad->func_call = FUNC_FASTCALL1 + n - 1;
-				}
-				skip (s1, ')');
-				break;
 			case TOK_FASTCALL1:
 			case TOK_FASTCALL2:
 			case TOK_FASTCALL3:
-				ad->func_call = FUNC_FASTCALLW;
-				break;
-#endif
+				TCC_ERR ("Unsupported calling convention attribute");
 			case TOK_MODE:
 				skip (s1, '(');
 				switch (s1->tok) {
@@ -1400,8 +1396,9 @@ basic_type2:
 				if (0 == ad->aligned) {
 					ad->aligned = FUNC_ALIGN (s->r);
 				}
-				if (0 == ad->func_call) {
+				if (!ad->func_call_present) {
 					ad->func_call = FUNC_CALL (s->r);
+					ad->func_call_present = FUNC_CALL_PRESENT (s->r);
 				}
 				ad->packed |= FUNC_PACKED (s->r);
 			}
@@ -1466,7 +1463,6 @@ static void post_type(TCCState *s1, CType *type, AttributeDef *ad) {
 			free (symname);
 			symname = strdup (s1->global_symname);
 			tcc_appendf (s1, "func.%s.ret=%s\n", symname, ret_type);
-			tcc_appendf (s1, "func.%s.cc=%s\n", symname, "cdecl"); // TODO
 			tcc_appendf (s1, "%s=func\n", symname);
 		}
 		arg_size = 0;
@@ -1534,6 +1530,10 @@ old_proto:
 		tcc_appendf (s1, "func.%s.args=%d\n", symname, narg);
 		tcc_appendf (s1, "func.%s.prototype=%s\n", symname, l == FUNC_OLD? "unspecified": "fixed");
 		skip (s1, ')');
+		parse_attribute (s1, ad);
+		if (ad->func_call_present) {
+			tcc_appendf (s1, "func.%s.cc=%s\n", symname, ad->func_call == FUNC_CDECL? "cdecl": "stdcall");
+		}
 		/* NOTE: const is ignored in returned type as it has a special meaning in gcc / C++ */
 		type->t &= ~VT_CONSTANT;
 		/* some ancient pre-K&R C allows a function to return an array and the array brackets
@@ -2897,9 +2897,16 @@ R_API int tcc_decl0(TCCState *s1, int l, int is_for_loop_init) {
 			continue;
 		}
 		/* iterate thru each declaration */
+		AttributeDef base_attributes = ad;
 		while (tcc_nerr (s1) == 0) {
+			ad.func_call = base_attributes.func_call;
+			ad.func_call_present = base_attributes.func_call_present;
 			type = btype;
 			type_decl (s1, &type, &ad, &v, TYPE_DIRECT);
+			if (ad.func_call_present && (type.t & VT_BTYPE) != VT_FUNC) {
+				tcc_error (s1, "Cannot preserve an explicit calling convention on this declarator");
+				return 1;
+			}
 #if 0
 			{
 				char buf[500];
@@ -2961,11 +2968,12 @@ R_API int tcc_decl0(TCCState *s1, int l, int is_for_loop_init) {
 					}
 					r = sym->type.ref->r;
 					/* use func_call from prototype if not defined */
-					if (FUNC_CALL (r) != FUNC_CDECL && FUNC_CALL (type.ref->r) == FUNC_CDECL) {
+					if (FUNC_CALL_PRESENT (r) && !FUNC_CALL_PRESENT (type.ref->r)) {
 						/// XXX workaround for the buggy tcc type punning crap
 						AttributeDef rd = {0};
 						memcpy (&rd, &r, sizeof (r));
 						FUNC_CALL (type.ref->r) = FUNC_CALL (rd);
+						FUNC_CALL_PRESENT (type.ref->r) = 1;
 					}
 
 					/* use export from prototype */

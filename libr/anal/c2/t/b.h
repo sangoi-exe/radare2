@@ -12,7 +12,7 @@ struct Foo {
 int foo(double age, char *name);
 
 struct Bar {
-	ut64 name;
+	uint64_t name;
 	void *ptr;
 };
 

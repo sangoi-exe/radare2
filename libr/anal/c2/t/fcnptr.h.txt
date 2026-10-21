@@ -1,15 +1,15 @@
+tags/foo=struct
 func.foo.fp.arg.0=int,a
 func.foo.fp.arg.1=int,b
-func.foo.fp.cc=cdecl
 func.foo.fp=a,b
 func.foo.fp.args=2
-type.foo.fp=func
-foo.fp=func
 func.foo.fp.ret=int
-foo=struct
-struct.foo.x=int,0,0
-struct.foo.fp=foo.fp,8,0
-struct.foo.b=char *,16,0
-struct.foo=x,fp,b
-type.foo.size=192
+func.foo.fp.prototype=fixed
+foo.fp=func
+tags/foo=struct
+tags/struct.foo.x=int,0,0
+tags/struct.foo.fp=func.foo.fp *,8,0
+tags/struct.foo.b=char *,16,0
+tags/struct.foo=x,fp,b
+tags/type.foo.size=192
 

@@ -2,7 +2,7 @@ struct.Bar.hello.meta=0
 struct.Bar.world.meta=0
 Bar=struct
 struct.Bar.hello=char *,0,0
-struct.Bar.world=int,8,0
+struct.Bar.world=int [],8,0
 struct.Bar=hello,world
-type.Bar.size=128
+type.Bar.size=64
 

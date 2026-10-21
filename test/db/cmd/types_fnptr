@@ -15,7 +15,6 @@ func.rea_callbacks.next *,8,0
 func.rea_callbacks.next=n
 func.rea_callbacks.next.arg.0=int,n
 func.rea_callbacks.next.args=1
-func.rea_callbacks.next.cc=cdecl
 func.rea_callbacks.next.prototype=fixed
 func.rea_callbacks.next.ret=int
 func.rea_callbacks.xDlSym=ctx,handle,name
@@ -23,7 +22,6 @@ func.rea_callbacks.xDlSym.arg.0=void *,ctx
 func.rea_callbacks.xDlSym.arg.1=void *,handle
 func.rea_callbacks.xDlSym.arg.2=const char *,name
 func.rea_callbacks.xDlSym.args=3
-func.rea_callbacks.xDlSym.cc=cdecl
 func.rea_callbacks.xDlSym.prototype=fixed
 func.rea_callbacks.xDlSym.ret=void (*)(void)
 EOF

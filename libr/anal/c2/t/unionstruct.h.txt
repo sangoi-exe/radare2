@@ -1,11 +1,13 @@
-PadStr=struct
-struct.PadStr.pad=char,0,6
-struct.PadStr.str1=char,6,11
-struct.PadStr=pad,str1
-type.PadStr.size=136
-Str=union
-union.Str.str0=char,0,5
-union.Str.str1=PadStr,0,0
-union.Str=str0,str1
-type.Str.size=136
+tags/PadStr=struct
+tags/PadStr=struct
+tags/struct.PadStr.pad=char,0,6
+tags/struct.PadStr.str1=char,6,11
+tags/struct.PadStr=pad,str1
+tags/type.PadStr.size=136
+tags/Str=union
+tags/Str=union
+tags/union.Str.str0=char,0,5
+tags/union.Str.str1=struct PadStr,0,0
+tags/union.Str=str0,str1
+tags/type.Str.size=136
 

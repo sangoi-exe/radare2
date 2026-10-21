@@ -940,6 +940,65 @@ static bool test_anal_tcc_prototype_metadata(void) {
 	mu_end;
 }
 
+static bool test_anal_cparse_supplied_calling_conventions(void) {
+	const char *parsers[] = { NULL, "tcc" };
+	size_t i;
+	for (i = 0; i < R_ARRAY_SIZE (parsers); i++) {
+		RAnal *anal = r_anal_new ();
+		r_anal_types_reload (anal, R2_PREFIX, NULL, NULL);
+		anal->opt.tparser = parsers[i]? strdup (parsers[i]): NULL;
+		char *error = NULL;
+		mu_assert_true (r_anal_import_c_decls (anal,
+			"int omitted(void);"
+			"__attribute__((cdecl)) int explicit_cdecl(void);"
+			"__attribute__((__stdcall__)) int explicit_stdcall(int value);", &error), "admit omitted and explicitly supplied convention facts");
+		mu_assert_null (error, "supported conventions parse without a diagnostic");
+		mu_assert_null (sdb_const_get (anal->sdb_types, "func.omitted.cc", NULL), "absence is not a supplied cdecl fact");
+		mu_assert_streq (sdb_const_get (anal->sdb_types, "func.explicit_cdecl.cc", NULL), "cdecl", "zero-valued explicit cdecl remains present");
+		mu_assert_streq (sdb_const_get (anal->sdb_types, "func.explicit_stdcall.cc", NULL), "stdcall", "explicit stdcall is not replaced by cdecl");
+		const char *unsupported[] = {
+			"__attribute__((fastcall)) int unsupported(void);",
+			"__attribute__((regparm(2))) int unsupported(void);",
+			"void outer(int (__attribute__((stdcall)) *nested)(int));"
+		};
+		size_t j;
+		for (j = 0; j < R_ARRAY_SIZE (unsupported); j++) {
+			char *kv = r_anal_cparse (anal, unsupported[j], &error);
+			mu_assert_null (kv, "unrepresentable convention input is refused rather than silently lost");
+			free (error);
+			error = NULL;
+		}
+		mu_assert_null (sdb_const_get (anal->sdb_types, "func.outer.cc", NULL), "nested convention refusal does not attach a fact to the outer function");
+		if (parsers[i]) {
+			mu_assert_true (r_anal_import_c_decls (anal,
+				"int trailing(void) __attribute__((stdcall));"
+				"int first(void) __attribute__((cdecl)), second(void);", NULL), "TCC reads final attributes at the actual declarator");
+			mu_assert_streq (sdb_const_get (anal->sdb_types, "func.trailing.cc", NULL), "stdcall", "trailing attribute is serialized after admission");
+			mu_assert_streq (sdb_const_get (anal->sdb_types, "func.first.cc", NULL), "cdecl", "first declarator retains its own explicit attribute");
+			mu_assert_null (sdb_const_get (anal->sdb_types, "func.second.cc", NULL), "declarator-local attributes do not leak across a comma");
+			mu_assert_false (r_anal_import_c_decls (anal, "typedef int (__attribute__((stdcall)) *ExplicitCB)(int);", NULL), "TCC refuses callback serialization that cannot retain the convention");
+			mu_assert_false (r_anal_import_c_decls (anal, "int (__attribute__((stdcall)) *object_cb)(int);", NULL), "a pointer object cannot silently become a convention-bearing ordinary function");
+		} else {
+			mu_assert_true (r_anal_import_c_decls (anal, "/// @cdecl\nint annotated(void);", &error), "generic user annotations retain their existing metadata meaning");
+			mu_assert_null (sdb_const_get (anal->sdb_types, "func.annotated.cc", NULL), "a generic annotation does not assert a C calling convention");
+			mu_assert_streq (sdb_const_get (anal->sdb_types, "func.annotated.@.cdecl", NULL), "true", "generic annotation metadata remains intact");
+			mu_assert_true (r_anal_import_c_decls (anal,
+				"typedef int Alias;struct Alias {int value;};"
+				"typedef const struct Alias *(*CB)(volatile Alias *value);"
+				"struct Callbacks {int (*explicit_cb)(const struct Alias *value) __attribute__((stdcall)); /// @stdcall(note)\nCB omitted_cb;};", &error), "c2 retains connected callbacks and the supplied member convention");
+			mu_assert_null (error, "connected callback attributes parse successfully");
+			mu_assert_null (sdb_const_get (anal->sdb_types, "func.CB.cc", NULL), "a named callback without convention input stays unspecified");
+			mu_assert_streq (sdb_const_get (anal->sdb_types, "func.CB.ret", NULL), "const struct Alias *", "callback return retains qualified tag identity");
+			mu_assert_streq (sdb_const_get (anal->sdb_types, "func.CB.arg.0", NULL), "volatile Alias *,value", "callback parameter retains qualified ordinary identity");
+			mu_assert_streq (sdb_const_get (anal->sdb_types, "func.Callbacks.explicit_cb.cc", NULL), "stdcall", "the convention belongs to the connected member callback record");
+			mu_assert_streq (tag_value (anal, "struct.Callbacks.explicit_cb.@.stdcall"), "note", "generic annotation replacement does not erase the independent supplied C convention");
+			mu_assert_streq (tag_value (anal, "struct.Callbacks.explicit_cb"), "func.Callbacks.explicit_cb *,0,0", "member references its convention-bearing callback");
+		}
+		r_anal_free (anal);
+	}
+	mu_end;
+}
+
 static bool test_anal_tcc_type_namespaces(void) {
 	RAnal *anal = r_anal_new ();
 	anal->config->bits = 64;
@@ -1801,7 +1860,7 @@ static bool test_anal_x86_16_declaration_layout(void) {
 	mu_assert_streq (argument, "CB", "a callback pointer typedef does not acquire another pointer");
 	free (argument);
 	mu_assert_eq (r_anal_type_bitsize (anal, "FN"), 0, "function typedef is not globally coerced to a pointer object");
-	mu_assert_streq (sdb_const_get (anal->sdb_types, "func.CB.cc", NULL), "cdecl", "pointer qualification does not rewrite the current convention");
+	mu_assert_null (sdb_const_get (anal->sdb_types, "func.CB.cc", NULL), "pointer qualification does not invent a calling convention");
 	RAnalBaseType *record = r_anal_get_base_type (anal, "Mixed", R_TYPE_NAMESPACE_TAG);
 	char *serialized = r_anal_base_type_to_kv (record);
 	mu_assert_notnull (serialized, "serialize the current explicit-layer record");
@@ -1847,6 +1906,7 @@ int all_tests(void) {
 	mu_run_test (test_anal_cparse_definition_alias);
 	mu_run_test (test_anal_cparse_prototype_metadata);
 	mu_run_test (test_anal_tcc_prototype_metadata);
+	mu_run_test (test_anal_cparse_supplied_calling_conventions);
 	mu_run_test (test_anal_tcc_type_namespaces);
 	mu_run_test (test_anal_cparse_grouped_names);
 	mu_run_test (test_anal_cparse_visible_typedef_callbacks);

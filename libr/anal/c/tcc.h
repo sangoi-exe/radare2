@@ -162,12 +162,14 @@ typedef struct AttributeDef {
 			      func_args     : 5,
 			      mode          : 4,
 			      weak          : 1,
-			      fill          : 11;
+			      func_call_present : 1,
+			      fill          : 10;
 	int alias_target;    /* token */
 } AttributeDef;
 
 /* gr: wrappers for casting sym->r for other purposes */
 #define FUNC_CALL(r) (((AttributeDef*)&(r))->func_call)
+#define FUNC_CALL_PRESENT(r) (((AttributeDef*)&(r))->func_call_present)
 #define FUNC_EXPORT(r) (((AttributeDef*)&(r))->func_export)
 #define FUNC_IMPORT(r) (((AttributeDef*)&(r))->func_import)
 #define FUNC_ARGS(r) (((AttributeDef*)&(r))->func_args)

@@ -6,6 +6,8 @@
 typedef struct {
 	RStrs key;
 	RStrs value;
+	RStrs c_value;
+	bool is_c;
 } KVCAttr;
 
 R_VEC_TYPE (RVecKVCAttr, KVCAttr);
@@ -174,8 +176,10 @@ static void skip_semicolons(KVCParser *kvc) {
 
 static void skip_ws(KVCParser *kvc) {
 	skip_spaces (kvc);
-	skip_semicolons (kvc);
-	skip_spaces (kvc);
+	while (kvc_peek (kvc, 0) == ';') {
+		skip_semicolons (kvc);
+		skip_spaces (kvc);
+	}
 }
 
 static const char *consume_word(KVCParser *kvc) {
@@ -208,7 +212,7 @@ static const char *kvc_attr(KVCParser *kvc, const char *k) {
 	return NULL;
 }
 
-static bool kvc_attr_add(KVCParser *kvc, RStrs key, RStrs value) {
+static bool kvc_attr_add(KVCParser *kvc, RStrs key, RStrs value, bool is_c) {
 	KVCAttr *attr = RVecKVCAttr_emplace_back (&kvc->attrs);
 	if (!attr) {
 		kvc_error (kvc, "Cannot allocate attribute");
@@ -216,6 +220,8 @@ static bool kvc_attr_add(KVCParser *kvc, RStrs key, RStrs value) {
 	}
 	attr->key = key;
 	attr->value = value;
+	attr->c_value = value;
+	attr->is_c = is_c;
 	return true;
 }
 
@@ -275,7 +281,7 @@ static bool parse_attributes(KVCParser *kvc) {
 		}
 		if (existing) {
 			existing->value = attr_value;
-		} else if (!kvc_attr_add (kvc, attr_name, attr_value)) {
+		} else if (!kvc_attr_add (kvc, attr_name, attr_value, false)) {
 			return false;
 		}
 	}
@@ -363,7 +369,7 @@ static bool parse_c_attributes(KVCParser *kvc) {
 	}
 	skip_spaces (kvc);
 	// Store attribute
-	if (!kvc_attr_add (kvc, attr_name, attr_value)) {
+	if (!kvc_attr_add (kvc, attr_name, attr_value, true)) {
 		return false;
 	}
 	kvc_getch (kvc);
@@ -410,6 +416,29 @@ static RTypeDecl *kvc_declaration(KVCParser *kvc, RStrs span) {
 }
 
 static void emit_func_signature(KVCParser *kvc, const char *name, const RTypeDeclNode *function, bool is_static) {
+	const char *callconv = NULL;
+	KVCAttr *attr;
+	R_VEC_FOREACH (&kvc->attrs, attr) {
+		if (!attr->is_c) {
+			continue;
+		}
+		const char *supplied = NULL;
+		if (r_strs_equals (attr->key, R_STRS_LIT ("cdecl"))) {
+			supplied = "cdecl";
+		} else if (r_strs_equals (attr->key, R_STRS_LIT ("stdcall"))) {
+			supplied = "stdcall";
+		} else if (r_strs_equals (attr->key, R_STRS_LIT ("fastcall")) || r_strs_equals (attr->key, R_STRS_LIT ("regparm"))) {
+			kvc_error (kvc, "Unsupported calling convention attribute");
+			return;
+		}
+		if (supplied) {
+			if (!r_strs_equals (attr->c_value, R_STRS_LIT ("true")) || (callconv && strcmp (callconv, supplied))) {
+				kvc_error (kvc, "Invalid or conflicting calling convention attributes");
+				return;
+			}
+			callconv = supplied;
+		}
+	}
 	RStrBuf *names = r_strbuf_new ("");
 	RListIter *iter;
 	RTypeDecl *param;
@@ -468,7 +497,10 @@ static void emit_func_signature(KVCParser *kvc, const char *name, const RTypeDec
 		r_strbuf_free (names);
 		return;
 	}
-	r_strbuf_appendf (kvc->sb, "func.%s.cc=cdecl\nfunc.%s=%s\nfunc.%s.args=%d\nfunc.%s.ret=%s\n", name, name, r_strbuf_get (names), name, index, name, ret);
+	if (callconv) {
+		r_strbuf_appendf (kvc->sb, "func.%s.cc=%s\n", name, callconv);
+	}
+	r_strbuf_appendf (kvc->sb, "func.%s=%s\nfunc.%s.args=%d\nfunc.%s.ret=%s\n", name, r_strbuf_get (names), name, index, name, ret);
 	r_strbuf_appendf (kvc->sb, "func.%s.prototype=%s\n", name, function->function.prototype? "fixed": "unspecified");
 	if (is_static) {
 		r_strbuf_appendf (kvc->sb, "func.%s.@.static=true\n", name);
@@ -1056,8 +1088,8 @@ static bool parse_function(KVCParser *kvc) {
 		return false;
 	}
 	r_strbuf_appendf (kvc->sb, "%s=func\n", decl->name);
-	apply_attributes (kvc, "func", decl->name, R_TYPE_NAMESPACE_ORDINARY);
 	emit_func_signature (kvc, decl->name, decl->type, is_static);
+	apply_attributes (kvc, "func", decl->name, R_TYPE_NAMESPACE_ORDINARY);
 	r_type_decl_free (decl);
 	skip_ws (kvc);
 	return true;
@@ -1170,7 +1202,9 @@ int main(int argc, char *argv[]) {
 	}
 
 	char *errmsg = NULL;
-	char *result = kvc_parse (NULL, (const char *)content, &errmsg);
+	RAnal *anal = r_anal_new ();
+	r_anal_types_reload (anal, R2_PREFIX, NULL, NULL);
+	char *result = kvc_parse (anal, (const char *)content, &errmsg);
 	if (errmsg) {
 		R_LOG_ERROR ("Parsing problem %s", errmsg);
 		free (errmsg);
@@ -1181,6 +1215,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	free (content);
+	r_anal_free (anal);
 	return 0;
 }
 #endif

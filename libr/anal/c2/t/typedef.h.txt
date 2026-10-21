@@ -1,10 +1,11 @@
-struct.foo.a.meta=0
-struct.foo.b.meta=0
+tags/foo=struct
+tags/struct.foo.a.meta=0
+tags/struct.foo.b.meta=0
 typedef.bar=struct foo
-foo=struct
-struct.foo.a=int,0,0
-struct.foo.b=int,4,0
-struct.foo=a,b
-type.foo.size=64
+tags/foo=struct
+tags/struct.foo.a=int,0,0
+tags/struct.foo.b=int,4,0
+tags/struct.foo=a,b
+tags/type.foo.size=64
 bar=typedef
 

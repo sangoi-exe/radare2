@@ -1818,9 +1818,6 @@ static bool import_dwarf_function_fallback(RAnal *anal, const char *typed_name, 
 
 	sdb_setf (types, ret_type, 0, "func.%s.ret", typed_name);
 
-	const char *default_cc = r_anal_cc_default (anal);
-	sdb_setf (types, default_cc? default_cc: "cdecl", 0, "func.%s.cc", typed_name);
-
 	RStrBuf argnames;
 	r_strbuf_init (&argnames);
 	RListIter *iter;

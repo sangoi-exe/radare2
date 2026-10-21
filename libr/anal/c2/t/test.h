@@ -11,6 +11,6 @@ struct Foo {
 	/// @pack(1) @brow(123)
 	int a;
 	char b;
-	ut8 c[32];
+	uint8_t c[32];
 };
 /* comment2 */

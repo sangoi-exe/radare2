@@ -4,5 +4,5 @@ struct PadStr {
 };
 union Str {
 	char str0[5];
-	PadStr str1;
+	struct PadStr str1;
 }

@@ -1,3 +1,48 @@
+NAME=c2 stores supplied conventions and uses the configured default for omission
+FILE=malloc://64
+ARGS=-a x86 -b 32
+CMDS=<<EOF
+e anal.cc=stdcall
+td int omitted(void);
+td __attribute__((cdecl)) int explicit_cdecl(void);
+td __attribute__((stdcall)) int explicit_stdcall(void);
+tk func.omitted.cc
+tk func.explicit_cdecl.cc
+tk func.explicit_stdcall.cc
+af+ 0 omitted
+afc
+EOF
+EXPECT=<<EOF
+cdecl
+stdcall
+stdcall
+EOF
+RUN
+
+NAME=TCC convention facts include final declarator attributes without leaking
+FILE=--
+ARGS=-a x86 -b 32 -e types.plugin=tcc
+CMDS=<<EOF
+td int omitted(void);
+td __attribute__((cdecl)) int explicit_cdecl(void);
+td __attribute__((stdcall)) int explicit_stdcall(void);
+td int trailing(void) __attribute__((stdcall));
+td int first(void) __attribute__((cdecl)), second(void);
+tk func.omitted.cc
+tk func.explicit_cdecl.cc
+tk func.explicit_stdcall.cc
+tk func.trailing.cc
+tk func.first.cc
+tk func.second.cc
+EOF
+EXPECT=<<EOF
+cdecl
+stdcall
+stdcall
+cdecl
+EOF
+RUN
+
 NAME=near and far remain ordinary parameter names in declarations and manual afs
 FILE=malloc://16
 ARGS=-a x86 -b 64
@@ -93,7 +138,6 @@ EOF
 EXPECT=<<EOF
 int (far *)(int left, int right),fn
 BYTE far * near *,ptr
-cdecl
 void use(int (far *fn)(int left, int right), BYTE far * near *ptr);
 EOF
 RUN

@@ -1,8 +1,8 @@
 innerfunc=func
 func.innerfunc.arg.0=int,a
-func.innerfunc.cc=cdecl
 func.innerfunc=a
 func.innerfunc.args=1
-func.innerfunc.@.static=true
 func.innerfunc.ret=int
+func.innerfunc.prototype=fixed
+func.innerfunc.@.static=true
 

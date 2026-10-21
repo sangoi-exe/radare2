@@ -1,7 +1,13 @@
-spam=struct
-struct.spam.ham=int,0,0
-struct.spam._foo=struct foo,4,0
-struct.spam.eggs=int,8,0
-struct.spam=ham,_foo,eggs
-type.spam.size=96
+tags/foo=struct
+tags/foo=struct
+tags/struct.foo.value=int,0,0
+tags/struct.foo=value
+tags/type.foo.size=32
+tags/spam=struct
+tags/spam=struct
+tags/struct.spam.ham=int,0,0
+tags/struct.spam._foo=struct foo,4,0
+tags/struct.spam.eggs=int,8,0
+tags/struct.spam=ham,_foo,eggs
+tags/type.spam.size=96
 

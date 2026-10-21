@@ -1,7 +1,8 @@
-xoo=union
-union.xoo.x=int,0,0
-union.xoo.y=int,0,0
-union.xoo.z=int,0,0
-union.xoo=x,y,z
-type.xoo.size=32
+tags/xoo=union
+tags/xoo=union
+tags/union.xoo.x=int,0,0
+tags/union.xoo.y=int,0,0
+tags/union.xoo.z=int,0,0
+tags/union.xoo=x,y,z
+tags/type.xoo.size=32
 

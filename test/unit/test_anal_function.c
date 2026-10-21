@@ -1492,6 +1492,11 @@ bool test_r_anal_function_get_signature_falls_back_to_valid_callconv(void) {
 	mu_assert_true (r_anal_cc_set (anal, "void amd64 (rdi, rsi, rdx, rcx, r8, r9, stack)"),
 		"must seed amd64 calling convention");
 	r_anal_set_cc_default (anal, "amd64");
+	char *parsed = r_anal_cparse (anal, "void sigcc (size_t sz);", NULL);
+	mu_assert_notnull (parsed, "declaration with no supplied convention parses");
+	r_anal_save_parsed_type (anal, parsed);
+	free (parsed);
+	mu_assert_null (sdb_const_get (anal->sdb_types, "func.sigcc.cc", NULL), "header producer leaves the convention absent");
 
 	RAnalFunction *f = r_anal_create_function (anal, "sigcc", 0x6000, 0, NULL);
 	mu_assert_notnull (f, "Couldn't create function for callconv fallback test");
@@ -1500,7 +1505,12 @@ bool test_r_anal_function_get_signature_falls_back_to_valid_callconv(void) {
 
 	RAnalFunctionSignature *signature = r_anal_function_get_signature (f);
 	mu_assert_notnull (signature, "typed signature must be readable");
-	mu_assert_streq (signature->callconv, "amd64", "invalid persisted cc must fall back to a valid live cc");
+	mu_assert_streq (signature->callconv, "amd64", "absent source convention follows the active analysis configuration");
+	r_anal_function_signature_free (signature);
+	sdb_set (anal->sdb_types, "func.sigcc.cc", "cdecl", 0);
+	signature = r_anal_function_get_signature (f);
+	mu_assert_notnull (signature, "typed signature with an unavailable stored convention remains readable");
+	mu_assert_streq (signature->callconv, "amd64", "an unavailable persisted convention retains the existing valid-live fallback");
 	r_anal_function_signature_free (signature);
 	r_anal_free (anal);
 	mu_end;

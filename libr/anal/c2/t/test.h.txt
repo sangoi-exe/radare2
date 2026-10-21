@@ -1,9 +1,10 @@
-struct.Foo.a.@.pack=1
-struct.Foo.a.@.brow=123
-Foo=struct
-struct.Foo.a=int,0,0
-struct.Foo.b=char,4,0
-struct.Foo.c=ut8,5,32
-struct.Foo=a,b,c
-type.Foo.size=320
+tags/Foo=struct
+tags/struct.Foo.a.@.pack=1
+tags/struct.Foo.a.@.brow=123
+tags/Foo=struct
+tags/struct.Foo.a=int,0,0
+tags/struct.Foo.b=char,4,0
+tags/struct.Foo.c=uint8_t,5,32
+tags/struct.Foo=a,b,c
+tags/type.Foo.size=320
 

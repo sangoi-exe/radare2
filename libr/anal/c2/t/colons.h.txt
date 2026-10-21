@@ -1,13 +1,13 @@
 foo=func
 func.foo.arg.0=int,bar
-func.foo.cc=cdecl
 func.foo=bar
 func.foo.args=1
 func.foo.ret=int
+func.foo.prototype=fixed
 bar=func
 func.bar.arg.0=long,cow
-func.bar.cc=cdecl
 func.bar=cow
 func.bar.args=1
 func.bar.ret=long
+func.bar.prototype=fixed
 

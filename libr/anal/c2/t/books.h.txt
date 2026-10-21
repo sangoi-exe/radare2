@@ -1,7 +1,8 @@
-Books=struct
-struct.Books.title=char,0,50
-struct.Books.author=char,50,50
-struct.Books.subject=char,100,100
-struct.Books=title,author,subject
-type.Books.size=1600
+tags/Books=struct
+tags/Books=struct
+tags/struct.Books.title=char,0,50
+tags/struct.Books.author=char,50,50
+tags/struct.Books.subject=char,100,100
+tags/struct.Books=title,author,subject
+tags/type.Books.size=1600
 

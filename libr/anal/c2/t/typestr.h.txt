@@ -2,6 +2,6 @@ typedef.string=char *
 string=typedef
 typedef.strong=char *
 strong=typedef
-typedef.strang=char*
+typedef.strang=char *
 strang=typedef
 
