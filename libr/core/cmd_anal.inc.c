@@ -4498,7 +4498,7 @@ static void rename_fcnsig(RAnalFunction *fcn, const char *oname, const char *nna
 }
 
 /* TODO: merge logic into r_anal_function_rename (); */
-static bool __setFunctionName(RCore *core, ut64 addr, const char *_name, bool prefix) {
+static bool __setFunctionName(RCore *core, ut64 addr, const char *_name, bool prefix, bool rename_signature) {
 	R_RETURN_VAL_IF_FAIL (core && _name, false);
 	bool ret = false;
 	char *name = getFunctionName (core, addr, r_str_trim_head_ro (_name), prefix);
@@ -4522,7 +4522,9 @@ static bool __setFunctionName(RCore *core, ut64 addr, const char *_name, bool pr
 			r_flag_set (core->flags, name, fcn->addr, r_anal_function_size_from_entry (fcn));
 			r_flag_space_pop (core->flags);
 		}
-		rename_fcnsig (fcn, oname, name);
+		if (rename_signature) {
+			rename_fcnsig (fcn, oname, name);
+		}
 		ret = r_anal_function_rename (fcn, name);
 		if (ret && core->anal->cb.on_fcn_rename) {
 			core->anal->cb.on_fcn_rename (core->anal, core->anal->user, fcn, name);
@@ -4604,7 +4606,7 @@ static void cmd_afn(RCore *core, const char *input, bool quiet) {
 					name = res;
 				}
 			}
-			if (!*name || !__setFunctionName (core, addr, name, false)) {
+			if (!*name || !__setFunctionName (core, addr, name, false, true)) {
 				if (!quiet) {
 					R_LOG_ERROR ("Cannot find function at 0x%08" PFMT64x, addr);
 				}
@@ -5216,8 +5218,8 @@ R_API bool r_core_anal_function_set_signature(RCore *core, ut64 addr, const char
 	bool ok = false;
 	if (prepared) {
 		const char *name = r_anal_function_signature_prepared_name (prepared);
-		if (!strcmp (fcn->name, name) || __setFunctionName (core, fcn->addr, name, false)) {
-			ok = r_anal_function_signature_apply (core->anal, fcn, prepared);
+		if (!strcmp (fcn->name, name) || __setFunctionName (core, fcn->addr, name, false, false)) {
+			ok = r_anal_function_signature_apply (core->anal, fcn, prepared, R_ANAL_SIGNATURE_APPLY_FUNCTION);
 		} else if (!message) {
 			message = r_str_newf ("Cannot rename function to '%s'", name);
 		}
@@ -5533,7 +5535,7 @@ R_API void r_core_af(RCore *core, ut64 addr, const char *name, bool anal_calls) 
 	RAnalFunction *fcn = r_anal_get_fcn_in (core->anal, addr, 0);
 	if (fcn) {
 		/* ensure we use a proper name */
-		__setFunctionName (core, addr, fcn->name, false);
+		__setFunctionName (core, addr, fcn->name, false, true);
 		if (core->anal->opt.vars) {
 			r_core_recover_vars (core, fcn, true);
 		}
@@ -5613,7 +5615,7 @@ R_API void r_core_af(RCore *core, ut64 addr, const char *name, bool anal_calls) 
 		r_bitset_free (visited);
 	}
 	if (name) {
-		if (*name && !__setFunctionName (core, addr, name, true)) {
+		if (*name && !__setFunctionName (core, addr, name, true, true)) {
 			R_LOG_ERROR ("af: Cannot find function at 0x%08" PFMT64x, addr);
 		}
 	}

@@ -1132,6 +1132,41 @@ static bool test_anal_cparse_tagged_member_does_not_resolve_typedef(void) {
 	mu_end;
 }
 
+static bool test_anal_type_format_tagged_identity(void) {
+	RAnal *anal = r_anal_new ();
+	anal->config->bits = 64;
+	r_anal_types_reload (anal, R2_PREFIX, NULL, NULL);
+	mu_assert_true (r_anal_import_c_decls (anal,
+		"struct Bright {int member;};typedef struct Bright Alias;struct Alias;"
+		"union Box {int member;};typedef union Box UnionAlias;union UnionAlias;"
+		"struct Opaque;", NULL), "seed complete aggregates, ordinary aliases and incomplete tags");
+	char *format = r_type_format (anal->sdb_types, "struct Alias");
+	mu_assert_null (format, "an incomplete struct tag cannot borrow an ordinary typedef's format");
+	format = r_type_format (anal->sdb_types, "union UnionAlias");
+	mu_assert_null (format, "an incomplete union tag cannot borrow an ordinary typedef's format");
+	format = r_type_format (anal->sdb_types, "struct Opaque");
+	mu_assert_null (format, "an incomplete tag without an alias has no by-value format");
+	format = r_type_format (anal->sdb_types, "union Bright");
+	mu_assert_null (format, "an explicit tag cannot borrow another tag kind's format");
+	format = r_type_format (anal->sdb_types, "Alias");
+	mu_assert_streq (format, "d member ", "ordinary struct aliases retain the complete format");
+	free (format);
+	format = r_type_format (anal->sdb_types, "struct Bright");
+	mu_assert_streq (format, "d member ", "a complete struct retains its tagged format");
+	free (format);
+	format = r_type_format (anal->sdb_types, "UnionAlias");
+	mu_assert_streq (format, "0d member ", "ordinary union aliases retain the complete format");
+	free (format);
+	format = r_type_format (anal->sdb_types, "union Box");
+	mu_assert_streq (format, "0d member ", "a complete union retains its tagged format");
+	free (format);
+	format = r_type_format (anal->sdb_types, "struct Alias *");
+	mu_assert_streq (format, "p", "an incomplete tagged pointee still has pointer representation");
+	free (format);
+	r_anal_free (anal);
+	mu_end;
+}
+
 static bool test_anal_cparse_incomplete_member(void) {
 	RAnal *anal = r_anal_new ();
 	anal->config->bits = 64;
@@ -1558,6 +1593,7 @@ int all_tests(void) {
 	mu_run_test (test_anal_cparse_forward_typedef);
 	mu_run_test (test_anal_cparse_distinct_tag_and_typedef_names);
 	mu_run_test (test_anal_cparse_tagged_member_does_not_resolve_typedef);
+	mu_run_test (test_anal_type_format_tagged_identity);
 	mu_run_test (test_anal_cparse_incomplete_member);
 	mu_run_test (test_anal_get_base_type_union);
 	mu_run_test (test_anal_save_base_type_union);

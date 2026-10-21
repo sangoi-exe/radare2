@@ -173,6 +173,77 @@ static bool test_move_preserve_independent_state(void) {
 	mu_end;
 }
 
+static bool test_move_preserve_prototype_metadata(void) {
+	const struct {
+		const char *prototype;
+		RTypeFunctionPrototype specificity;
+		const char *binding;
+	} cases[] = {
+		{ "unknown", R_TYPE_FUNC_PROTOTYPE_UNKNOWN, NULL },
+		{ "unspecified", R_TYPE_FUNC_PROTOTYPE_UNSPECIFIED, NULL },
+		{ "fixed", R_TYPE_FUNC_PROTOTYPE_FIXED, NULL },
+		{ "invalid", R_TYPE_FUNC_PROTOTYPE_UNKNOWN, NULL },
+		{ "unknown", R_TYPE_FUNC_PROTOTYPE_UNKNOWN, "link" },
+		{ "unknown", R_TYPE_FUNC_PROTOTYPE_UNKNOWN, "fcnlink" },
+	};
+	size_t i;
+	for (i = 0; i < R_ARRAY_SIZE (cases); i++) {
+		RCore *core = move_core ();
+		RAnal *anal = core->anal;
+		RAnalFunction *fcn = r_anal_create_function (anal, NULL, MOVE_ADDR, R_ANAL_FCN_TYPE_FCN, NULL);
+		r_anal_function (anal, fcn, fcn->addr, R_ANAL_REF_TYPE_CALL);
+		const char *type_name = cases[i].binding? "manual_move_prototype": fcn->name;
+		char *prototype_key = r_str_newf ("func.%s.prototype", type_name);
+		sdb_set (anal->sdb_types, prototype_key, cases[i].prototype, 0);
+		if (cases[i].binding) {
+			sdb_set (anal->sdb_types, type_name, "func", 0);
+			sdb_setf (anal->sdb_types, type_name, 0, "%s.%08"PFMT64x, cases[i].binding, fcn->addr);
+		}
+		char *name = strdup (fcn->name);
+		const char *cc = fcn->callconv;
+		RAnalBlock *bb = r_list_first (fcn->bbs);
+		ut64 epoch = fcn->dirty_epoch;
+		mu_assert_true (move_run (core, 1), "prototype-only or unreadable metadata refuses the generic move helper");
+		mu_assert_ptreq (r_anal_get_function_at (anal, MOVE_ADDR), fcn, "existing function identity retained");
+		mu_assert_streq (fcn->name, name, "generic name retained");
+		mu_assert_ptreq (fcn->callconv, cc, "existing convention retained");
+		mu_assert_ptreq (r_list_first (fcn->bbs), bb, "existing body retained");
+		mu_assert_eq (fcn->dirty_epoch, epoch, "refused signature is not applied");
+		mu_assert_streq (sdb_const_get (anal->sdb_types, prototype_key, NULL), cases[i].prototype, "independent specificity retained");
+		mu_assert_null (sdb_const_getf (anal->sdb_types, NULL, "func.%s.ret", type_name), "no helper return installed");
+		mu_assert_null (sdb_const_getf (anal->sdb_types, NULL, "func.%s.args", type_name), "no helper parameters installed");
+		mu_assert_null (sdb_const_get (anal->sdb_types, "borland_fmovmem_000110e8", NULL), "no helper prototype created");
+		char *linked = r_type_link_at (anal->sdb_types, MOVE_ADDR);
+		if (cases[i].binding && !strcmp (cases[i].binding, "link")) {
+			mu_assert_streq (linked, type_name, "explicit effective binding retained");
+		} else {
+			mu_assert_null (linked, "no new helper link");
+		}
+		free (linked);
+		const char *dwarf = sdb_const_getf (anal->sdb_types, NULL, "fcnlink.%08"PFMT64x, MOVE_ADDR);
+		if (cases[i].binding && !strcmp (cases[i].binding, "fcnlink")) {
+			mu_assert_streq (dwarf, type_name, "DWARF effective binding retained");
+		} else {
+			mu_assert_null (dwarf, "no new DWARF binding");
+		}
+		RAnalFunctionSignature *sig = r_anal_function_get_signature (fcn);
+		if (!strcmp (cases[i].prototype, "invalid")) {
+			mu_assert_null (sig, "invalid metadata remains unreadable instead of becoming a helper");
+		} else {
+			mu_assert_notnull (sig, "independent signature remains readable");
+			mu_assert_eq (sig->prototype, cases[i].specificity, "effective specificity retained");
+			mu_assert_null (sig->ret_type, "effective return remains absent");
+			mu_assert_true (r_list_empty (sig->params), "effective parameters remain absent");
+		}
+		r_anal_function_signature_free (sig);
+		mu_assert_notnull (r_anal_get_function_at (anal, MOVE_ADDR + 89), "unrelated qualified wrapper remains available");
+		free (prototype_key);
+		free (name);
+		move_core_free (core);
+	}
+	mu_end;
+}
+
 static bool test_move_preserve_body_and_convention(void) {
 	RCore *core = move_core ();
 	RAnalFunction *fcn = r_anal_create_function (core->anal, NULL, MOVE_ADDR, R_ANAL_FCN_TYPE_FCN, NULL);
@@ -419,6 +490,7 @@ int main(int argc, char **argv) {
 	mu_run_test (test_move_family);
 	mu_run_test (test_move_current_qualification);
 	mu_run_test (test_move_preserve_independent_state);
+	mu_run_test (test_move_preserve_prototype_metadata);
 	mu_run_test (test_move_preserve_body_and_convention);
 	mu_run_test (test_move_metadata_spaces);
 	mu_run_test (test_move_preserve_type);

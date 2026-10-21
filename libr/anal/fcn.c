@@ -2975,30 +2975,30 @@ static char *function_signature_address_type_name(Sdb *types, ut64 addr) {
 }
 
 // The prototype's key, and whether the address or the name selected it.
-static char *function_signature_type_name_origin(RAnal *anal, RAnalFunction *fcn, RAnalFunctionSignatureOrigin *origin) {
+static char *function_signature_type_name_origin(RAnal *anal, RAnalFunction *fcn, Sdb *types, RAnalFunctionSignatureOrigin *origin) {
 	const char *basename;
 
-	R_RETURN_VAL_IF_FAIL (anal && anal->sdb_types && fcn && fcn->name, NULL);
+	R_RETURN_VAL_IF_FAIL (anal && types && fcn && fcn->name, NULL);
 	*origin = R_ANAL_FUNCTION_SIGNATURE_ORIGIN_NAME;
-	char *name = function_signature_address_type_name (anal->sdb_types, fcn->addr);
+	char *name = function_signature_address_type_name (types, fcn->addr);
 	if (name) {
 		*origin = R_ANAL_FUNCTION_SIGNATURE_ORIGIN_ADDRESS;
 		return name;
 	}
 	const char *lookup_name = function_signature_lookup_name (anal, fcn);
-	name = function_signature_try_type_name (anal->sdb_types, lookup_name);
+	name = function_signature_try_type_name (types, lookup_name);
 	if (name) {
 		return name;
 	}
 	if (lookup_name != fcn->name) {
-		name = function_signature_try_type_name (anal->sdb_types, fcn->name);
+		name = function_signature_try_type_name (types, fcn->name);
 		if (name) {
 			return name;
 		}
 	}
 	basename = r_str_rchr (lookup_name, NULL, '.');
 	if (basename && basename[1]) {
-		name = function_signature_try_type_name (anal->sdb_types, basename + 1);
+		name = function_signature_try_type_name (types, basename + 1);
 		if (name) {
 			return name;
 		}
@@ -3006,7 +3006,7 @@ static char *function_signature_type_name_origin(RAnal *anal, RAnalFunction *fcn
 	if (lookup_name != fcn->name) {
 		basename = r_str_rchr (fcn->name, NULL, '.');
 		if (basename && basename[1]) {
-			name = function_signature_try_type_name (anal->sdb_types, basename + 1);
+			name = function_signature_try_type_name (types, basename + 1);
 			if (name) {
 				return name;
 			}
@@ -3014,14 +3014,14 @@ static char *function_signature_type_name_origin(RAnal *anal, RAnalFunction *fcn
 	}
 	// auto-detect JNI native functions (Java_Package_Class_method)
 	if (r_str_startswith (lookup_name, "Java_")) {
-		name = function_signature_try_type_name (anal->sdb_types, "jni_native");
+		name = function_signature_try_type_name (types, "jni_native");
 		if (name) {
 			return name;
 		}
 	}
 	basename = r_str_rchr (lookup_name, NULL, '.');
 	if (basename && r_str_startswith (basename + 1, "Java_")) {
-		name = function_signature_try_type_name (anal->sdb_types, "jni_native");
+		name = function_signature_try_type_name (types, "jni_native");
 		if (name) {
 			return name;
 		}
@@ -3031,7 +3031,7 @@ static char *function_signature_type_name_origin(RAnal *anal, RAnalFunction *fcn
 
 static char *function_signature_type_name(RAnal *anal, RAnalFunction *fcn) {
 	RAnalFunctionSignatureOrigin origin;
-	return function_signature_type_name_origin (anal, fcn, &origin);
+	return function_signature_type_name_origin (anal, fcn, anal->sdb_types, &origin);
 }
 
 static const char *function_signature_callconv(RAnal *anal, RAnalFunction *fcn, const char *type_name) {
@@ -3284,7 +3284,7 @@ R_API RAnalFunctionSignature *r_anal_function_get_signature(RAnalFunction *funct
 	R_RETURN_VAL_IF_FAIL (function && function->anal && function->anal->sdb_types, NULL);
 	anal = function->anal;
 	RAnalFunctionSignatureOrigin origin;
-	type_name = function_signature_type_name_origin (anal, function, &origin);
+	type_name = function_signature_type_name_origin (anal, function, anal->sdb_types, &origin);
 	if (!type_name) {
 		return NULL;
 	}
@@ -3367,6 +3367,10 @@ R_API bool r_anal_function_set_signature(RAnal *anal, RAnalFunction *fcn, const 
 	R_RETURN_VAL_IF_FAIL (anal && fcn && anal->sdb_types && signature, false);
 	if (!r_type_func_prototype_name (signature->prototype)) {
 		R_LOG_ERROR ("Invalid signature parameter-list specificity");
+		return false;
+	}
+	if (signature->prototype == R_TYPE_FUNC_PROTOTYPE_FIXED && signature->origin == R_ANAL_FUNCTION_SIGNATURE_ORIGIN_VARIABLES) {
+		R_LOG_ERROR ("Cannot set a fixed signature from an unavailable formal list");
 		return false;
 	}
 	type_name = function_signature_type_name (anal, fcn);
@@ -3501,11 +3505,120 @@ R_API RAnalFunctionSignaturePrepared *r_anal_function_signature_prepare(RAnal *a
 	return prepared;
 }
 
-R_API bool r_anal_function_signature_apply(RAnal *anal, RAnalFunction *fcn, const RAnalFunctionSignaturePrepared *prepared) {
+static bool function_signature_record_matches(Sdb *types, const RAnalFunctionSignaturePrepared *prepared, const char *type_name) {
+	char *prefix = r_str_newf ("func.%s", prepared->name);
+	if (!prefix) {
+		return false;
+	}
+	size_t prefix_len = strlen (prefix);
+	SdbList *records = sdb_foreach_list (prepared->types, false);
+	SdbListIter *iter;
+	SdbKv *record;
+	bool matches = records != NULL;
+	ls_foreach (records, iter, record) {
+		const char *key = sdbkv_key (record);
+		char *target = NULL;
+		if (!strcmp (key, prepared->name)) {
+			target = strdup (type_name);
+		} else if (!strncmp (key, prefix, prefix_len) && (!key[prefix_len] || key[prefix_len] == '.')) {
+			target = r_str_newf ("func.%s%s", type_name, key + prefix_len);
+		} else {
+			target = strdup (key);
+		}
+		const char *existing = target? sdb_const_get (types, target, NULL): NULL;
+		matches = existing && !strcmp (existing, sdbkv_value (record));
+		free (target);
+		if (!matches) {
+			break;
+		}
+	}
+	ls_free (records);
+	free (prefix);
+	return matches;
+}
+
+static char *function_signature_unused_type_name(RAnal *anal, RAnalFunction *fcn, const char *name) {
+	SdbList *records = sdb_foreach_list (anal->sdb_types, false);
+	Sdb *probe = sdb_new0 ();
+	char *candidate = strdup (name);
+	if (!records || !probe) {
+		ls_free (records);
+		sdb_free (probe);
+		free (candidate);
+		return NULL;
+	}
+	size_t suffix = 0;
+	while (candidate) {
+		char *prefix = r_str_newf ("func.%s", candidate);
+		if (!prefix) {
+			free (candidate);
+			candidate = NULL;
+			break;
+		}
+		size_t prefix_len = strlen (prefix);
+		bool occupied = false;
+		SdbListIter *iter;
+		SdbKv *record;
+		ls_foreach (records, iter, record) {
+			const char *key = sdbkv_key (record);
+			if (!strcmp (key, candidate) || (!strncmp (key, prefix, prefix_len) && (!key[prefix_len] || key[prefix_len] == '.'))) {
+				occupied = true;
+				break;
+			}
+		}
+		free (prefix);
+		if (!occupied) {
+			// An unused key must not become a new import/fuzzy match for another function.
+			if (!sdb_set (probe, candidate, "func", 0)) {
+				free (candidate);
+				candidate = NULL;
+				break;
+			}
+			RListIter *iter;
+			RAnalFunction *other;
+			r_list_foreach (anal->fcns, iter, other) {
+				if (other == fcn) {
+					continue;
+				}
+				RAnalFunctionSignatureOrigin origin;
+				char *resolved = function_signature_type_name_origin (anal, other, probe, &origin);
+				occupied = resolved && !strcmp (resolved, candidate);
+				free (resolved);
+				if (occupied) {
+					break;
+				}
+			}
+			sdb_unset (probe, candidate, 0);
+		}
+		if (!occupied) {
+			break;
+		}
+		free (candidate);
+		candidate = suffix? r_str_newf ("%s_%" PFMT64x "_%zu", name, fcn->addr, suffix + 1): r_str_newf ("%s_%" PFMT64x, name, fcn->addr);
+		suffix++;
+	}
+	ls_free (records);
+	sdb_free (probe);
+	return candidate;
+}
+
+R_API bool r_anal_function_signature_apply(RAnal *anal, RAnalFunction *fcn, const RAnalFunctionSignaturePrepared *prepared, RAnalFunctionSignatureApply scope) {
 	R_RETURN_VAL_IF_FAIL (anal && fcn && prepared, false);
-	char *type_name = function_signature_address_type_name (anal->sdb_types, fcn->addr);
-	if (!type_name) {
-		type_name = strdup (prepared->name);
+	R_RETURN_VAL_IF_FAIL (scope == R_ANAL_SIGNATURE_APPLY_SHARED || scope == R_ANAL_SIGNATURE_APPLY_FUNCTION, false);
+	char *type_name;
+	if (scope == R_ANAL_SIGNATURE_APPLY_FUNCTION) {
+		char *effective = function_signature_type_name (anal, fcn);
+		bool unchanged = effective && function_signature_record_matches (anal->sdb_types, prepared, effective);
+		free (effective);
+		if (unchanged) {
+			return true;
+		}
+		type_name = function_signature_unused_type_name (anal, fcn, prepared->name);
+	} else {
+		type_name = function_signature_address_type_name (anal->sdb_types, fcn->addr);
+		if (!type_name) {
+			type_name = strdup (prepared->name);
+		}
 	}
 	char *prefix = r_str_newf ("func.%s", prepared->name);
 	if (!type_name || !prefix) {
@@ -3560,7 +3673,7 @@ R_API int r_anal_str_to_fcn(RAnal *a, RAnalFunction *f, const char *sig) {
 	R_RETURN_VAL_IF_FAIL (a && f && sig, false);
 	char *error = NULL;
 	RAnalFunctionSignaturePrepared *prepared = r_anal_function_signature_prepare (a, sig, &error);
-	bool ok = prepared && r_anal_function_signature_apply (a, f, prepared);
+	bool ok = prepared && r_anal_function_signature_apply (a, f, prepared, R_ANAL_SIGNATURE_APPLY_SHARED);
 	r_anal_function_signature_prepared_free (prepared);
 	if (error) {
 		R_LOG_ERROR ("%s", error);

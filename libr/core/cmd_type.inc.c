@@ -1793,6 +1793,7 @@ static void printFunctionTypeJson(TypePrintCtx *ctx, const char *input) {
 	const char *name = r_str_trim_head_ro (input);
 	RTypeFunctionPrototype prototype;
 	if (!r_type_func_get_prototype (tdb, name, &prototype)) {
+		r_core_return_code (core, R_CMD_RC_FAILURE);
 		return;
 	}
 	int i, args = sdb_num_getf (tdb, NULL, "func.%s.args", name);

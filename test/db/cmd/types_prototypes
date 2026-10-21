@@ -32,7 +32,7 @@ afs
 tk func.returns_table.ret
 EOF
 EXPECT=<<EOF
-uint16_t far *(near *returns_table ())[3];
+uint16_t far *(near *returns_table (void))[3];
 uint16_t far *(near *)[3]
 EOF
 RUN

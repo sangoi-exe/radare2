@@ -757,6 +757,11 @@ static char *type_format(Sdb *TDB, const char *t, int depth) {
 		const char *name = element->base.name;
 		const char *bare = NULL;
 		if (type_aggregate_prefixed (name, &bare)) {
+			RTypeLayout layout;
+			if (!r_type_decl_layout (TDB, element, &layout)) {
+				r_type_decl_free (decl);
+				return NULL;
+			}
 			name = bare;
 		}
 		fmt = type_format_base (TDB, name, depth);

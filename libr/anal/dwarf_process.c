@@ -25,7 +25,9 @@ typedef struct dwarf_function_t {
 	ut64 addr;
 	const char *name;
 	char *signature;
-	bool prototype_complete; // extraction/address/formal completeness, not parameter-list knowledge
+	bool prototype_complete; // complete prototype and a unique qualified address for fcnlink
+	bool formals_complete; // availability of formal types, independently of address eligibility
+	int formal_count; // source formal DIEs, including those with unavailable types
 	RTypeFunctionPrototype prototype; // explicit DW_AT_prototyped, including inherited attributes
 	bool is_external;
 	bool is_method;
@@ -64,6 +66,7 @@ typedef struct dwarf_variable_t {
 	char *name;
 	char *type;
 	VariableKind kind;
+	int formal_index; // original DIE position, not a dense index after missing types are skipped
 	bool is_result;
 } Variable;
 
@@ -1515,9 +1518,10 @@ static VariableLocation *parse_dwarf_location(Context *ctx, const RBinDwarfAttrV
 	return location;
 }
 
-static bool parse_function_args_and_vars(Context *ctx, ut64 idx, RStrBuf *args, RList/*<Variable*>*/ *variables, bool *has_unspecified_parameters) {
+static bool parse_function_args_and_vars(Context *ctx, ut64 idx, RStrBuf *args, RList/*<Variable*>*/ *variables, bool *has_unspecified_parameters, int *formal_count) {
 	const RBinDwarfDie *die = &ctx->all_dies[idx++];
 	bool complete = true;
+	*formal_count = 0;
 
 	if (die->has_children) {
 		int child_depth = 1;
@@ -1537,6 +1541,7 @@ static bool parse_function_args_and_vars(Context *ctx, ut64 idx, RStrBuf *args, 
 				if (!child_die->attr_count) {
 					if (child_depth == 1 && child_die->tag == DW_TAG_formal_parameter) {
 						complete = false;
+						argNumber++;
 					}
 					continue;
 				}
@@ -1581,6 +1586,7 @@ static bool parse_function_args_and_vars(Context *ctx, ut64 idx, RStrBuf *args, 
 					/* arguments sometimes have only type, create generic argX */
 					if (type.len) {
 						var->kind = VARIABLE_KIND_FORMAL_PARAMETER;
+						var->formal_index = argNumber - 1;
 						if (name) {
 							var->name = strdup (name);
 						} else {
@@ -1622,6 +1628,7 @@ static bool parse_function_args_and_vars(Context *ctx, ut64 idx, RStrBuf *args, 
 		if (args->len > 0) {
 			r_strbuf_slice (args, 0, args->len - 1);
 		}
+		*formal_count = argNumber - 1;
 	}
 	return complete;
 }
@@ -1680,36 +1687,30 @@ static RTypeFunctionPrototype dwarf_function_prototype(Context *ctx, const RBinD
 	return R_TYPE_FUNC_PROTOTYPE_UNKNOWN;
 }
 
-static bool dwarf_function_type_matches(Sdb *types, const char *name, const char *ret_type, RList/*<Variable*>*/ *variables, bool has_unspecified_parameters, RTypeFunctionPrototype prototype) {
+static bool dwarf_function_type_matches(Sdb *types, const char *name, const char *ret_type, RList/*<Variable*>*/ *variables, bool has_unspecified_parameters, const Function *function) {
 	int argc;
 	RTypeFunctionPrototype existing_prototype;
-	if (!r_type_func_get_prototype (types, name, &existing_prototype) || existing_prototype != prototype
-		|| !r_type_func_exist (types, name)
-		|| !r_type_func_args_count (types, name, &argc)
-		|| has_unspecified_parameters != r_type_func_is_variadic (types, name, argc)) {
+	if (!r_type_func_get_prototype (types, name, &existing_prototype) || existing_prototype != function->prototype
+		|| !r_type_func_exist (types, name)) {
+		return false;
+	}
+	bool count_available = r_type_func_args_count (types, name, &argc);
+	int expected_args = function->formal_count + (has_unspecified_parameters? 1: 0);
+	if (count_available != function->formals_complete || (count_available && argc != expected_args)
+			|| has_unspecified_parameters != r_type_func_is_variadic (types, name, expected_args)) {
 		return false;
 	}
 	const char *existing_ret = r_type_func_ret (types, name);
 	if (!existing_ret || strcmp (existing_ret, ret_type)) {
 		return false;
 	}
-	int expected_args = has_unspecified_parameters? 1: 0;
 	RListIter *iter;
 	Variable *var;
-	r_list_foreach (variables, iter, var) {
-		if (var->kind == VARIABLE_KIND_FORMAL_PARAMETER && var->type) {
-			expected_args++;
-		}
-	}
-	if (argc != expected_args) {
-		return false;
-	}
-	int arg_index = 0;
 	r_list_foreach (variables, iter, var) {
 		if (var->kind != VARIABLE_KIND_FORMAL_PARAMETER || !var->type) {
 			continue;
 		}
-		char *existing_type = r_type_func_args_type (types, name, arg_index++);
+		char *existing_type = r_type_func_args_type (types, name, var->formal_index);
 		const bool matches = existing_type && !strcmp (existing_type, var->type);
 		free (existing_type);
 		if (!matches) {
@@ -1727,20 +1728,20 @@ static char *dwarf_function_type_name(Context *ctx, const char *sname, const Fun
 	if (previous_name && !strcmp (previous_name, dwarf_fcn->name)
 		&& previous && r_type_kind (types, previous) == R_TYPE_FUNCTION
 		&& sdb_num_getf (ctx->sdb, NULL, "fcn.%s.addr", sname) == dwarf_fcn->addr
-		&& dwarf_function_type_matches (types, previous, ret_type, variables, has_unspecified_parameters, dwarf_fcn->prototype)) {
+		&& dwarf_function_type_matches (types, previous, ret_type, variables, has_unspecified_parameters, dwarf_fcn)) {
 		return strdup (previous);
 	}
 	char *name = sanitize_c_identifier (dwarf_fcn->name);
 	if (!name || !sdb_const_get (types, name, 0)
 		|| dwarf_function_type_matches (types, name, ret_type,
-			variables, has_unspecified_parameters, dwarf_fcn->prototype)) {
+			variables, has_unspecified_parameters, dwarf_fcn)) {
 		return name;
 	}
 	char *candidate = r_str_newf ("%s_%" PFMT64x, name, dwarf_fcn->addr);
 	int suffix = 2;
 	while (candidate && sdb_const_get (types, candidate, 0)
 		&& !dwarf_function_type_matches (types, candidate, ret_type,
-			variables, has_unspecified_parameters, dwarf_fcn->prototype)) {
+			variables, has_unspecified_parameters, dwarf_fcn)) {
 		free (candidate);
 		candidate = r_str_newf ("%s_%" PFMT64x "_%d", name, dwarf_fcn->addr, suffix++);
 	}
@@ -1769,14 +1770,14 @@ static char *sdb_variable_data(const Variable *var) {
 	return NULL;
 }
 
-static bool import_dwarf_function_fallback(RAnal *anal, const char *typed_name, const char *ret_type, RList/*<Variable*>*/ *variables, bool has_unspecified_parameters, RTypeFunctionPrototype prototype) {
+static bool import_dwarf_function_fallback(RAnal *anal, const char *typed_name, const char *ret_type, RList/*<Variable*>*/ *variables, bool has_unspecified_parameters, const Function *function) {
 	R_RETURN_VAL_IF_FAIL (anal && typed_name && ret_type && variables, false);
 	Sdb *types = anal->sdb_types;
 	if (r_type_func_exist (types, typed_name)) {
 		return true;
 	}
 	sdb_set (types, typed_name, "func", 0);
-	r_type_func_set_prototype (types, typed_name, prototype);
+	r_type_func_set_prototype (types, typed_name, function->prototype);
 
 	sdb_setf (types, ret_type, 0, "func.%s.ret", typed_name);
 
@@ -1785,29 +1786,28 @@ static bool import_dwarf_function_fallback(RAnal *anal, const char *typed_name, 
 
 	RStrBuf argnames;
 	r_strbuf_init (&argnames);
-	int arg_index = 0;
 	RListIter *iter;
 	Variable *var;
 	r_list_foreach (variables, iter, var) {
 		if (var->kind != VARIABLE_KIND_FORMAL_PARAMETER || !var->type) {
 			continue;
 		}
-		char *arg_name = var->name? strdup (var->name): r_str_newf ("arg%d", arg_index);
+		char *arg_name = var->name? strdup (var->name): r_str_newf ("arg%d", var->formal_index);
 		char *arg_val = r_str_newf ("%s,%s", var->type, arg_name);
-		sdb_setf (types, arg_val, 0, "func.%s.arg.%d", typed_name, arg_index);
-		r_strbuf_appendf (&argnames, "%s%s", arg_index? ",": "", arg_name);
+		sdb_setf (types, arg_val, 0, "func.%s.arg.%d", typed_name, var->formal_index);
+		r_strbuf_appendf (&argnames, "%s%s", argnames.len? ",": "", arg_name);
 		free (arg_name);
 		free (arg_val);
-		arg_index++;
 	}
 	if (has_unspecified_parameters) {
 		// canonical types.sdb.txt form: empty type, "..." as the name
-		sdb_setf (types, ",...", 0, "func.%s.arg.%d", typed_name, arg_index);
-		r_strbuf_appendf (&argnames, "%s...", arg_index? ",": "");
-		arg_index++;
+		sdb_setf (types, ",...", 0, "func.%s.arg.%d", typed_name, function->formal_count);
+		r_strbuf_appendf (&argnames, "%s...", argnames.len? ",": "");
 	}
-	r_strf_buffer (16);
-	sdb_setf (types, r_strf ("%d", arg_index), 0, "func.%s.args", typed_name);
+	if (function->formals_complete) {
+		r_strf_buffer (16);
+		sdb_setf (types, r_strf ("%d", function->formal_count + (has_unspecified_parameters? 1: 0)), 0, "func.%s.args", typed_name);
+	}
 
 	sdb_setf (types, r_strbuf_get (&argnames), 0, "func.%s", typed_name);
 	r_strbuf_fini (&argnames);
@@ -1830,13 +1830,15 @@ static void import_dwarf_function_type(Context *ctx, const char *sname, const ch
 		const char *arg_name = var->name? var->name: "arg";
 		r_strbuf_appendf (&args_buf, "%s %s,", var->type, arg_name);
 	}
-	if (has_unspecified_parameters) {
+	if (has_unspecified_parameters && dwarf_fcn->formals_complete) {
 		r_strbuf_append (&args_buf, "...,");
 	}
 	if (args_buf.len > 0) {
 		r_strbuf_slice (&args_buf, 0, args_buf.len - 1);
 	}
-	if (!args_buf.len && dwarf_fcn->prototype == R_TYPE_FUNC_PROTOTYPE_FIXED) {
+	if (!dwarf_fcn->formals_complete) {
+		r_strbuf_set (&args_buf, "");
+	} else if (!args_buf.len && dwarf_fcn->prototype == R_TYPE_FUNC_PROTOTYPE_FIXED) {
 		r_strbuf_append (&args_buf, "void");
 	}
 	char *csig = r_str_newf ("%s %s(%s);", ret_type, typed_name, r_strbuf_get (&args_buf));
@@ -1850,7 +1852,8 @@ static void import_dwarf_function_type(Context *ctx, const char *sname, const ch
 		   sdb entries directly. */
 		const char *lang = ctx->lang;
 		bool is_c_like = !lang || !strcmp (lang, "cxx") || !strcmp (lang, "objc");
-		if (is_c_like) {
+		// C syntax cannot carry an unavailable formal list without asserting a different contract.
+		if (is_c_like && dwarf_fcn->formals_complete) {
 			char *errmsg = NULL;
 			if (r_anal_import_c_decls (anal, csig, &errmsg)) {
 				r_type_func_set_prototype (anal->sdb_types, typed_name, dwarf_fcn->prototype);
@@ -1860,16 +1863,16 @@ static void import_dwarf_function_type(Context *ctx, const char *sname, const ch
 			free (errmsg);
 		}
 		if (!dwarf_function_type_matches (anal->sdb_types, typed_name,
-				ret_type, variables, has_unspecified_parameters, dwarf_fcn->prototype)) {
+				ret_type, variables, has_unspecified_parameters, dwarf_fcn)) {
 			/* The C importer can fail or normalize the declaration into a
 			   different prototype. Replace only the function record; the
 			   types it references stay registered. */
 			r_anal_function_del_signature (anal, typed_name);
-			import_dwarf_function_fallback (anal, typed_name, ret_type, variables, has_unspecified_parameters, dwarf_fcn->prototype);
+			import_dwarf_function_fallback (anal, typed_name, ret_type, variables, has_unspecified_parameters, dwarf_fcn);
 		}
 	}
 	if (dwarf_fcn->prototype_complete && dwarf_function_type_matches (anal->sdb_types,
-			typed_name, ret_type, variables, has_unspecified_parameters, dwarf_fcn->prototype)) {
+			typed_name, ret_type, variables, has_unspecified_parameters, dwarf_fcn)) {
 		sdb_setf (anal->sdb_types, typed_name, 0, "fcnlink.%08" PFMT64x, dwarf_fcn->addr);
 	}
 	free (csig);
@@ -1972,7 +1975,7 @@ static void sdb_save_dwarf_function(Context *ctx, Function *dwarf_fcn, const cha
 			formal_index++;
 		}
 		char *meta = sdb_variable_data (var);
-		if (!meta && is_formal && !var->location) {
+		if (!meta && is_formal && !var->location && dwarf_fcn->formals_complete) {
 			meta = dwarf_formal_convention_meta (ctx, argno, formal_count, var->type);
 		}
 		if (!meta || !var->name) {
@@ -2160,10 +2163,10 @@ static void parse_function(Context *ctx, ut64 idx) {
 	}
 	ctx->scope_lo = low_pc;
 	ctx->scope_hi = high_pc? high_pc: UT64_MAX;
-	bool formals_complete = parse_function_args_and_vars (ctx, idx, &args, variables, &has_unspecified_parameters);
+	fcn.formals_complete = parse_function_args_and_vars (ctx, idx, &args, variables, &has_unspecified_parameters, &fcn.formal_count);
 	ctx->scope_lo = 0;
 	ctx->scope_hi = UT64_MAX;
-	fcn.prototype_complete = address_count == 1 && !has_ranges && formals_complete;
+	fcn.prototype_complete = address_count == 1 && !has_ranges && fcn.formals_complete;
 
 	if (ret_type.len == 0) { /* DW_AT_type is omitted in case of `void` ret type */
 		if (has_ret_type) {
@@ -2182,7 +2185,9 @@ static void parse_function(Context *ctx, ut64 idx) {
 			fcn.name = demangled_name;
 		}
 	}
-	if (!args.len && fcn.prototype == R_TYPE_FUNC_PROTOTYPE_FIXED) {
+	if (!fcn.formals_complete) {
+		r_strbuf_set (&args, "");
+	} else if (!args.len && fcn.prototype == R_TYPE_FUNC_PROTOTYPE_FIXED) {
 		r_strbuf_append (&args, "void");
 	}
 	fcn.signature = r_str_newf ("%s %s(%s);", r_strbuf_get (&ret_type), fcn.name, r_strbuf_get (&args));

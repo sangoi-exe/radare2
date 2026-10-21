@@ -1,5 +1,6 @@
 #include <r_anal.h>
 #include <r_bin.h>
+#include <r_core.h>
 #include "minunit.h"
 
 #define MODE 2
@@ -328,7 +329,7 @@ static bool test_dwarf_function_parsing_rust(void) {
 	} while (0)
 
 static void prototype_test_die(RBinDwarfCompUnit *unit, ut64 offset, ut16 tag, const RBinDwarfAttrValue *attrs, size_t count) {
-	RBinDwarfDie die = { .offset = offset, .tag = tag, .attr_idx = RVecDwarfAttrValue_length (unit->attrs), .attr_count = count };
+	RBinDwarfDie die = { .offset = offset, .abbrev_code = tag? 1: 0, .tag = tag, .attr_idx = RVecDwarfAttrValue_length (unit->attrs), .attr_count = count };
 	size_t i;
 	for (i = 0; i < count; i++) {
 		RVecDwarfAttrValue_push_back (unit->attrs, &attrs[i]);
@@ -407,8 +408,165 @@ static bool test_dwarf_prototype_attributes(void) {
 	mu_end;
 }
 
+static bool test_dwarf_incomplete_formals(void) {
+	const struct {
+		bool missing;
+		bool known;
+		bool ranges;
+		bool prototyped;
+	} cases[] = {
+		{ true, false, false, true },
+		{ true, true, false, true },
+		{ false, true, true, true },
+		{ false, false, false, true },
+		{ false, false, false, false }
+	};
+	const ut64 languages[] = { DW_LANG_C_plus_plus_14, DW_LANG_Rust };
+	size_t language, i;
+	for (language = 0; language < R_ARRAY_SIZE (languages); language++) {
+		for (i = 0; i < R_ARRAY_SIZE (cases); i++) {
+			RAnal *scenario = r_anal_new ();
+			r_str_ncpy (scenario->config->arch, "x86", sizeof (scenario->config->arch));
+			scenario->config->bits = 64;
+			RBinDwarfDebugInfo *info = R_NEW0 (RBinDwarfDebugInfo);
+			info->comp_units = RVecDwarfCompUnit_new ();
+			RBinDwarfCompUnit unit = { .dies = RVecDwarfDie_new (), .attrs = RVecDwarfAttrValue_new () };
+			RBinDwarfAttrValue language_attr[] = { { .attr_name = DW_AT_language, .kind = DW_AT_KIND_CONSTANT, .uconstant = languages[language] } };
+			prototype_test_die (&unit, 1, DW_TAG_compile_unit, language_attr, R_ARRAY_SIZE (language_attr));
+			RBinDwarfAttrValue base[] = {
+				{ .attr_name = DW_AT_name, .kind = DW_AT_KIND_STRING, .string.content = "int" },
+				{ .attr_name = DW_AT_byte_size, .kind = DW_AT_KIND_CONSTANT, .uconstant = 4 },
+				{ .attr_name = DW_AT_encoding, .kind = DW_AT_KIND_CONSTANT, .uconstant = DW_ATE_signed }
+			};
+			prototype_test_die (&unit, 10, DW_TAG_base_type, base, R_ARRAY_SIZE (base));
+			RBinDwarfAttrValue function[] = {
+				{ .attr_name = DW_AT_name, .kind = DW_AT_KIND_STRING, .string.content = "decoded_case" },
+				{ .attr_name = DW_AT_low_pc, .kind = DW_AT_KIND_ADDRESS, .address = 0x1000 },
+				{ .attr_name = DW_AT_high_pc, .kind = DW_AT_KIND_ADDRESS, .address = 0x1010 },
+				{ .attr_name = DW_AT_type, .kind = DW_AT_KIND_REFERENCE, .reference = 10 },
+				{ .attr_name = DW_AT_prototyped, .kind = DW_AT_KIND_FLAG, .flag = cases[i].prototyped },
+				{ .attr_name = DW_AT_ranges, .kind = DW_AT_KIND_RANGELISTPTR, .uconstant = 0 }
+			};
+			prototype_test_die (&unit, 20, DW_TAG_subprogram, function, cases[i].ranges? 6: 5);
+			RVecDwarfDie_at (unit.dies, RVecDwarfDie_length (unit.dies) - 1)->has_children = true;
+			if (cases[i].missing) {
+				RBinDwarfAttrValue missing[] = { { .attr_name = DW_AT_name, .kind = DW_AT_KIND_STRING, .string.content = "lost" } };
+				prototype_test_die (&unit, 30, DW_TAG_formal_parameter, missing, cases[i].known? 1: 0);
+			}
+			const ut8 arg_location[] = { DW_OP_reg5 };
+			if (cases[i].known) {
+				RBinDwarfAttrValue known[] = {
+					{ .attr_name = DW_AT_name, .kind = DW_AT_KIND_STRING, .string.content = "known" },
+					{ .attr_name = DW_AT_type, .kind = DW_AT_KIND_REFERENCE, .reference = 10 },
+					{ .attr_name = DW_AT_location, .kind = DW_AT_KIND_BLOCK, .block = { .length = sizeof (arg_location), .data = arg_location } }
+				};
+				prototype_test_die (&unit, 31, DW_TAG_formal_parameter, known, R_ARRAY_SIZE (known));
+			}
+			const ut8 local_location[] = { DW_OP_addr, 0x00, 0x20, 0, 0, 0, 0, 0, 0 };
+			RBinDwarfAttrValue local[] = {
+				{ .attr_name = DW_AT_name, .kind = DW_AT_KIND_STRING, .string.content = "local" },
+				{ .attr_name = DW_AT_type, .kind = DW_AT_KIND_REFERENCE, .reference = 10 },
+				{ .attr_name = DW_AT_location, .kind = DW_AT_KIND_BLOCK, .block = { .length = sizeof (local_location), .data = local_location } }
+			};
+			prototype_test_die (&unit, 32, DW_TAG_variable, local, R_ARRAY_SIZE (local));
+			prototype_test_die (&unit, 40, 0, NULL, 0);
+			RVecDwarfCompUnit_push_back (info->comp_units, &unit);
+			RAnalDwarfContext ctx = { .info = info };
+			r_anal_dwarf_process_info (scenario, &ctx);
+			int argc = 99;
+			mu_assert_eq (r_type_func_args_count (scenario->sdb_types, "decoded_case", &argc), !cases[i].missing, "only complete formal lists publish a formal count through either producer");
+			if (cases[i].missing) {
+				mu_assert_eq (argc, 99, "missing formal types cannot become zero or a shortened count");
+			} else {
+				mu_assert_eq (argc, cases[i].known? 1: 0, "address ranges do not erase independently complete formals");
+			}
+			mu_assert_nullable_streq (sdb_const_get (scenario->sdb_types, "func.decoded_case.prototype", NULL), cases[i].prototyped? "fixed": "unspecified", "formal completeness does not replace source specificity");
+			Sdb *dwarf = sdb_ns (scenario->sdb, "dwarf", 0);
+			mu_assert_notnull (dwarf, "actual decoded DIEs reached the importer");
+			mu_assert_nullable_streq (sdb_const_get (dwarf, "fcn.decoded_case.var.local", NULL), "g,8192,int", "independent local type and location facts survive incomplete formals");
+			if (cases[i].known) {
+				mu_assert_nullable_streq (sdb_const_getf (scenario->sdb_types, NULL, "func.decoded_case.arg.%d", cases[i].missing? 1: 0), "int,known", "available formals retain their actual DIE positions without asserting a full count");
+				mu_assert_nullable_streq (sdb_const_get (dwarf, "fcn.decoded_case.arg.0", NULL), "known,r,rdi,int", "a formal's independently supplied location is retained");
+			}
+			if (cases[i].missing) {
+				mu_assert_nullable_streq (sdb_const_get (dwarf, "fcn.decoded_case.csig", NULL), "int decoded_case();", "the C projection cannot publish a fixed-empty or shortened prototype");
+				mu_assert_null (sdb_const_get (scenario->sdb_types, "fcnlink.00001000", NULL), "an incomplete formal list cannot acquire a complete address prototype");
+				RAnalFunction *named = r_anal_create_function (scenario, "decoded_case", 0x3000, 0, NULL);
+				RAnalFunctionSignature *snapshot = r_anal_function_get_signature (named);
+				mu_assert_notnull (snapshot, "the name lookup still exposes the independent return and specificity facts");
+				mu_assert_eq (snapshot->prototype, R_TYPE_FUNC_PROTOTYPE_FIXED, "name lookup preserves fixed knowledge without claiming its list is available");
+				ut64 epoch = r_anal_types_dirty_epoch (scenario);
+				mu_assert_false (r_anal_function_set_signature (scenario, named, snapshot), "an unchanged incomplete DWARF snapshot cannot harden on writeback");
+				mu_assert_eq (r_anal_types_dirty_epoch (scenario), epoch, "incomplete snapshot refusal leaves imported facts unchanged");
+				r_anal_function_signature_free (snapshot);
+			} else if (cases[i].ranges) {
+				mu_assert_null (sdb_const_get (scenario->sdb_types, "fcnlink.00001000", NULL), "range qualification is independent of the complete name-based signature");
+			}
+			r_anal_dwarf_process_info (scenario, &ctx);
+			mu_assert_nullable_streq (sdb_const_get (dwarf, "fcn.decoded_case.typed_name", NULL), "decoded_case", "the same partial or complete facts remain idempotent");
+			r_bin_dwarf_free_debug_info (info);
+			r_anal_free (scenario);
+		}
+	}
+	mu_end;
+}
+
+static bool test_dwarf_linked_functions_isolate_core_edit(void) {
+	RCore *core = r_core_new ();
+	RBinDwarfDebugInfo *info = R_NEW0 (RBinDwarfDebugInfo);
+	info->comp_units = RVecDwarfCompUnit_new ();
+	RBinDwarfCompUnit unit = { .dies = RVecDwarfDie_new (), .attrs = RVecDwarfAttrValue_new () };
+	RBinDwarfAttrValue language[] = { { .attr_name = DW_AT_language, .kind = DW_AT_KIND_CONSTANT, .uconstant = DW_LANG_C_plus_plus_14 } };
+	prototype_test_die (&unit, 1, DW_TAG_compile_unit, language, R_ARRAY_SIZE (language));
+	RBinDwarfAttrValue function[] = {
+		{ .attr_name = DW_AT_name, .kind = DW_AT_KIND_STRING, .string.content = "decoded_shared" },
+		{ .attr_name = DW_AT_low_pc, .kind = DW_AT_KIND_ADDRESS, .address = 0x1000 },
+		{ .attr_name = DW_AT_high_pc, .kind = DW_AT_KIND_ADDRESS, .address = 0x1001 },
+		{ .attr_name = DW_AT_prototyped, .kind = DW_AT_KIND_FLAG, .flag = 1 }
+	};
+	prototype_test_die (&unit, 20, DW_TAG_subprogram, function, R_ARRAY_SIZE (function));
+	function[1].address = 0x2000;
+	function[2].address = 0x2001;
+	prototype_test_die (&unit, 30, DW_TAG_subprogram, function, R_ARRAY_SIZE (function));
+	RVecDwarfCompUnit_push_back (info->comp_units, &unit);
+	RAnalDwarfContext ctx = { .info = info };
+	r_anal_dwarf_process_info (core->anal, &ctx);
+	mu_assert_nullable_streq (sdb_const_get (core->anal->sdb_types, "fcnlink.00001000", NULL), "decoded_shared", "first actual decoded function selects the shared type");
+	mu_assert_nullable_streq (sdb_const_get (core->anal->sdb_types, "fcnlink.00002000", NULL), "decoded_shared", "second actual decoded function selects that same type");
+	RAnalFunction *edited = r_anal_create_function (core->anal, "decoded_shared", 0x1000, R_ANAL_FCN_TYPE_FCN, NULL);
+	RAnalFunction *other = r_anal_create_function (core->anal, "dbg.decoded_shared", 0x2000, R_ANAL_FCN_TYPE_FCN, NULL);
+	RAnalBlock *block = r_anal_create_block (core->anal, 0x1000, 1);
+	r_anal_function_add_block (edited, block);
+	r_unref (block);
+	RAnalFunctionSignature *before = r_anal_function_get_signature (other);
+	mu_assert_notnull (before, "read the automatically linked peer before the edit");
+	mu_assert_true (r_core_anal_function_set_signature (core, 0x1000, "int edited(int (*callback)(char))", NULL), "edit only one automatically linked function through the Core facade");
+	mu_assert_streq (edited->name, "edited", "the local edit renames only its selected function");
+	mu_assert_streq (r_type_func_ret (core->anal->sdb_types, "decoded_shared"), "void", "the imported shared source type is not rewritten");
+	mu_assert_nullable_streq (sdb_const_get (core->anal->sdb_types, "fcnlink.00001000", NULL), "decoded_shared", "signature rename does not migrate the original automatic binding");
+	r_anal_dwarf_process_info (core->anal, &ctx);
+	RAnalFunctionSignature *after = r_anal_function_get_signature (other);
+	mu_assert_notnull (after, "read the automatically linked peer after import refresh");
+	mu_assert_streq (before->signature, after->signature, "the peer's shared signature is unchanged by the local edit and refresh");
+	RAnalFunctionSignature *actual = r_anal_function_get_signature (edited);
+	mu_assert_notnull (actual, "the selected function keeps its own address-linked signature");
+	mu_assert_streq (actual->ret_type, "int", "automatic DWARF binding cannot override the isolated edit");
+	mu_assert_eq (r_list_length (actual->params), 1, "callback parameters retain the outer function's arity");
+	RAnalFunctionParam *param = r_list_first (actual->params);
+	mu_assert_streq (param->type, "int (*)(char)", "the admitted nested function type remains inline after isolation");
+	mu_assert_streq (param->name, "callback", "the callback keeps its declared name");
+	r_anal_function_signature_free (before);
+	r_anal_function_signature_free (after);
+	r_anal_function_signature_free (actual);
+	r_bin_dwarf_free_debug_info (info);
+	r_core_free (core);
+	mu_end;
+}
+
 int all_tests(void) {
 	mu_run_test (test_dwarf_prototype_attributes);
+	mu_run_test (test_dwarf_incomplete_formals);
+	mu_run_test (test_dwarf_linked_functions_isolate_core_edit);
 	run_test_with_setup (test_parse_dwarf_types);
 	run_test_with_setup (test_dwarf_function_parsing_cpp);
 	run_test_with_setup (test_dwarf_function_parsing_rust);

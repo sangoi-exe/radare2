@@ -682,6 +682,43 @@ bool test_r_anal_function_signature_prototype_roundtrip(void) {
 	mu_end;
 }
 
+bool test_r_anal_function_set_signature_refuses_incomplete_fixed_snapshot(void) {
+	size_t count;
+	for (count = 0; count < 2; count++) {
+		RAnal *anal = r_anal_new ();
+		r_anal_types_reload (anal, R2_PREFIX, NULL, NULL);
+		RAnalFunction *fcn = r_anal_create_function (anal, "partial", 0x1000, 0, NULL);
+		sdb_set (anal->sdb_types, "partial", "func", 0);
+		sdb_set (anal->sdb_types, "func.partial.ret", "int", 0);
+		sdb_set (anal->sdb_types, "func.partial.noreturn", "true", 0);
+		sdb_set (anal->sdb_types, "func.partial.prototype", "fixed", 0);
+		sdb_set (anal->sdb_types, "func.partial.arg.2", "short,known", 0);
+		RAnalVar *hint = count? r_anal_function_set_var (fcn, 8, R_ANAL_VAR_KIND_BPV, "int32_t", 4, true, "hint"): NULL;
+		RAnalFunctionSignature *snapshot = r_anal_function_get_signature (fcn);
+		mu_assert_notnull (snapshot, "read fixed knowledge with an unavailable formal count");
+		mu_assert_eq (snapshot->origin, R_ANAL_FUNCTION_SIGNATURE_ORIGIN_VARIABLES, "available presentation comes from variables, not complete formals");
+		mu_assert_eq (r_list_length (snapshot->params), count, "retain available inferred parameter presentation");
+		ut64 types_epoch = r_anal_types_dirty_epoch (anal);
+		ut64 function_epoch = r_anal_function_dirty_epoch (fcn);
+		mu_assert_false (r_anal_function_set_signature (anal, fcn, snapshot), "unchanged partial fixed snapshots cannot publish a complete list");
+		mu_assert_null (sdb_const_get (anal->sdb_types, "func.partial.args", NULL), "refusal cannot fabricate a complete zero or shortened count");
+		mu_assert_streq (sdb_const_get (anal->sdb_types, "func.partial.arg.2", NULL), "short,known", "independent known parameter facts survive refusal");
+		mu_assert_streq (sdb_const_get (anal->sdb_types, "func.partial.noreturn", NULL), "true", "independent return behavior survives refusal");
+		mu_assert_streq (sdb_const_get (anal->sdb_types, "func.partial.prototype", NULL), "fixed", "refusal does not erase source specificity");
+		mu_assert_eq (r_anal_types_dirty_epoch (anal), types_epoch, "refusal does not mutate the type database");
+		mu_assert_eq (r_anal_function_dirty_epoch (fcn), function_epoch, "refusal does not mutate the function");
+		mu_assert_false (fcn->is_noreturn, "refusal does not synchronize independent function state");
+		if (count) {
+			mu_assert_notnull (hint, "seed the inferred variable");
+			mu_assert_streq (hint->name, "hint", "refusal preserves inferred variable identity");
+			mu_assert_streq (hint->type, "int32_t", "refusal preserves inferred variable type");
+		}
+		r_anal_function_signature_free (snapshot);
+		r_anal_free (anal);
+	}
+	mu_end;
+}
+
 bool test_r_anal_function_signature_empty_list_specificity(void) {
 	RAnal *anal = r_anal_new ();
 	mu_assert_true (r_anal_import_c_decls (anal, "int unspecified();int fixed(void);", NULL), "import both empty parameter-list forms");
@@ -725,13 +762,15 @@ bool test_r_core_anal_function_set_signature(void) {
 	const struct {
 		const char *declaration;
 		const char *parameter_type;
+		const char *parameter_name;
 		RTypeFunctionPrototype prototype;
 	} cases[] = {
-		{ "int grid(uint16_t (*values)[2+3])", "uint16_t (*)[2+3]", R_TYPE_FUNC_PROTOTYPE_FIXED },
-		{ "int grid(uint16_t (*values)[1|2+3])", "uint16_t (*)[1|2+3]", R_TYPE_FUNC_PROTOTYPE_FIXED },
-		{ "int grid(uint16_t (*values)[16>>1])", "uint16_t (*)[16>>1]", R_TYPE_FUNC_PROTOTYPE_FIXED },
-		{ "int grid()", NULL, R_TYPE_FUNC_PROTOTYPE_UNSPECIFIED },
-		{ "int grid(void)", NULL, R_TYPE_FUNC_PROTOTYPE_FIXED }
+		{ "int grid(uint16_t (*values)[2+3])", "uint16_t (*)[2+3]", "values", R_TYPE_FUNC_PROTOTYPE_FIXED },
+		{ "int grid(uint16_t (*values)[1|2+3])", "uint16_t (*)[1|2+3]", "values", R_TYPE_FUNC_PROTOTYPE_FIXED },
+		{ "int grid(uint16_t (*values)[16>>1])", "uint16_t (*)[16>>1]", "values", R_TYPE_FUNC_PROTOTYPE_FIXED },
+		{ "int grid(int (*callback)(int (*nested)(char)))", "int (*)(int (*nested)(char))", "callback", R_TYPE_FUNC_PROTOTYPE_FIXED },
+		{ "int grid()", NULL, NULL, R_TYPE_FUNC_PROTOTYPE_UNSPECIFIED },
+		{ "int grid(void)", NULL, NULL, R_TYPE_FUNC_PROTOTYPE_FIXED }
 	};
 	RCore *core = r_core_new ();
 	RAnalFunction *fcn = r_anal_create_function (core->anal, "original", 0x1000, R_ANAL_FCN_TYPE_FCN, NULL);
@@ -754,8 +793,8 @@ bool test_r_core_anal_function_set_signature(void) {
 		mu_assert_eq (r_list_length (signature->params), cases[i].parameter_type? 1: 0, "direct signature preserves parameter count");
 		if (cases[i].parameter_type) {
 			RAnalFunctionParam *param = r_list_first (signature->params);
-			mu_assert_streq (param->type, cases[i].parameter_type, "array expression operators reach the canonical signature owner");
-			mu_assert_streq (param->name, "values", "the array parameter keeps its name");
+			mu_assert_streq (param->type, cases[i].parameter_type, "array expressions and nested callbacks retain their declarator graphs");
+			mu_assert_streq (param->name, cases[i].parameter_name, "the parameter keeps its own name");
 		}
 		r_anal_function_signature_free (signature);
 	}
@@ -876,6 +915,7 @@ bool test_r_core_afs_preserves_compound_return_name_and_flags(void) {
 	mu_assert_notnull (r_flag_set_inspace (core->flags, R_FLAGS_FS_FUNCTIONS, "original", 0, 1), "seed function-owned flag");
 	RFlagItem *symbol = r_flag_set_inspace (core->flags, R_FLAGS_FS_SYMBOLS, "sym.original", 0, 1);
 	mu_assert_notnull (symbol, "seed independent symbol flag");
+	mu_assert_true (r_anal_import_c_decls (core->anal, "int returns_table(int old);", NULL), "seed an occupied shared name before the compound local edit");
 	mu_assert_eq (r_core_cmd0 (core, "afs uint16_t far *(near *returns_table(void))[3]"), 0, "apply manual compound signature");
 	mu_assert_streq (fcn->name, "returns_table", "manual afs uses the function's declarator name");
 	RFlagItem *flag = r_flag_get (core->flags, "returns_table");
@@ -887,6 +927,7 @@ bool test_r_core_afs_preserves_compound_return_name_and_flags(void) {
 	mu_assert_notnull (signature, "read manual compound signature");
 	mu_assert_streq (signature->ret_type, "uint16_t far *(near *)[3]", "manual afs preserves the return graph");
 	mu_assert_streq (signature->signature, "uint16_t far *(near *returns_table (void))[3];", "render the named compound declaration");
+	mu_assert_streq (r_type_func_ret (core->anal->sdb_types, "returns_table"), "int", "local compound application does not replace the occupied shared type");
 	r_anal_function_signature_free (signature);
 	ut64 function_epoch = r_anal_function_dirty_epoch (fcn);
 	ut64 types_epoch = r_anal_types_dirty_epoch (core->anal);
@@ -1006,32 +1047,40 @@ bool test_r_core_afs_updates_effective_binding(void) {
 	const struct {
 		const char *link;
 		const char *source;
-		const char *effective;
 		const char *input;
 		RTypeFunctionPrototype prototype;
 		bool destination;
 	} cases[] = {
-		{ NULL, NULL, "original", "afs char target(void)", R_TYPE_FUNC_PROTOTYPE_FIXED, true },
-		{ "link.00000000", "linked", "linked", "afs char target()", R_TYPE_FUNC_PROTOTYPE_UNSPECIFIED, false },
-		{ "link.00000000", "original", "target", "afs char target(void)", R_TYPE_FUNC_PROTOTYPE_FIXED, false },
-		{ "fcnlink.00000000", "original", "target", "afs char target()", R_TYPE_FUNC_PROTOTYPE_UNSPECIFIED, false },
-		{ "fcnlink.00000000", "linked", "linked", "afs char target(void)", R_TYPE_FUNC_PROTOTYPE_FIXED, false },
-		{ "fcnlink.00000000", "linked", "linked", "afs char target(void)", R_TYPE_FUNC_PROTOTYPE_FIXED, true }
+		{ NULL, "original", "afs char target(void)", R_TYPE_FUNC_PROTOTYPE_FIXED, true },
+		{ "link", "linked", "afs char target()", R_TYPE_FUNC_PROTOTYPE_UNSPECIFIED, false },
+		{ "link", "original", "afs char target(void)", R_TYPE_FUNC_PROTOTYPE_FIXED, false },
+		{ "fcnlink", "original", "afs char target()", R_TYPE_FUNC_PROTOTYPE_UNSPECIFIED, false },
+		{ "fcnlink", "linked", "afs char target(void)", R_TYPE_FUNC_PROTOTYPE_FIXED, false },
+		{ "fcnlink", "linked", "afs char target(void)", R_TYPE_FUNC_PROTOTYPE_FIXED, true }
 	};
 	size_t i;
 	for (i = 0; i < R_ARRAY_SIZE (cases); i++) {
 		RCore *core = r_core_new ();
 		RAnalFunction *fcn = r_anal_create_function (core->anal, "original", 0, R_ANAL_FCN_TYPE_FCN, NULL);
+		RAnalFunction *other = r_anal_create_function (core->anal, cases[i].link? "other": "dbg.original", 16, R_ANAL_FCN_TYPE_FCN, NULL);
 		RAnalBlock *block = r_anal_create_block (core->anal, 0, 8);
 		r_anal_function_add_block (fcn, block);
 		r_unref (block);
 		mu_assert_true (r_anal_import_c_decls (core->anal, "int original(int old);short linked(char saved);", NULL), "seed the source and linked contracts");
+		mu_assert_true (r_anal_cc_set (core->anal, "void sharedcc (stack)"), "seed the shared source convention");
+		sdb_set (core->anal->sdb_types, "func.original.cc", "sharedcc", 0);
+		sdb_set (core->anal->sdb_types, "func.linked.cc", "sharedcc", 0);
+		sdb_set (core->anal->sdb_types, "func.original.noreturn", "true", 0);
+		sdb_set (core->anal->sdb_types, "func.linked.noreturn", "true", 0);
 		if (cases[i].destination) {
 			mu_assert_true (r_anal_import_c_decls (core->anal, "long target(void);", NULL), "seed an occupied destination prototype");
 		}
 		if (cases[i].link) {
-			sdb_set (core->anal->sdb_types, cases[i].link, cases[i].source, 0);
+			sdb_setf (core->anal->sdb_types, cases[i].source, 0, "%s.%08" PFMT64x, cases[i].link, fcn->addr);
+			sdb_setf (core->anal->sdb_types, cases[i].source, 0, "%s.%08" PFMT64x, cases[i].link, other->addr);
 		}
+		RAnalFunctionSignature *before = r_anal_function_get_signature (other);
+		mu_assert_notnull (before, "read the other function's shared contract before the edit");
 		RFlagItem *flag = r_flag_set_inspace (core->flags, R_FLAGS_FS_FUNCTIONS, "original", 0, 8);
 		RFlagItem *symbol = r_flag_set_inspace (core->flags, R_FLAGS_FS_SYMBOLS, "sym.original", 0, 8);
 		r_core_seek (core, 4, true);
@@ -1041,23 +1090,61 @@ bool test_r_core_afs_updates_effective_binding(void) {
 			&& r_flag_get (core->flags, "sym.original") == symbol;
 		bool contract_updated = signature && signature->ret_type && !strcmp (signature->ret_type, "char") && r_list_empty (signature->params)
 			&& signature->prototype == cases[i].prototype;
-		const char *value = sdb_const_getf (core->anal->sdb_types, NULL, "func.%s.ret", cases[i].effective);
-		bool effective_updated = value && !strcmp (value, "char");
-		const char *link = cases[i].link? sdb_const_get (core->anal->sdb_types, cases[i].link, NULL): NULL;
-		bool links_preserved = !cases[i].link || (link && !strcmp (link, cases[i].effective));
+		RAnalFunctionSignature *after = r_anal_function_get_signature (other);
+		bool other_unchanged = after && !strcmp (before->signature, after->signature) && before->prototype == after->prototype
+			&& before->noreturn == after->noreturn && !strcmp (before->callconv, after->callconv);
+		const char *source_ret = r_type_func_ret (core->anal->sdb_types, cases[i].source);
+		bool source_unchanged = source_ret && !strcmp (source_ret, !strcmp (cases[i].source, "linked")? "short": "int")
+			&& sdb_num_getf (core->anal->sdb_types, NULL, "func.%s.args", cases[i].source) == 1;
+		const char *other_link = cases[i].link? sdb_const_getf (core->anal->sdb_types, NULL, "%s.%08" PFMT64x, cases[i].link, other->addr): NULL;
+		bool links_preserved = !cases[i].link || (other_link && !strcmp (other_link, cases[i].source));
 		const char *destination = r_type_func_ret (core->anal->sdb_types, "target");
 		bool destination_preserved = !cases[i].destination || (destination && !strcmp (destination, "long"));
-		bool dwarf_priority_preserved = !cases[i].destination || !cases[i].link
-			|| !sdb_const_get (core->anal->sdb_types, "link.00000000", NULL);
+		char *private_type = r_type_link_at (core->anal->sdb_types, fcn->addr);
+		bool isolated = private_type && strcmp (private_type, cases[i].source);
+		ut64 types_epoch = r_anal_types_dirty_epoch (core->anal);
+		r_core_cmd0 (core, cases[i].input);
+		char *repeated_type = r_type_link_at (core->anal->sdb_types, fcn->addr);
+		bool repeated_unchanged = private_type && repeated_type && !strcmp (private_type, repeated_type)
+			&& r_anal_types_dirty_epoch (core->anal) == types_epoch;
+		free (private_type);
+		free (repeated_type);
+		r_anal_function_signature_free (before);
+		r_anal_function_signature_free (after);
 		r_anal_function_signature_free (signature);
 		r_core_free (core);
 		mu_assert_true (identity_updated, "afs at a contained address renames the owning function and flag, not its symbol");
 		mu_assert_true (contract_updated, "afs applies the admitted result to the selected effective contract");
-		mu_assert_true (effective_updated, "the effective owner receives the supplied signature");
-		mu_assert_true (links_preserved, "explicit address and DWARF links remain live when their prototype moves");
+		mu_assert_true (isolated, "a command edit selects its own ordinary function record through the addressed link");
+		mu_assert_true (other_unchanged, "explicit and name-derived shared lookup cannot change the other function");
+		mu_assert_true (source_unchanged, "command rename and application preserve the shared source type");
+		mu_assert_true (links_preserved, "other explicit address and DWARF links keep their source owner");
 		mu_assert_true (destination_preserved, "an occupied destination keeps its unrelated contract");
-		mu_assert_true (dwarf_priority_preserved, "occupied destination rename does not override an explicit DWARF association");
+		mu_assert_true (repeated_unchanged, "an unchanged repeated command does not create another ordinary type record");
 	}
+	mu_end;
+}
+
+bool test_r_core_signature_isolation_avoids_other_name_matches(void) {
+	RCore *core = r_core_new ();
+	mu_assert_true (r_anal_import_c_decls (core->anal, "int edited(int old);", NULL), "seed the source type that must remain shared");
+	RAnalFunction *fcn = r_anal_create_function (core->anal, "original", 0, R_ANAL_FCN_TYPE_FCN, NULL);
+	RAnalFunction *other = r_anal_create_function (core->anal, "dbg.edited_0", 16, R_ANAL_FCN_TYPE_FCN, NULL);
+	RAnalBlock *block = r_anal_create_block (core->anal, 0, 1);
+	r_anal_function_add_block (fcn, block);
+	r_unref (block);
+	r_type_set_link (core->anal->sdb_types, "edited", fcn->addr);
+	RAnalFunctionSignature *before = r_anal_function_get_signature (other);
+	mu_assert_notnull (before, "read the other function's original name-based presentation");
+	mu_assert_true (r_core_anal_function_set_signature (core, 0, "char edited(void)", NULL), "apply a function-local edit through the direct Core facade");
+	RAnalFunctionSignature *after = r_anal_function_get_signature (other);
+	mu_assert_notnull (after, "read the other function after candidate selection");
+	mu_assert_streq (before->signature, after->signature, "the new ordinary key cannot become another function's name-based match");
+	mu_assert_null (sdb_const_get (core->anal->sdb_types, "edited_0", NULL), "an unused but shadowing ordinary name is not selected");
+	mu_assert_streq (r_type_func_ret (core->anal->sdb_types, "edited"), "int", "the shared source is not overwritten");
+	r_anal_function_signature_free (before);
+	r_anal_function_signature_free (after);
+	r_core_free (core);
 	mu_end;
 }
 
@@ -1639,6 +1726,7 @@ int all_tests(void) {
 	mu_run_test (test_r_anal_str_to_fcn_defaults_omitted_return_type);
 	mu_run_test (test_r_anal_function_signature_parse_requires_a_named_function);
 	mu_run_test (test_r_anal_function_signature_prototype_roundtrip);
+	mu_run_test (test_r_anal_function_set_signature_refuses_incomplete_fixed_snapshot);
 	mu_run_test (test_r_anal_function_signature_empty_list_specificity);
 	mu_run_test (test_r_anal_function_signature_grouped_name);
 	mu_run_test (test_r_core_anal_function_set_signature);
@@ -1650,6 +1738,7 @@ int all_tests(void) {
 	mu_run_test (test_r_core_afs_reuses_selected_parser_admission);
 	mu_run_test (test_r_core_afs_name_collision_preserves_state);
 	mu_run_test (test_r_core_afs_updates_effective_binding);
+	mu_run_test (test_r_core_signature_isolation_avoids_other_name_matches);
 	mu_run_test (test_r_core_afs_overrides_import_for_only_the_current_function);
 	mu_run_test (test_r_core_afn_migrates_explicit_prototype_links);
 	mu_run_test (test_r_anal_function_get_signature_string_resolves_import_flag_prototype);

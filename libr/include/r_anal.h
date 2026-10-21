@@ -275,7 +275,7 @@ typedef enum {
 	R_ANAL_FUNCTION_SIGNATURE_ORIGIN_UNKNOWN = 0, // not read from a prototype lookup
 	R_ANAL_FUNCTION_SIGNATURE_ORIGIN_ADDRESS, // a prototype linked to the address (tl or a DWARF fcnlink)
 	R_ANAL_FUNCTION_SIGNATURE_ORIGIN_NAME, // a prototype found by the function's name
-	R_ANAL_FUNCTION_SIGNATURE_ORIGIN_VARIABLES, // no prototype; built from the argument variables
+	R_ANAL_FUNCTION_SIGNATURE_ORIGIN_VARIABLES, // formal count unavailable; presentation built from argument variables
 } RAnalFunctionSignatureOrigin;
 
 typedef struct r_anal_function_signature_t {
@@ -1244,15 +1244,20 @@ R_API RAnalFunction *r_anal_function_next(RAnal *anal, ut64 addr);
 // Parse one named function signature, defaulting an omitted result to void; free with r_type_decl_free.
 R_API R_OWNED RTypeDecl *r_anal_function_signature_parse(const char * R_NONNULL signature, char ** R_NULLABLE error);
 typedef struct r_anal_function_signature_prepared_t RAnalFunctionSignaturePrepared;
+typedef enum {
+	R_ANAL_SIGNATURE_APPLY_SHARED,
+	R_ANAL_SIGNATURE_APPLY_FUNCTION
+} RAnalFunctionSignatureApply;
 // Synchronously admit one normalized declaration through the selected parser before Core renames it.
 R_API R_OWNED RAnalFunctionSignaturePrepared *r_anal_function_signature_prepare(RAnal *anal, const char *signature, char **error);
 R_API const char *r_anal_function_signature_prepared_name(const RAnalFunctionSignaturePrepared *prepared);
-// Apply the admitted result to the function's effective binding without parsing C again.
-R_API bool r_anal_function_signature_apply(RAnal *anal, RAnalFunction *fcn, const RAnalFunctionSignaturePrepared *prepared);
+// Shared application updates the effective type; function application leaves shared types intact and links only when needed.
+R_API bool r_anal_function_signature_apply(RAnal *anal, RAnalFunction *fcn, const RAnalFunctionSignaturePrepared *prepared, RAnalFunctionSignatureApply scope);
 R_API void r_anal_function_signature_prepared_free(RAnalFunctionSignaturePrepared *prepared);
 R_API RAnalFunctionSignature *r_anal_function_get_signature(RAnalFunction *function);
 R_API void r_anal_function_signature_free(RAnalFunctionSignature *signature);
 R_API char *r_anal_function_get_signature_string(RAnalFunction *function);
+// Updates the shared type; a FIXED snapshot built from variables has no writable complete formal list.
 R_API bool r_anal_function_set_signature(RAnal *anal, RAnalFunction *fcn, const RAnalFunctionSignature *signature);
 R_API bool r_anal_function_del_signature(RAnal *a, const char *name);
 R_API ut64 r_anal_function_dirty_epoch(const RAnalFunction *fcn);

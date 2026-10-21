@@ -369,11 +369,15 @@ CMDS=<<EOF
 -e types.plugin=tcc
 af+ 0 f
 afb+ 0 0 16
-'CF #define A '' "
+'td #define A '' "
+s 0
 EOF
 EXPECT=<<EOF
 <string>:1: error: empty character constant
 <string>:1: error: missing terminating " character
+EOF
+EXPECT_ERR=<<EOF
+ERROR: Cannot parse C type declarations
 EOF
 RUN
 
@@ -383,12 +387,15 @@ CMDS=<<EOF
 -e types.plugin=tcc
 af+ 0 f
 afb+ 0 0 16
-'CF #define S "x y"
+'td #define S "x y"
 'CF int f(int a, char *s);
 afs
 EOF
 EXPECT=<<EOF
 int32_t f (int32_t a, char *s);
+EOF
+EXPECT_ERR=<<EOF
+ERROR: Cannot parse C type declarations
 EOF
 RUN
 
@@ -2223,21 +2230,20 @@ struct.s1.size=int,4,0
 EOF
 RUN
 
-NAME=types afs [after]
+NAME=types afs [after] isolates the local signature from the shared prototype
 FILE=bins/elf/hello_world
 CMDS=<<EOF
 s main
 af
 'afs int main(int argc);
-tk~func.main
+afs
+afsj
+tfc main
 EOF
 EXPECT=<<EOF
-func.main=argc
-func.main.arg.0=int,argc
-func.main.args=1
-func.main.cc=cdecl
-func.main.prototype=fixed
-func.main.ret=int
+int main (int argc);
+{"name":"main","noreturn":false,"ret":"int","prototype":"fixed","callconv":"amd64","argc":1,"args":[{"name":"argc","type":"int","cc":"rdi"}]}
+int main(int argc, char **argv, char **envp);
 EOF
 RUN
 
@@ -6368,6 +6374,23 @@ typedef int (*B)(void);
 EOF_EXPECT
 RUN
 
+NAME=tfj invalid parameter-list knowledge reports failure and recovers
+FILE=-
+ARGS=-a x86 -b 64
+CMDS=<<EOF_CMDS
+td int Status(void);
+tk func.Status.prototype=invalid
+{"cmd":"tfj Status","json":true}
+tk func.Status.prototype=fixed
+{"cmd":"tfj Status","json":true}
+s 0
+EOF_CMDS
+EXPECT=<<EOF_EXPECT
+{"res":null,"error":true,"value":1,"logs":[{"type":"ERROR","origin":"r_type_func_get_prototype","message":"Invalid parameter-list specificity for Status: invalid"}],"code":1}
+{"res":{"name":"Status","prototype":"fixed","ret":"int","cc":"cdecl","args":[],"size":0},"error":false,"value":1,"code":0}
+EOF_EXPECT
+RUN
+
 NAME=missing prototype knowledge is not inferred from zero arguments
 FILE=malloc://64
 ARGS=-a x86 -b 64
@@ -6401,13 +6424,13 @@ s 1
 afn
 afs
 tfc target
-tk link.00000000
+afsj
 EOF_CMDS
 EXPECT=<<EOF_EXPECT
 target
 char target (void);
 long target(void);
-original
+{"name":"target","noreturn":false,"ret":"char","prototype":"fixed","callconv":"amd64","argc":0,"args":[]}
 EOF_EXPECT
 RUN
 

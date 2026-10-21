@@ -164,6 +164,8 @@ func.__stack_chk_fail.noreturn=true
 func.__stack_chk_fail.prototype=fixed
 func.__stack_chk_fail.ret=void
 
+func.strlen.prototype=fixed
+
 off64_t=typedef
 typedef.off64_t=int64_t
 

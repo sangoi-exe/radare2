@@ -416,17 +416,24 @@ static bool borland_apply(RAnal *anal, ut64 family, const HelperContract *helper
 		return false;
 	}
 	if (fcn) {
+		char *key = r_type_func_key (anal->sdb_types, fcn->name);
+		bool occupied = key || sdb_const_get (anal->sdb_types, fcn->name, NULL)
+			|| sdb_const_getf (anal->sdb_types, NULL, "func.%s.prototype", fcn->name)
+			|| sdb_const_getf (anal->sdb_types, NULL, "fcnlink.%08"PFMT64x, addr);
 		RAnalFunctionSignature *sig = r_anal_function_get_signature (fcn);
 		bool same = borland_signature_equal (sig, helper) && fcn->callconv && !strcmp (fcn->callconv, helper->cc);
-		bool conflict = sig && (sig->ret_type || !r_list_empty (sig->params));
+		const char *default_cc = r_anal_cc_default (anal);
+		bool empty = sig && sig->prototype == R_TYPE_FUNC_PROTOTYPE_UNKNOWN
+			&& !sig->ret_type && r_list_empty (sig->params) && !sig->noreturn
+			&& (!sig->callconv || (default_cc && !strcmp (sig->callconv, default_cc)));
 		r_anal_function_signature_free (sig);
+		free (key);
 		if (same && RVecAnalVarPtr_empty (&fcn->vars) && !fcn->is_noreturn
 				&& (fcn->meta.stack_pop == R_ANAL_CC_STACK_POP_UNKNOWN || fcn->meta.stack_pop == helper->purge)) {
 			borland_comment (anal, addr, helper->comment);
 			return true;
 		}
-		const char *default_cc = r_anal_cc_default (anal);
-		if (!borland_generic_name (fcn->name) || conflict || !RVecAnalVarPtr_empty (&fcn->vars) || fcn->is_noreturn
+		if (!borland_generic_name (fcn->name) || occupied || !empty || !RVecAnalVarPtr_empty (&fcn->vars) || fcn->is_noreturn
 				|| (fcn->meta.stack_pop != R_ANAL_CC_STACK_POP_UNKNOWN && fcn->meta.stack_pop != helper->purge)
 				|| (fcn->callconv && (!default_cc || strcmp (fcn->callconv, default_cc)))) {
 			R_LOG_WARN ("Borland: preserving prototype/variables/convention at 0x%08"PFMT64x, addr);
