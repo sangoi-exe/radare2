@@ -1,6 +1,6 @@
 # Intent Contract: native semantic type fidelity
 
-Status: active
+Status: on-hold
 Task mode: Doctrine
 Lifecycle phase: Implementation
 Strategy epoch: 1
@@ -87,8 +87,8 @@ High-level packages: native qualification representation/access semantics; host 
 
 The runtime exposes no `update_plan`. The one subordinate execution projection is `.sangoi/planning/2026-10-21-native-semantic-type-fidelity-microtasks.md`; it owns only current microtask footprints, dependencies, status and results. This contract remains the sole Scope, route, acceptance and lifecycle owner. Disposable task outputs belong below `/home/lucas/.cache/codex/radare2/native-semantic-type-fidelity-2026-10-21/`.
 
-Current-user decisions open: none. The explicit confirmation lifted the prior decision hold and the Scope-revision audit has closed.
+Current-user decision open: calling-convention precedence for an actual function when its selected type record and a later explicit `afc` disagree. B1's raw-record-first implementation contradicts the retained documented operational override. A fresh-session witness stores `func.precedence.cc=__cdecl16near`, selects `afc __cdecl16far`, and observes host `calltype=__cdecl16far` but native locked `__cdecl16near`, two-byte return frame and parameter at stack+2. Root verified the actual output and source delta. The recommendation is to preserve the explicit per-function operational selection while keeping callback-type conventions faithful and absent source metadata absent. The current user has not selected closure of this newly demonstrated conflict; no priority/provenance architecture change is authorized by the earlier confirmation.
 Residual limitation accepted: empty-aggregate object layout remains unsupported, and the prior bare-tag name-only display is not preserved. The still-true missing completeness distinction is recorded above; acceptance does not turn it into implemented support.
 Plan audit: the initial `/root/semantic_plan_audit` returned PROCEED. Its current Scope-revision audit also returned PROCEED with complete Intent Contract coverage and no material findings after checking the exact confirmation against the revised owner. The registered transition published the existing plan locator and resumed active Implementation without a new human checkpoint.
-Blocker: none.
-Next action: integrate effective flexible-member admission and canonical signature-record identity while bridge semantic conversion proceeds on disjoint source paths; then finish structured/target-bound application and matching-runtime qualification. T1, C1, M1 and N1–N4 are integrated component checkpoints with their recorded proof limits. No whole-task approval has occurred.
+Blocker: current-user decision on the actual-function convention conflict above. Source mutation and new Gate launches are held; all running validation has finished and the private SDK is released.
+Next action: obtain that decision, apply its bounded owner correction and classified direct test followers, finish matching-runtime qualification, then perform the committed-candidate review. B1.4 restores all15 inference regressions without golden changes; resolution26/26 and full-types57/74 pass, with17 classified proof followers remaining. Host S1 and native N5 are integrated alongside the earlier checkpoints. Matching native75/75, preparation and pcode XML pass. No whole-task approval has occurred.
