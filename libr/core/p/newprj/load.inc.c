@@ -39,7 +39,16 @@ static void rprj_type_load(RPrjCursor *cur, int mode, ut64 next_entry) {
 			r_strbuf_appendf (cur->out, "      %s = %s\n", key, value);
 		}
 		if (mode & R_CORE_NEWPRJ_MODE_LOAD) {
-			sdb_set (cur->core->anal->sdb_types, key, value, 0);
+			Sdb *types = cur->core->anal->sdb_types;
+			if (r_str_startswith (key, "tags/")) {
+				types = r_type_namespace (types, R_TYPE_NAMESPACE_TAG, true);
+				key += 5;
+			}
+			if (!types) {
+				cur->invalid = true;
+				continue;
+			}
+			sdb_set (types, key, value, 0);
 		}
 	}
 	if (rprj_entry_remaining (b, next_entry)) {

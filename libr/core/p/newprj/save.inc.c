@@ -149,6 +149,18 @@ static bool rprj_type_write_cb(void *user, const char *key, const char *value) {
 	return true;
 }
 
+static bool rprj_type_tag_write_cb(void *user, const char *key, const char *value) {
+	RPrjCursor *cur = user;
+	char *tag_key = r_type_identifier_key (key, R_TYPE_NAMESPACE_TAG);
+	if (!tag_key) {
+		return false;
+	}
+	rprj_write_le32 (cur->b, rprj_st_append (cur->st, tag_key));
+	rprj_write_le32 (cur->b, rprj_st_append (cur->st, value));
+	free (tag_key);
+	return true;
+}
+
 static bool rprj_sdb_addr_write_cb(void *user, const char *key, const char *value) {
 	RPrjCursor *cur = user;
 	ut64 addr;
@@ -163,6 +175,10 @@ static bool rprj_sdb_addr_write_cb(void *user, const char *key, const char *valu
 
 static void rprj_type_write(RPrjCursor *cur) {
 	sdb_foreach (cur->core->anal->sdb_types, rprj_type_write_cb, cur);
+	Sdb *tags = r_type_namespace (cur->core->anal->sdb_types, R_TYPE_NAMESPACE_TAG, false);
+	if (tags) {
+		sdb_foreach (tags, rprj_type_tag_write_cb, cur);
+	}
 }
 
 static void rprj_tlnk_write(RPrjCursor *cur) {

@@ -125,7 +125,6 @@ static void synth_hint(RAnal *anal, SynthRec *rec, ut64 off, ut64 iaddr) {
 			memb = r_type_get_struct_memb (anal->sdb_types, sname, (int)a->off);
 		}
 	}
-	free (sname);
 	if (off > 0) {
 		if (memb) {
 			r_anal_hint_set_offset (anal, iaddr, memb);
@@ -135,6 +134,7 @@ static void synth_hint(RAnal *anal, SynthRec *rec, ut64 off, ut64 iaddr) {
 		r_meta_set_string (anal, R_META_TYPE_VARTYPE, iaddr, memb? memb: sname);
 	}
 	free (memb);
+	free (sname);
 }
 
 // takes ownership of type; returns the new end offset

@@ -505,36 +505,28 @@ R_API RAnalBaseType *r_anal_get_base_type(RAnal *anal, const char *name, RTypeNa
 	if (!types) {
 		return NULL;
 	}
-	char *sname = strdup (name);
-	const char *type = sdb_const_get (types, sname, NULL);
+	const char *type = sdb_const_get (types, name, NULL);
 	if (!type) {
-		free (sname);
-		sname = r_str_sanitize_sdb_key (name);
-		type = sname? sdb_const_get (types, sname, NULL): NULL;
-	}
-	if (!type) {
-		free (sname);
 		return NULL;
 	}
 
 	RAnalBaseType *base_type = NULL;
 	if (!strcmp (type, "struct")) {
-		base_type = get_composite_type (types, sname, R_ANAL_BASE_TYPE_KIND_STRUCT);
+		base_type = get_composite_type (types, name, R_ANAL_BASE_TYPE_KIND_STRUCT);
 	} else if (!strcmp (type, "enum")) {
-		base_type = get_enum_type (types, sname);
+		base_type = get_enum_type (types, name);
 	} else if (!strcmp (type, "union")) {
-		base_type = get_composite_type (types, sname, R_ANAL_BASE_TYPE_KIND_UNION);
+		base_type = get_composite_type (types, name, R_ANAL_BASE_TYPE_KIND_UNION);
 	} else if (!strcmp (type, "typedef")) {
-		base_type = get_typedef_type (anal, sname);
+		base_type = get_typedef_type (anal, name);
 	} else if (!strcmp (type, "type")) {
-		base_type = get_atomic_type (anal, sname);
+		base_type = get_atomic_type (anal, name);
 	}
 
 	if (base_type) {
 		base_type->space = space;
-		base_type->name = strdup (sname);
+		base_type->name = strdup (name);
 	}
-	free (sname);
 
 	return base_type;
 }
