@@ -350,9 +350,9 @@ PS* ctypes~?Foo
 P- ctypes > /dev/null
 EOF
 EXPECT=<<EOF
-14
-14
-5
+25
+25
+6
 EOF
 RUN
 
@@ -368,19 +368,19 @@ tk type.char **.size=64
 P+ costom_types > /dev/null
 Pc
 t- char **
-t- Foo
+t- struct Foo
 tk~?char **
-tk~?Foo
+tk tags/*~?Foo
 P costom_types > /dev/null
 tk~?char **
-tk~?Foo
+tk tags/*~?Foo
 P- costom_types > /dev/null
 EOF
 EXPECT=<<EOF
-11
+22
 0
-14
-5
+25
+6
 EOF
 RUN
 

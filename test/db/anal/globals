@@ -58,12 +58,12 @@ avg uint16_t[2][3] global.grid @ 0x100
 avg int *[3] global.pointers @ 0x200
 avg int (* )[4] global.pointer @ 0x300
 avg const uint8_t [0x10] global.bytes @ 0x400
-avg Pair[2] global.pairs @ 0x500
+avg struct Pair[2] global.pairs @ 0x500
 avgj
 tss uint16_t[2][3]
 tss int *[3]
 tss int (* )[4]
-tss Pair[2]
+tss struct Pair[2]
 Cf. @ 0x100
 Cf. @ 0x200
 Cf. @ 0x300
@@ -72,7 +72,7 @@ Cf. @ 0x500~[0]
 tl
 EOF
 EXPECT=<<EOF
-[{"name":"global.grid","addr":256,"size":12,"type":"uint16_t[2][3]"},{"name":"global.pointers","addr":512,"size":24,"type":"int *[3]"},{"name":"global.pointer","addr":768,"size":8,"type":"int (* )[4]"},{"name":"global.bytes","addr":1024,"size":16,"type":"const uint8_t [0x10]"},{"name":"global.pairs","addr":1280,"size":16,"type":"Pair[2]"}]
+[{"name":"global.grid","addr":256,"size":12,"type":"uint16_t[2][3]"},{"name":"global.pointers","addr":512,"size":24,"type":"int *[3]"},{"name":"global.pointer","addr":768,"size":8,"type":"int (* )[4]"},{"name":"global.bytes","addr":1024,"size":16,"type":"const uint8_t [0x10]"},{"name":"global.pairs","addr":1280,"size":16,"type":"struct Pair[2]"}]
 12
 24
 8
@@ -86,7 +86,7 @@ p
 0x00000200 = int *[3]
 0x00000300 = int (* )[4]
 0x00000400 = const uint8_t [0x10]
-0x00000500 = Pair[2]
+0x00000500 = struct Pair[2]
 EOF
 RUN
 
@@ -117,17 +117,17 @@ FILE=malloc://0x1000
 ARGS=-a x86 -b 64
 CMDS=<<EOF
 "td union Item { int count; char byte; };"
-avg Item[2] global.items @ 0x100
+avg union Item[2] global.items @ 0x100
 avgj
-tss Item[2]
+tss union Item[2]
 Cf. @ 0x100
 tl
 EOF
 EXPECT=<<EOF
-[{"name":"global.items","addr":256,"size":8,"type":"Item[2]"}]
+[{"name":"global.items","addr":256,"size":8,"type":"union Item[2]"}]
 8
 [2]? (pf 0dc count byte )
-0x00000100 = Item[2]
+0x00000100 = union Item[2]
 EOF
 RUN
 
@@ -222,7 +222,7 @@ EXPECT=<<EOF
 0x01002260 8 global.global_wide uint64_t
 0x01002268 12 global.global_array int[3]
 0x01002278 8 global.global_pointer int *
-0x01002280 8 global.global_pair GlobalPair
+0x01002280 8 global.global_pair struct GlobalPair
 0x01002288 4 global.main.local_static int
 0x0100228c 2 global.global_static short
 0x01002290 4 global.global_zero int
@@ -247,7 +247,7 @@ EXPECT=<<EOF
 0x01002260 8 global.global_wide uint64_t
 0x01002268 12 global.global_array int[3]
 0x01002278 8 global.global_pointer int *
-0x01002280 8 global.global_pair GlobalPair
+0x01002280 8 global.global_pair struct GlobalPair
 0x01002288 4 global.main.local_static int
 0x0100228c 2 global.global_static short
 0x01002290 4 global.global_zero int
@@ -269,7 +269,7 @@ EXPECT=<<EOF
 0x02002260 8 global.global_wide uint64_t
 0x02002268 12 global.global_array int[3]
 0x02002278 8 global.global_pointer int *
-0x02002280 8 global.global_pair GlobalPair
+0x02002280 8 global.global_pair struct GlobalPair
 0x02002288 4 global.main.local_static int
 0x0200228c 2 global.global_static short
 0x02002290 4 global.global_zero int
@@ -323,7 +323,7 @@ EXPECT=<<EOF
 0x100004008 8 global._global_wide uint64_t
 0x100004010 12 global._global_array int[3]
 0x100004020 8 global._global_pointer int *
-0x100004028 8 global._global_pair GlobalPair
+0x100004028 8 global._global_pair struct GlobalPair
 0x100004030 4 global._main.local_static int
 0x100004034 2 global._global_static short
 0x100004038 4 global._global_zero int
@@ -626,15 +626,15 @@ tsc global_0x2000
 EOF
 EXPECT=<<EOF
 [{"name":"global.0x2000","addr":8192,"size":16,"type":"global_0x2000"}]
-struct global_0x2000 {
+typedef struct {
   uint32_t field_0x0;
   char *message_0x8;
-};
+} global_0x2000;
 [{"name":"global.0x2000","addr":8192,"size":16,"type":"global_0x2000"}]
-struct global_0x2000 {
+typedef struct {
   uint32_t field_0x0;
   char *message_0x8;
-};
+} global_0x2000;
 EOF
 RUN
 
@@ -662,10 +662,10 @@ tsc global_0x2000
 EOF
 EXPECT=<<EOF
 [{"name":"global.0x2000","addr":8192,"size":16,"type":"global_0x2000"}]
-struct global_0x2000 {
+typedef struct {
   uint32_t field_0x0;
   char *message_0x8;
-};
+} global_0x2000;
 EOF
 RUN
 
@@ -689,15 +689,15 @@ tsc global_0x2000
 EOF
 EXPECT=<<EOF
 [{"name":"global.0x2000","addr":8192,"size":8,"type":"global_0x2000"}]
-struct global_0x2000 {
+typedef struct {
   uint32_t field_0x0;
   uint32_t field_0x4;
-};
+} global_0x2000;
 [{"name":"global.0x2000","addr":8192,"size":8,"type":"global_0x2000"}]
-struct global_0x2000 {
+typedef struct {
   uint32_t field_0x0;
   uint32_t field_0x4;
-};
+} global_0x2000;
 EOF
 RUN
 
@@ -896,16 +896,21 @@ aeim
 aaft
 avgj
 tsc global_0x2020
+tk struct.global_0x2020.field_0x0
+tk struct.global_0x2020.field_0x8
+tss global_0x2020
 aaft
 avgj
 EOF
 EXPECT=<<EOF
 [{"name":"global.0x2020","addr":8224,"size":16,"type":"global_0x2020"}]
-struct global_0x2020 {
+typedef struct {
   uint32_t field_0x0;
-  uint8_t pad_0x4[4]; // gap
   uint64_t field_0x8;
-};
+} global_0x2020;
+uint32_t,0,0
+uint64_t,8,0
+16
 [{"name":"global.0x2020","addr":8224,"size":16,"type":"global_0x2020"}]
 EOF
 RUN
@@ -992,15 +997,15 @@ tsc global_0x2000
 EOF
 EXPECT=<<EOF
 [{"name":"global.message.0x2000","addr":8192,"size":16,"type":"global_0x2000"}]
-struct global_0x2000 {
+typedef struct {
   char *message_0x0;
   char *message_0x8;
-};
+} global_0x2000;
 [{"name":"global.message.0x2000","addr":8192,"size":16,"type":"global_0x2000"}]
-struct global_0x2000 {
+typedef struct {
   char *message_0x0;
   char *message_0x8;
-};
+} global_0x2000;
 EOF
 RUN
 
@@ -1020,10 +1025,10 @@ avgj
 EOF
 EXPECT=<<EOF
 [{"name":"global.0x2000","addr":8192,"size":8,"type":"global_0x2000"}]
-struct global_0x2000 {
+typedef struct {
   uint32_t field_0x0;
   uint32_t field_0x4;
-};
+} global_0x2000;
 [{"name":"global.0x2000","addr":8192,"size":8,"type":"global_0x2000"}]
 EOF
 RUN
@@ -1088,14 +1093,19 @@ aeim
 aaft
 avgj
 tsc global_0x100004018
+tk struct.global_0x100004018.field_0x0
+tk struct.global_0x100004018.field_0x8
+tss global_0x100004018
 EOF
 EXPECT=<<EOF
 [{"name":"global.0x100004018","addr":4294983704,"size":16,"type":"global_0x100004018"}]
-struct global_0x100004018 {
+typedef struct {
   uint32_t field_0x0;
-  uint8_t pad_0x4[4]; // gap
   uint64_t field_0x8;
-};
+} global_0x100004018;
+uint32_t,0,0
+uint64_t,8,0
+16
 EOF
 RUN
 

@@ -778,14 +778,14 @@ CMDS=<<EOF
 wx 8845ed897decc3
 af
 afvb
-afvt var_14h pair
+afvt var_14h "struct pair"
 afvb
 afvx
 EOF
 EXPECT=<<EOF
 var int8_t var_13h @ rbp-0x13
 var int32_t var_14h @ rbp-0x14
-var pair var_14h @ rbp-0x14
+var struct pair var_14h @ rbp-0x14
 afvR
       arg1  0x3
    var_14h

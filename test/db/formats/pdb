@@ -250,12 +250,12 @@ NAME=idp union members reach sdb via union member vec
 FILE=-
 CMDS=<<EOF
 idp bins/pdb/Project1.pdb
-tk union.R2_TEST_UNION
-tk union.R2_TEST_UNION.r2_union_var_1
-tk union.R2_TEST_UNION.r2_union_var_2
-tuc R2_TEST_UNION
-tk struct.R2_TEST_STRUCT.r2_struct_var_1
-tsc R2_TEST_STRUCT
+tk tags/union.R2_TEST_UNION
+tk tags/union.R2_TEST_UNION.r2_union_var_1
+tk tags/union.R2_TEST_UNION.r2_union_var_2
+tuc union R2_TEST_UNION
+tk tags/struct.R2_TEST_STRUCT.r2_struct_var_1
+tsc struct R2_TEST_STRUCT
 EOF
 EXPECT=<<EOF
 r2_union_var_1,r2_union_var_2
@@ -289,7 +289,7 @@ idp bins/pdb/issue_12924.pdb
 te~tagCOINITBASE
 EOF
 EXPECT=<<EOF
-tagCOINITBASE
+enum tagCOINITBASE
 EOF
 RUN
 
