@@ -426,17 +426,15 @@ static char *type_get_memb(Sdb *TDB, Sdb *db, const char *kind, const char *type
 	int nargs = r_str_split (members, ',');
 	for (i = 0; i < nargs; i++) {
 		const char *name = r_str_word_get0 (members, i);
-		const char *value = sdb_const_getf (db, NULL, "%s.%s.%s", kind, type, name);
-		char *subtype = value? strdup (value): NULL;
+		char *key = r_str_newf ("%s.%s.%s", kind, type, name);
+		ut64 member_offset;
+		int arrsz;
+		char *subtype = key? r_type_get_member (db, key, &member_offset, &arrsz): NULL;
+		free (key);
 		if (!subtype) {
 			break;
 		}
-		int len = r_str_split (subtype, ',');
-		if (len < 3) {
-			free (subtype);
-			break;
-		}
-		int cur_offset = r_num_math (NULL, r_str_word_get0 (subtype, len - 2));
+		int cur_offset = (int)member_offset;
 		if (is_struct) {
 			if (cur_offset > 0 && cur_offset < next_offset) {
 				free (subtype);
@@ -451,7 +449,6 @@ static char *type_get_memb(Sdb *TDB, Sdb *db, const char *kind, const char *type
 			free (subtype);
 			break;
 		}
-		int arrsz = r_num_math (NULL, r_str_word_get0 (subtype, len - 1));
 		int fsize = (r_type_get_bitsize (TDB, subtype) * (arrsz ? arrsz : 1)) / 8;
 		if (!fsize) {
 			free (subtype);
@@ -465,10 +462,9 @@ static char *type_get_memb(Sdb *TDB, Sdb *db, const char *kind, const char *type
 			next_offset = member_end;
 		}
 		if (offset > cur_offset && offset < member_end) {
-			const char *nested_type = r_str_word_get0 (subtype, 0);
 			char *nested_name = NULL;
 			Sdb *nested_db = NULL;
-			const char *nested_kind = type_aggregate_kind (TDB, nested_type, &nested_name, &nested_db);
+			const char *nested_kind = type_aggregate_kind (TDB, subtype, &nested_name, &nested_db);
 			if (nested_kind) {
 				char *nested_path = r_str_newf ("%s.%s", path, name);
 				if (nested_path) {

@@ -1,14 +1,7 @@
 tags/foo=struct
-foo.fp=func
-func.foo.fp.arg.0=int,a
-func.foo.fp.arg.1=int,b
-func.foo.fp=a,b
-func.foo.fp.args=2
-func.foo.fp.ret=int
-func.foo.fp.prototype=fixed
 tags/foo=struct
 tags/struct.foo.x=int,0,0
-tags/struct.foo.fp=func.foo.fp *,8,0
+tags/struct.foo.fp=int (*)(int a, int b),8,0
 tags/struct.foo.b=char *,16,0
 tags/struct.foo=x,fp,b
 tags/type.foo.size=192

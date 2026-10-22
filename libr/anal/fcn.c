@@ -3110,8 +3110,9 @@ static bool function_signature_identifier(Sdb *types, const char *name) {
 	return valid;
 }
 
-R_API R_OWNED char *r_anal_function_signature_to_kv(Sdb *types, const char *name, const RTypeDeclNode *function, RTypeFunctionPrototype prototype, const char *callconv, bool noreturn) {
+R_API R_OWNED char *r_anal_function_signature_to_kv(Sdb *types, const char *name, const RTypeDeclNode *function, RTypeFunctionPrototype prototype, bool noreturn) {
 	R_RETURN_VAL_IF_FAIL (types && name && function && function->kind == R_TYPE_DECL_FUNCTION && function->child, NULL);
+	const char *callconv = function->function.callconv;
 	const char *knowledge = r_type_func_prototype_name (prototype);
 	if (!knowledge || !function_signature_identifier (types, name) || strlen (name) + strlen ("func..prototype") >= SDB_MAX_KEY
 			|| (callconv && (strlen (callconv) >= SDB_MAX_VALUE || strpbrk (callconv, "\r\n")))) {
@@ -3194,7 +3195,7 @@ R_API R_OWNED char *r_anal_function_signature_to_kv(Sdb *types, const char *name
 	return r_strbuf_drain_nofree (&output);
 }
 
-static RTypeDecl *function_signature_decl(Sdb *types, const char *ret_type, RList *params, RTypeFunctionPrototype prototype, bool fill_defaults) {
+static RTypeDecl *function_signature_decl(Sdb *types, const char *ret_type, RList *params, RTypeFunctionPrototype prototype, const char *callconv, bool fill_defaults) {
 	RListIter *iter;
 	RAnalFunctionParam *param;
 	size_t i = 0;
@@ -3207,9 +3208,14 @@ static RTypeDecl *function_signature_decl(Sdb *types, const char *ret_type, RLis
 	RTypeDeclNode *function = R_NEW0 (RTypeDeclNode);
 	function->kind = R_TYPE_DECL_FUNCTION;
 	function->function.prototype = prototype == R_TYPE_FUNC_PROTOTYPE_FIXED;
+	function->function.callconv = callconv? strdup (callconv): NULL;
 	function->child = decl->type;
 	function->function.parameters = r_list_newf ((RListFree)r_type_decl_free);
 	decl->type = function;
+	if (callconv && !function->function.callconv) {
+		r_type_decl_free (decl);
+		return NULL;
+	}
 	if (params) {
 		r_list_foreach (params, iter, param) {
 			RAnalFunctionParam tmp = {0};
@@ -3245,7 +3251,7 @@ static RTypeDecl *function_signature_decl(Sdb *types, const char *ret_type, RLis
 
 static char *function_signature_string(Sdb *types, const char *name, const char *ret_type, RList *params, RTypeFunctionPrototype prototype, bool sanitize_name, bool fill_defaults) {
 	R_RETURN_VAL_IF_FAIL (name, NULL);
-	RTypeDecl *decl = function_signature_decl (types, ret_type, params, prototype, fill_defaults);
+	RTypeDecl *decl = function_signature_decl (types, ret_type, params, prototype, NULL, fill_defaults);
 	if (!decl) {
 		return NULL;
 	}
@@ -3577,8 +3583,8 @@ R_API RAnalFunctionSignaturePrepared *r_anal_function_signature_prepare_structur
 		return NULL;
 	}
 	char *name = function_signature_type_name (anal, fcn);
-	RTypeDecl *decl = function_signature_decl (anal->sdb_types, R_STR_ISNOTEMPTY (signature->ret_type)? signature->ret_type: "void", signature->params, signature->prototype, true);
-	char *records = decl && R_STR_ISNOTEMPTY (name)? r_anal_function_signature_to_kv (anal->sdb_types, name, decl->type, signature->prototype, signature->callconv, signature->noreturn): NULL;
+	RTypeDecl *decl = function_signature_decl (anal->sdb_types, R_STR_ISNOTEMPTY (signature->ret_type)? signature->ret_type: "void", signature->params, signature->prototype, signature->callconv, true);
+	char *records = decl && R_STR_ISNOTEMPTY (name)? r_anal_function_signature_to_kv (anal->sdb_types, name, decl->type, signature->prototype, signature->noreturn): NULL;
 	prepared = function_signature_prepare_records (name, records);
 	if (prepared) {
 		prepared->has_noreturn = true;

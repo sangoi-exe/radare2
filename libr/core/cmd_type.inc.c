@@ -910,8 +910,10 @@ static bool type_expand_function_refs(Sdb *db, RTypeDeclNode **slot, int depth) 
 		r_type_decl_free (result);
 		function->function.parameters = r_list_newf ((RListFree)r_type_decl_free);
 		function->function.prototype = prototype == R_TYPE_FUNC_PROTOTYPE_FIXED;
+		const char *callconv = sdb_const_getf (db, NULL, "func.%s.cc", name);
+		function->function.callconv = callconv? strdup (callconv): NULL;
 		int i;
-		bool ok = true;
+		bool ok = !callconv || function->function.callconv;
 		for (i = 0; i < argc; i++) {
 			char *type = r_type_func_args_type (db, name, i);
 			const char *argument = r_type_func_args_name (db, name, i);

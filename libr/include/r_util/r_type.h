@@ -78,6 +78,7 @@ typedef struct r_type_decl_node_t {
 		} array;
 		struct {
 			RList * R_OWNED parameters; // owned RTypeDecl entries, without parameter adjustment
+			char * R_OWNED callconv; // supplied convention; NULL does not assert an effective default
 			bool variadic;
 			bool prototype; // distinguishes (void) from () when parameters is empty
 		} function;
@@ -95,6 +96,8 @@ typedef struct r_type_decl_t {
 // This is not a header, definition or storage-class specifier parser.
 // near/far precede their associated star; qualifiers after a star qualify that pointer.
 // atomic and _Atomic are accepted qualifier spellings; rendering uses _Atomic, not _Atomic(type).
+// Function conventions use __attribute__((r2_cc("model"))); this is analysis syntax, not a historical compiler spelling.
+// The carrier precedes the function declarator or its pointer star inside grouping; cdecl/stdcall attributes are also accepted.
 // No typedef expansion, parameter decay, calling-convention selection or ABI sizing is performed.
 // The result owns all nodes, strings and parameters; error receives an owned diagnostic or NULL.
 R_API R_OWNED RTypeDecl *r_type_decl_parse(const char * R_NONNULL text, RTypeDeclContext context, Sdb * R_NULLABLE types, char ** R_NULLABLE error);

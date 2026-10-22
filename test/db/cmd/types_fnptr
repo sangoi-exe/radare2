@@ -10,20 +10,8 @@ tk~^func.rea_callbacks
 EOF
 EXPECT=<<EOF
 xDlSym,next
-func.rea_callbacks.xDlSym *,0,0
-func.rea_callbacks.next *,8,0
-func.rea_callbacks.next=n
-func.rea_callbacks.next.arg.0=int,n
-func.rea_callbacks.next.args=1
-func.rea_callbacks.next.prototype=fixed
-func.rea_callbacks.next.ret=int
-func.rea_callbacks.xDlSym=ctx,handle,name
-func.rea_callbacks.xDlSym.arg.0=void *,ctx
-func.rea_callbacks.xDlSym.arg.1=void *,handle
-func.rea_callbacks.xDlSym.arg.2=const char *,name
-func.rea_callbacks.xDlSym.args=3
-func.rea_callbacks.xDlSym.prototype=fixed
-func.rea_callbacks.xDlSym.ret=void (*)(void)
+void (*(*)(void *ctx, void *handle, const char *name))(void),0,0
+int (*)(int n),8,0
 EOF
 RUN
 
@@ -83,11 +71,9 @@ tk func.rea_callback_union.first.arg.0
 EOF
 EXPECT=<<EOF
 first,second,value
-func.rea_callback_union.first *,0,0
-func.rea_callback_union.second *,0,0
+void *(*)(int n),0,0
+int (*)(void),0,0
 int,0,0
-void *
-int,n
 EOF
 RUN
 

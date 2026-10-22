@@ -755,6 +755,67 @@ static bool test_anal_cparse_multiline_fnptr(void) {
 	mu_end;
 }
 
+static bool test_anal_cparse_intrinsic_member_callbacks(void) {
+	RAnal *anal = r_anal_new ();
+	r_arch_config_use (anal->config, "x86");
+	anal->config->bits = 64;
+	r_anal_types_reload (anal, R2_PREFIX, NULL, NULL);
+	char *error = NULL;
+	mu_assert_true (r_anal_import_c_decls (anal, "typedef struct { int (*cb)(int); } S; struct S { char (*cb)(double); };", &error), "same-spelling ordinary and tag callbacks import independently");
+	mu_assert_null (error, "intrinsic callbacks need no generated name collision workaround");
+	mu_assert_null (sdb_const_get (anal->sdb_types, "S.cb", NULL), "no manufactured function binding escapes the aggregate");
+	mu_assert_null (sdb_const_get (anal->sdb_types, "func.S.cb.ret", NULL), "no shared global callback signature is manufactured");
+	Sdb *spaces[] = { anal->sdb_types, r_type_namespace (anal->sdb_types, R_TYPE_NAMESPACE_TAG, false) };
+	size_t i;
+	for (i = 0; i < R_ARRAY_SIZE (spaces); i++) {
+		char *type = r_type_get_member (spaces[i], "struct.S.cb", NULL, NULL);
+		mu_assert_notnull (type, "read the actual inline member type");
+		RTypeDecl *decl = r_type_decl_parse (type, R_TYPE_DECL_CONTEXT_ABSTRACT, anal->sdb_types, &error);
+		free (type);
+		mu_assert_null (error, "member syntax reparses through the shared owner");
+		mu_assert_notnull (decl, "member has a declaration tree, not a generated global reference");
+		mu_assert_eq (decl->type->kind, R_TYPE_DECL_POINTER, "member remains a pointer");
+		RTypeDeclNode *function = decl->type->child;
+		mu_assert_eq (function->kind, R_TYPE_DECL_FUNCTION, "member carries its own intrinsic function");
+		mu_assert_null (function->function.callconv, "no source convention is invented");
+		mu_assert_true (function->function.prototype, "prototype specificity stays on the callback");
+		mu_assert_streq (function->child->base.name, i? "char": "int", "return category stays with its aggregate identity");
+		RTypeDecl *param = r_list_first (function->function.parameters);
+		mu_assert_streq (param->type->base.name, i? "double": "int", "parameter category cannot be overwritten by the other callback");
+		r_type_decl_free (decl);
+	}
+	mu_assert_true (r_anal_import_c_decls (anal, "struct H2Offset {int (*cb)(int,int);char tail;};", &error), "import the demonstrated comma-bearing callback and following member");
+	mu_assert_null (error, "offset-reader regression input retains valid declarations");
+	char *path = r_type_get_struct_memb (anal->sdb_types, "struct H2Offset", 8);
+	mu_assert_streq (path, "struct H2Offset.tail", "offset lookup measures the complete intrinsic callback type before its tail");
+	free (path);
+	RList *paths = r_type_get_by_offset (anal->sdb_types, 8);
+	mu_assert_notnull (paths, "enumerate the existing by-offset consumer");
+	mu_assert_notnull (r_list_find (paths, "struct H2Offset.tail", (RListComparator)strcmp), "by-offset enumeration retains the same following member");
+	r_list_free (paths);
+	mu_assert_true (r_anal_import_c_decls (anal, "struct Returned {int (__attribute__((r2_cc(\"returned\"))) *(__attribute__((r2_cc(\"outer\"))) *cb)(void))(double);};", &error), "C2 does not strip nested semantic attributes as field metadata");
+	mu_assert_null (error, "nested convention-bearing callback imports");
+	char *type = r_type_get_member (spaces[1], "struct.Returned.cb", NULL, NULL);
+	RTypeDecl *decl = type? r_type_decl_parse (type, R_TYPE_DECL_CONTEXT_ABSTRACT, anal->sdb_types, &error): NULL;
+	mu_assert_notnull (decl, "read intrinsic callback returning a callback");
+	mu_assert_null (error, "stored returned-callback type reparses");
+	RTypeDeclNode *outer = decl->type->child;
+	mu_assert_eq (outer->kind, R_TYPE_DECL_FUNCTION, "member pointer targets the outer function");
+	mu_assert_streq (outer->function.callconv, "outer", "outer member callback retains its own convention");
+	mu_assert_eq (outer->child->kind, R_TYPE_DECL_POINTER, "callback result is a separate pointer");
+	mu_assert_eq (outer->child->child->kind, R_TYPE_DECL_FUNCTION, "returned callback stays intrinsic");
+	mu_assert_streq (outer->child->child->function.callconv, "returned", "returned callback convention does not migrate to its enclosing function");
+	free (type);
+	r_type_decl_free (decl);
+	mu_assert_true (r_anal_import_c_decls (anal, "typedef int (__attribute__((r2_cc(\"named\"))) *CB)(int);typedef CB Alias;struct Uses {CB cb;};", &error), "genuine named callback and alias bindings remain supported");
+	mu_assert_null (error, "named callback convention parses");
+	mu_assert_streq (sdb_const_get (anal->sdb_types, "func.CB.cc", NULL), "named", "genuine named callback companion keeps its convention");
+	mu_assert_streq (sdb_const_get (anal->sdb_types, "typedef.CB", NULL), "func.CB *", "named callback retains the actual existing companion binding");
+	mu_assert_streq (sdb_const_get (anal->sdb_types, "typedef.Alias", NULL), "CB", "real aliases remain aliases");
+	r_anal_free (anal);
+	mu_end;
+}
+
 static bool test_anal_cparse_attribute_capacity(void) {
 	RAnal *anal = r_anal_new ();
 	int form, count;
@@ -958,8 +1019,7 @@ static bool test_anal_cparse_supplied_calling_conventions(void) {
 		mu_assert_streq (sdb_const_get (anal->sdb_types, "func.explicit_stdcall.cc", NULL), "stdcall", "explicit stdcall is not replaced by cdecl");
 		const char *unsupported[] = {
 			"__attribute__((fastcall)) int unsupported(void);",
-			"__attribute__((regparm(2))) int unsupported(void);",
-			"void outer(int (__attribute__((stdcall)) *nested)(int));"
+			"__attribute__((regparm(2))) int unsupported(void);"
 		};
 		size_t j;
 		for (j = 0; j < R_ARRAY_SIZE (unsupported); j++) {
@@ -970,6 +1030,8 @@ static bool test_anal_cparse_supplied_calling_conventions(void) {
 		}
 		mu_assert_null (sdb_const_get (anal->sdb_types, "func.outer.cc", NULL), "nested convention refusal does not attach a fact to the outer function");
 		if (parsers[i]) {
+			mu_assert_false (r_anal_import_c_decls (anal, "void outer(int (__attribute__((stdcall)) *nested)(int));", NULL), "TCC refuses an unrepresentable inline callback convention");
+			mu_assert_false (r_anal_import_c_decls (anal, "void carrier(__attribute__((r2_cc(\"named\"))) int value);", NULL), "TCC must not silently ignore the analysis convention carrier");
 			mu_assert_true (r_anal_import_c_decls (anal,
 				"int trailing(void) __attribute__((stdcall));"
 				"int first(void) __attribute__((cdecl)), second(void);", NULL), "TCC reads final attributes at the actual declarator");
@@ -990,9 +1052,9 @@ static bool test_anal_cparse_supplied_calling_conventions(void) {
 			mu_assert_null (sdb_const_get (anal->sdb_types, "func.CB.cc", NULL), "a named callback without convention input stays unspecified");
 			mu_assert_streq (sdb_const_get (anal->sdb_types, "func.CB.ret", NULL), "const struct Alias *", "callback return retains qualified tag identity");
 			mu_assert_streq (sdb_const_get (anal->sdb_types, "func.CB.arg.0", NULL), "volatile Alias *,value", "callback parameter retains qualified ordinary identity");
-			mu_assert_streq (sdb_const_get (anal->sdb_types, "func.Callbacks.explicit_cb.cc", NULL), "stdcall", "the convention belongs to the connected member callback record");
+			mu_assert_null (sdb_const_get (anal->sdb_types, "func.Callbacks.explicit_cb.cc", NULL), "anonymous member conventions do not manufacture global records");
 			mu_assert_streq (tag_value (anal, "struct.Callbacks.explicit_cb.@.stdcall"), "note", "generic annotation replacement does not erase the independent supplied C convention");
-			mu_assert_streq (tag_value (anal, "struct.Callbacks.explicit_cb"), "func.Callbacks.explicit_cb *,0,0", "member references its convention-bearing callback");
+			mu_assert_streq (tag_value (anal, "struct.Callbacks.explicit_cb"), "int (__attribute__((r2_cc(\"stdcall\"))) *)(const struct Alias *value),0,0", "member carries its supplied convention inline");
 		}
 		r_anal_free (anal);
 	}
@@ -1049,7 +1111,7 @@ static bool test_anal_cparse_grouped_names(void) {
 	mu_assert_streq (sdb_const_get (anal->sdb_types, "typedef.Number", NULL), "int", "a grouped typedef name still names an object type");
 	mu_assert_streq (tag_value (anal, "struct.Grouped.object"), "int,0,0", "a grouped scalar member is not an anonymous function");
 	mu_assert_null (sdb_const_get (anal->sdb_types, "Grouped.object", NULL), "a grouped scalar member does not install a callback signature");
-	mu_assert_streq (tag_value (anal, "struct.Grouped.callback"), "func.Grouped.callback *,8,0", "the separate callback member retains its function-pointer shape");
+	mu_assert_streq (tag_value (anal, "struct.Grouped.callback"), "int (*)(int),8,0", "the separate callback member retains its intrinsic function-pointer shape");
 	r_anal_free (anal);
 	mu_end;
 }
@@ -2003,6 +2065,7 @@ static bool test_anal_x86_16_declaration_layout(void) {
 }
 
 int all_tests(void) {
+	mu_run_test (test_anal_cparse_intrinsic_member_callbacks);
 	mu_run_test (test_anal_type_namespace_independence);
 	mu_run_test (test_anal_type_record_deletion_ownership);
 	mu_run_test (test_anal_anonymous_alias_identity);

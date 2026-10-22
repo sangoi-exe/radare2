@@ -823,6 +823,9 @@ static void parse_attribute(TCCState *s1, AttributeDef *ad) {
 				ad->func_import = 1;
 				break;
 			default:
+				if (!strcmp (get_tok_str (s1, t, NULL), "r2_cc")) {
+					TCC_ERR ("Unsupported analysis calling convention carrier r2_cc");
+				}
 				if (s1->warn_unsupported) {
 					tcc_warning (s1, "'%s' attribute ignored", get_tok_str (s1, t, NULL));
 				}

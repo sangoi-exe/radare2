@@ -2138,7 +2138,41 @@ bool test_r_core_calling_conventions_reinitialize_after_purge(void) {
 	mu_end;
 }
 
+static bool test_r_anal_intrinsic_callback_convention_roundtrip(void) {
+	RCore *core = r_core_new ();
+	mu_assert_true (r_anal_import_c_decls (core->anal, "typedef int (__attribute__((r2_cc(\"named\"))) *CB)(int left, int right);", NULL), "import a genuinely named convention-bearing callback");
+	char *output = r_core_cmd_str (core, "ttc CB");
+	mu_assert_notnull (output, "export the actual named callback through Core");
+	mu_assert_true (r_str_startswith (output, "typedef "), "Core exports the named binding as a typedef");
+	RTypeDecl *decl = r_type_decl_parse (output + strlen ("typedef "), R_TYPE_DECL_CONTEXT_NAMED, core->anal->sdb_types, NULL);
+	mu_assert_notnull (decl, "Core named-record expansion retains parseable semantic syntax");
+	mu_assert_eq (decl->type->kind, R_TYPE_DECL_POINTER, "named callback export preserves its pointer layer");
+	mu_assert_eq (decl->type->child->kind, R_TYPE_DECL_FUNCTION, "named callback export expands its function companion");
+	mu_assert_streq (decl->type->child->function.callconv, "named", "named-record expansion does not erase stored convention knowledge");
+	r_type_decl_free (decl);
+	free (output);
+	r_config_set (core->config, "types.plugin", "tcc");
+	RAnalFunction *fcn = r_anal_create_function (core->anal, "structured_cc", 0x100, 0, NULL);
+	mu_assert_notnull (fcn, "create the structured signature target");
+	RAnalFunctionParam param = { .name = "cb", .type = "int (__attribute__((r2_cc(\"callback\"))) *)(int, int)" };
+	RList *params = r_list_new ();
+	r_list_append (params, &param);
+	RAnalFunctionSignature input = { .ret_type = "void", .callconv = "amd64", .prototype = R_TYPE_FUNC_PROTOTYPE_FIXED, .params = params };
+	mu_assert_true (r_anal_function_set_signature (core->anal, fcn, &input), "trusted callback facts bypass the selected text frontend's carrier refusal");
+	mu_assert_streq (sdb_const_get (core->anal->sdb_types, "func.structured_cc.cc", NULL), "amd64", "outer function convention comes from the constructed FUNCTION node");
+	char *type = r_type_func_args_type (core->anal->sdb_types, "structured_cc", 0);
+	decl = type? r_type_decl_parse (type, R_TYPE_DECL_CONTEXT_ABSTRACT, core->anal->sdb_types, NULL): NULL;
+	mu_assert_notnull (decl, "structured argument stores its full intrinsic declaration");
+	mu_assert_streq (decl->type->child->function.callconv, "callback", "structured argument retains its independent supplied convention");
+	r_type_decl_free (decl);
+	free (type);
+	r_list_free (params);
+	r_core_free (core);
+	mu_end;
+}
+
 int all_tests(void) {
+	mu_run_test (test_r_anal_intrinsic_callback_convention_roundtrip);
 	mu_run_test (test_r_core_calling_conventions_reinitialize_after_purge);
 	mu_run_test (test_r_core_project_preserves_instruction_positions_and_stack_pop);
 	mu_run_test (test_r_anal_function_getter_preserves_purge_ownership);

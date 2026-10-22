@@ -5488,15 +5488,11 @@ NAME=td keeps the pointer with the type in function pointer members
 FILE=-
 CMDS=<<EOF
 'td struct S { int (*cb)(int *n, char *s); };
+tk tags/struct.S.cb
 tk~^func.S
 EOF
 EXPECT=<<EOF
-func.S.cb=n,s
-func.S.cb.arg.0=int *,n
-func.S.cb.arg.1=char *,s
-func.S.cb.args=2
-func.S.cb.prototype=fixed
-func.S.cb.ret=int
+int (*)(int *n, char *s),0,0
 EOF
 RUN
 
@@ -5523,15 +5519,14 @@ FILE=-
 ARGS=-b 64
 CMDS=<<EOF
 'td struct A2 { float (*m)(void); void *x; };
+tk tags/struct.A2.m
 tk~^func.A2
-tss func.A2.m
-tss func.A2.m *
+tss float (void)
+tss float (*)(void)
 tss struct A2
 EOF
 EXPECT=<<EOF
-func.A2.m.args=0
-func.A2.m.prototype=fixed
-func.A2.m.ret=float
+float (*)(void),0,0
 0
 8
 16
@@ -5620,15 +5615,11 @@ NAME=td keeps a nested function pointer argument in one slot
 FILE=-
 CMDS=<<EOF
 'td struct N { int (*cb)(int (*inner)(int, int), char c); };
+tk tags/struct.N.cb
 tk~^func.N
 EOF
 EXPECT=<<EOF
-func.N.cb=inner,c
-func.N.cb.arg.0=int (*)(int, int),inner
-func.N.cb.arg.1=char,c
-func.N.cb.args=2
-func.N.cb.prototype=fixed
-func.N.cb.ret=int
+int (*)(int (*inner)(int, int), char c),0,0
 EOF
 RUN
 
@@ -6298,7 +6289,7 @@ int
 int,arg0
 int
 int,0,0
-func.Grouped.callback *,8,0
+int (*)(int),8,0
 EOF_EXPECT
 RUN
 

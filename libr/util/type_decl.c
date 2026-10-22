@@ -14,6 +14,7 @@ typedef struct {
 typedef struct {
 	RTypeDeclNode *head;
 	RTypeDeclNode **tail;
+	char *callconv;
 } DeclChain;
 
 static void decl_node_free(RTypeDeclNode *node) {
@@ -28,6 +29,7 @@ static void decl_node_free(RTypeDeclNode *node) {
 			break;
 		case R_TYPE_DECL_FUNCTION:
 			r_list_free (node->function.parameters);
+			free (node->function.callconv);
 			break;
 		case R_TYPE_DECL_POINTER:
 		case R_TYPE_DECL_LVALUE_REFERENCE:
@@ -76,6 +78,92 @@ static bool decl_word(DeclParser *parser, const char *word) {
 		return true;
 	}
 	return false;
+}
+
+static bool decl_callconv_merge(DeclParser *parser, char **target, char *value) {
+	if (!value) {
+		return true;
+	}
+	if (*target) {
+		bool equal = !strcmp (*target, value);
+		free (value);
+		return equal || decl_error (parser, "Conflicting calling convention attributes");
+	}
+	*target = value;
+	return true;
+}
+
+static bool decl_punctuation(DeclParser *parser, char ch) {
+	decl_skip_space (parser);
+	if (*parser->cursor != ch) {
+		return decl_error (parser, "Malformed function convention attribute");
+	}
+	parser->cursor++;
+	return true;
+}
+
+static char *decl_callconv_string(DeclParser *parser) {
+	if (!decl_punctuation (parser, '"')) {
+		return NULL;
+	}
+	RStrBuf value;
+	r_strbuf_init (&value);
+	while (*parser->cursor && *parser->cursor != '"') {
+		char ch = *parser->cursor++;
+		if (ch == '\\') {
+			if (!*parser->cursor) {
+				decl_error (parser, "Unterminated convention string escape");
+				break;
+			}
+			ch = *parser->cursor++;
+			if (ch != '\\' && ch != '"') {
+				decl_error (parser, "Unsupported convention string escape");
+				break;
+			}
+		}
+		if ((ut8)ch < 32 || !r_strbuf_append_n (&value, &ch, 1)) {
+			decl_error (parser, "Invalid convention string");
+			break;
+		}
+	}
+	if (!parser->error && (!decl_punctuation (parser, '"') || !r_strbuf_length (&value))) {
+		decl_error (parser, "Expected a nonempty convention string");
+	}
+	char *result = parser->error? NULL: r_strbuf_drain_nofree (&value);
+	r_strbuf_fini (&value);
+	return result;
+}
+
+static bool decl_attributes(DeclParser *parser, char **callconv) {
+	while (decl_word (parser, "__attribute__")) {
+		if (!decl_punctuation (parser, '(') || !decl_punctuation (parser, '(')) {
+			return false;
+		}
+		char *value = NULL;
+		if (decl_word (parser, "cdecl") || decl_word (parser, "__cdecl") || decl_word (parser, "__cdecl__")) {
+			value = strdup ("cdecl");
+		} else if (decl_word (parser, "stdcall") || decl_word (parser, "__stdcall") || decl_word (parser, "__stdcall__")) {
+			value = strdup ("stdcall");
+		} else if (decl_word (parser, "r2_cc")) {
+			if (!decl_punctuation (parser, '(')) {
+				return false;
+			}
+			value = decl_callconv_string (parser);
+			if (!value || !decl_punctuation (parser, ')')) {
+				free (value);
+				return false;
+			}
+		} else {
+			return decl_error (parser, "Unsupported function convention attribute");
+		}
+		if (!value) {
+			return decl_error (parser, "Cannot allocate function convention");
+		}
+		if (!decl_callconv_merge (parser, callconv, value) || !decl_punctuation (parser, ')') || !decl_punctuation (parser, ')')) {
+			return false;
+		}
+	}
+	return !parser->error;
 }
 
 static unsigned int decl_qualifier(DeclParser *parser) {
@@ -394,21 +482,30 @@ static RTypePointerKind decl_pointer_kind(DeclParser *parser) {
 	return R_TYPE_POINTER_DEFAULT;
 }
 
-static bool decl_declarator(DeclParser *parser, DeclChain *chain, char **name, RTypeDeclContext context, bool parameter) {
+static bool decl_declarator(DeclParser *parser, DeclChain *chain, char **name, RTypeDeclContext context, bool parameter, bool grouped_context, char *direct_callconv) {
 	if (parser->depth >= 64) {
+		free (direct_callconv);
 		return decl_error (parser, "Declaration nesting is too deep");
 	}
 	parser->depth++;
 	int bindings = r_list_length (parser->ordinary);
 	DeclChain pointers = { 0 };
 	pointers.tail = &pointers.head;
+	char *pointer_callconv = NULL;
 	while (true) {
+		char *attribute = NULL;
+		if (!decl_attributes (parser, &attribute)) {
+			free (attribute);
+			break;
+		}
 		RTypePointerKind kind = decl_pointer_kind (parser);
 		decl_skip_space (parser);
 		bool reference = *parser->cursor == '&' && kind == R_TYPE_POINTER_DEFAULT;
 		if (*parser->cursor != '*' && !reference) {
+			decl_callconv_merge (parser, &direct_callconv, attribute);
 			break;
 		}
+		decl_callconv_merge (parser, grouped_context? &pointer_callconv: &direct_callconv, attribute);
 		parser->cursor++;
 		RTypeDeclNode *node = R_NEW0 (RTypeDeclNode);
 		node->kind = R_TYPE_DECL_POINTER;
@@ -437,16 +534,25 @@ static bool decl_declarator(DeclParser *parser, DeclChain *chain, char **name, R
 		lookahead.cursor++;
 		decl_skip_space (&lookahead);
 		bool grouped = *lookahead.cursor == '*' || *lookahead.cursor == '&' || *lookahead.cursor == '(' || *lookahead.cursor == '['
+			|| decl_word (&lookahead, "__attribute__")
 			|| decl_pointer_kind (&lookahead) != R_TYPE_POINTER_DEFAULT
 			|| (context == R_TYPE_DECL_CONTEXT_NAMED && decl_ident_start (*lookahead.cursor) && !decl_name_keyword (&lookahead) && (!parameter || !decl_visible_type (parser, lookahead.cursor)));
 		if (grouped) {
 			parser->cursor++;
-			if (decl_declarator (parser, chain, name, context, parameter)) {
+			RTypeDeclNode **start = chain->tail;
+			if (decl_declarator (parser, chain, name, context, parameter, true, NULL)) {
 				if (*parser->cursor == ')') {
 					parser->cursor++;
 				} else {
 					decl_error (parser, "Expected ) after declarator");
 				}
+			}
+			RTypeDeclNode *function;
+			for (function = *start; function && function->kind != R_TYPE_DECL_FUNCTION; function = function->child) {
+			}
+			if (function) {
+				decl_callconv_merge (parser, &function->function.callconv, direct_callconv);
+				direct_callconv = NULL;
 			}
 		}
 	} else if (!parser->error && context == R_TYPE_DECL_CONTEXT_NAMED && decl_ident_start (*parser->cursor)) {
@@ -466,7 +572,12 @@ static bool decl_declarator(DeclParser *parser, DeclChain *chain, char **name, R
 		} else if (*parser->cursor == '(') {
 			node = R_NEW0 (RTypeDeclNode);
 			node->kind = R_TYPE_DECL_FUNCTION;
+			decl_callconv_merge (parser, &node->function.callconv, chain->callconv);
+			chain->callconv = NULL;
+			decl_callconv_merge (parser, &node->function.callconv, direct_callconv);
+			direct_callconv = NULL;
 			decl_parameters (parser, node);
+			decl_attributes (parser, &node->function.callconv);
 		} else {
 			break;
 		}
@@ -477,6 +588,8 @@ static bool decl_declarator(DeclParser *parser, DeclChain *chain, char **name, R
 	if (pointers.head) {
 		chain->tail = pointers.tail;
 	}
+	decl_callconv_merge (parser, &chain->callconv, direct_callconv);
+	decl_callconv_merge (parser, &chain->callconv, pointer_callconv);
 	while (r_list_length (parser->ordinary) > bindings) {
 		r_list_pop (parser->ordinary);
 	}
@@ -485,14 +598,24 @@ static bool decl_declarator(DeclParser *parser, DeclChain *chain, char **name, R
 }
 
 static RTypeDecl *decl_parse(DeclParser *parser, RTypeDeclContext context, bool require_name) {
+	char *callconv = NULL;
+	if (!decl_attributes (parser, &callconv)) {
+		free (callconv);
+		return NULL;
+	}
 	RTypeDeclNode *base = decl_base (parser);
 	if (!base) {
+		free (callconv);
 		return NULL;
 	}
 	RTypeDecl *decl = R_NEW0 (RTypeDecl);
 	DeclChain chain = { 0 };
 	chain.tail = &chain.head;
-	bool ok = decl_declarator (parser, &chain, &decl->name, context, !require_name);
+	bool ok = decl_declarator (parser, &chain, &decl->name, context, !require_name, false, callconv);
+	if (chain.callconv) {
+		free (chain.callconv);
+		ok = decl_error (parser, "Calling convention requires a function declarator");
+	}
 	if (ok && require_name && !decl->name) {
 		ok = decl_error (parser, "Expected a declaration name");
 	}
@@ -543,6 +666,29 @@ static bool decl_render_qualifiers(RStrBuf *out, unsigned int qualifiers) {
 		&& (!(qualifiers & R_TYPE_DECL_ATOMIC) || r_strbuf_append (out, "_Atomic "));
 }
 
+static bool decl_render_callconv(RStrBuf *out, const char *callconv) {
+	if (!callconv) {
+		return true;
+	}
+	if (!*callconv) {
+		return false;
+	}
+	RStrBuf attribute;
+	r_strbuf_init (&attribute);
+	bool ok = r_strbuf_append (&attribute, "__attribute__((r2_cc(\"");
+	const char *p;
+	for (p = callconv; *p && ok; p++) {
+		ok = (ut8)*p >= 32;
+		if (*p == '\\' || *p == '"') {
+			ok = ok && r_strbuf_append (&attribute, "\\");
+		}
+		ok = ok && r_strbuf_append_n (&attribute, p, 1);
+	}
+	ok = ok && r_strbuf_append (&attribute, "\"))) ") && r_strbuf_prepend (out, r_strbuf_get (&attribute));
+	r_strbuf_fini (&attribute);
+	return ok;
+}
+
 R_API R_OWNED char *r_type_decl_render(const RTypeDecl *decl, bool include_name) {
 	R_RETURN_VAL_IF_FAIL (decl && decl->type, NULL);
 	RStrBuf out;
@@ -585,8 +731,11 @@ R_API R_OWNED char *r_type_decl_render(const RTypeDecl *decl, bool include_name)
 			ok = ok && r_strbuf_prepend (&out, r_strbuf_get (&prefix));
 			r_strbuf_fini (&prefix);
 		} else {
+			if (node->kind == R_TYPE_DECL_FUNCTION) {
+				ok = decl_render_callconv (&out, node->function.callconv);
+			}
 			if (previous == R_TYPE_DECL_POINTER || previous == R_TYPE_DECL_LVALUE_REFERENCE || previous == R_TYPE_DECL_RVALUE_REFERENCE) {
-				ok = r_strbuf_prepend (&out, "(") && r_strbuf_append (&out, ")");
+				ok = ok && r_strbuf_prepend (&out, "(") && r_strbuf_append (&out, ")");
 			}
 			if (node->kind == R_TYPE_DECL_ARRAY) {
 				ok = ok && r_strbuf_appendf (&out, "[%s]", node->array.count);

@@ -29,6 +29,7 @@ static bool same_declaration(const RTypeDecl *a, const RTypeDecl *b) {
 			break;
 		case R_TYPE_DECL_FUNCTION:
 			if (an->function.variadic != bn->function.variadic || an->function.prototype != bn->function.prototype
+				|| !!an->function.callconv != !!bn->function.callconv || (an->function.callconv && strcmp (an->function.callconv, bn->function.callconv))
 				|| r_list_length (an->function.parameters) != r_list_length (bn->function.parameters)) {
 				return false;
 			}
@@ -46,6 +47,64 @@ static bool same_declaration(const RTypeDecl *a, const RTypeDecl *b) {
 		}
 	}
 	return !an && !bn;
+}
+
+static bool test_type_decl_calling_conventions(void) {
+	const char *inputs[] = {
+		"int plain(void)",
+		"__attribute__((cdecl)) int supplied(void)",
+		"int __attribute__((stdcall)) supplied(int value)",
+		"int (__attribute__((r2_cc(\"__cdecl16far\"))) far * const cb)(volatile int *value)",
+		"int (__attribute__((r2_cc(\"returned\"))) *__attribute__((r2_cc(\"outer\"))) f(void))(double)",
+		"int (__attribute__((r2_cc(\"inner\\\"\\\\model\"))) *cb)(int, int)"
+	};
+	size_t i;
+	for (i = 0; i < R_ARRAY_SIZE (inputs); i++) {
+		char *error = NULL;
+		RTypeDecl *decl = r_type_decl_parse (inputs[i], R_TYPE_DECL_CONTEXT_NAMED, NULL, &error);
+		mu_assert_null (error, "supported per-function conventions parse");
+		mu_assert_notnull (decl, "parse supplied or absent convention without an ABI guess");
+		char *rendered = r_type_decl_render (decl, true);
+		mu_assert_notnull (rendered, "render the supplied convention carrier");
+		RTypeDecl *again = r_type_decl_parse (rendered, R_TYPE_DECL_CONTEXT_NAMED, NULL, &error);
+		mu_assert_null (error, "canonical convention syntax reparses");
+		mu_assert_notnull (again, "reparse canonical convention syntax");
+		mu_assert_true (same_declaration (decl, again), "conventions remain on their original function layers");
+		const RTypeDeclNode *function = decl->type;
+		if (i == 0) {
+			mu_assert_null (function->function.callconv, "omission remains absent");
+		} else if (i < 3) {
+			mu_assert_streq (function->function.callconv, i == 1? "cdecl": "stdcall", "existing C attribute spellings retain their supplied fact");
+		} else if (i == 4) {
+			mu_assert_eq (function->kind, R_TYPE_DECL_FUNCTION, "outer declaration remains an actual function");
+			mu_assert_streq (function->function.callconv, "outer", "outer convention does not migrate to its return type");
+			mu_assert_eq (function->child->kind, R_TYPE_DECL_POINTER, "return pointer remains explicit");
+			mu_assert_eq (function->child->child->kind, R_TYPE_DECL_FUNCTION, "return pointer targets a separate function");
+			mu_assert_streq (function->child->child->function.callconv, "returned", "returned callback retains its own convention");
+		} else {
+			mu_assert_eq (function->kind, R_TYPE_DECL_POINTER, "callback has a pointer, not a convention-inferred representation");
+			mu_assert_streq (function->child->function.callconv, i == 3? "__cdecl16far": "inner\"\\model", "callback convention is an independent function fact");
+		}
+		free (rendered);
+		r_type_decl_free (again);
+		r_type_decl_free (decl);
+	}
+	const char *invalid[] = {
+		"int __attribute__((r2_cc(\"x\\",
+		"int __attribute__((cdecl)) __attribute__((stdcall)) f(void)",
+		"int (__attribute__((r2_cc(\"\"))) *cb)(void)",
+		"int __attribute__((stdcall(1))) f(void)",
+		"int __attribute__((r2_cc(\"x\"))) value",
+		"int (__attribute__((fastcall)) *cb)(void)"
+	};
+	for (i = 0; i < R_ARRAY_SIZE (invalid); i++) {
+		char *error = NULL;
+		RTypeDecl *decl = r_type_decl_parse (invalid[i], R_TYPE_DECL_CONTEXT_NAMED, NULL, &error);
+		mu_assert_null (decl, "unsupported or conflicting semantic input refuses instead of disappearing");
+		mu_assert_notnull (error, "refusal has a diagnostic");
+		free (error);
+	}
+	mu_end;
 }
 
 static bool test_type_decl_mixed_pointers(void) {
@@ -564,6 +623,7 @@ static bool test_type_decl_reference_syntax(void) {
 }
 
 int all_tests(void) {
+	mu_run_test (test_type_decl_calling_conventions);
 	mu_run_test (test_type_decl_mixed_pointers);
 	mu_run_test (test_type_decl_array_precedence);
 	mu_run_test (test_type_decl_functions);

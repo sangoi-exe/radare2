@@ -1251,7 +1251,7 @@ typedef enum {
 	R_ANAL_SIGNATURE_APPLY_FUNCTION
 } RAnalFunctionSignatureApply;
 // Normalize an already constructed function declaration with explicit source facts into native records.
-R_API R_OWNED char *r_anal_function_signature_to_kv(Sdb *types, const char *name, const RTypeDeclNode *function, RTypeFunctionPrototype prototype, const char *callconv, bool noreturn);
+R_API R_OWNED char *r_anal_function_signature_to_kv(Sdb *types, const char *name, const RTypeDeclNode *function, RTypeFunctionPrototype prototype, bool noreturn);
 // Synchronously admit one normalized declaration through the selected parser before Core renames it.
 R_API R_OWNED RAnalFunctionSignaturePrepared *r_anal_function_signature_prepare(RAnal *anal, const char *signature, char **error);
 // Normalize trusted facts and bind a shared update; fcn may describe a prospective function.

@@ -6,8 +6,6 @@
 typedef struct {
 	RStrs key;
 	RStrs value;
-	RStrs c_value;
-	bool is_c;
 } KVCAttr;
 
 R_VEC_TYPE (RVecKVCAttr, KVCAttr);
@@ -47,8 +45,16 @@ static char *collapse_whitespace(RStrs s) {
 	}
 	char *d = out;
 	bool in_space = false;
+	char quote = 0;
 	for (const char *src = out; *src; src++) {
-		if (isspace ((unsigned char)*src)) {
+		if (quote) {
+			*d++ = *src;
+			if (*src == '\\' && src[1]) {
+				*d++ = *++src;
+			} else if (*src == quote) {
+				quote = 0;
+			}
+		} else if (isspace ((unsigned char)*src)) {
 			if (!in_space) {
 				*d++ = ' ';
 				in_space = true;
@@ -56,6 +62,9 @@ static char *collapse_whitespace(RStrs s) {
 		} else {
 			*d++ = *src;
 			in_space = false;
+			if (*src == '"' || *src == '\'') {
+				quote = *src;
+			}
 		}
 	}
 	*d = 0;
@@ -112,8 +121,21 @@ static inline void kvc_skipn(KVCParser *kvc, size_t amount) {
 
 static const char *scan_to_semicolon(KVCParser *kvc) {
 	int depth = 0;
+	char quote = 0;
 	while (!r_strs_empty (kvc->s)) {
 		char ch = kvc_peek (kvc, 0);
+		if (quote) {
+			kvc_getch (kvc);
+			if (ch == '\\') {
+				kvc_getch (kvc);
+			} else if (ch == quote) {
+				quote = 0;
+			}
+			continue;
+		}
+		if (ch == '"' || ch == '\'') {
+			quote = ch;
+		}
 		if (!depth && (ch == ';' || ch == '}')) {
 			return ch == ';'? kvc->s.a: NULL;
 		}
@@ -212,7 +234,7 @@ static const char *kvc_attr(KVCParser *kvc, const char *k) {
 	return NULL;
 }
 
-static bool kvc_attr_add(KVCParser *kvc, RStrs key, RStrs value, bool is_c) {
+static bool kvc_attr_add(KVCParser *kvc, RStrs key, RStrs value) {
 	KVCAttr *attr = RVecKVCAttr_emplace_back (&kvc->attrs);
 	if (!attr) {
 		kvc_error (kvc, "Cannot allocate attribute");
@@ -220,8 +242,6 @@ static bool kvc_attr_add(KVCParser *kvc, RStrs key, RStrs value, bool is_c) {
 	}
 	attr->key = key;
 	attr->value = value;
-	attr->c_value = value;
-	attr->is_c = is_c;
 	return true;
 }
 
@@ -281,7 +301,7 @@ static bool parse_attributes(KVCParser *kvc) {
 		}
 		if (existing) {
 			existing->value = attr_value;
-		} else if (!kvc_attr_add (kvc, attr_name, attr_value, false)) {
+		} else if (!kvc_attr_add (kvc, attr_name, attr_value)) {
 			return false;
 		}
 	}
@@ -369,7 +389,7 @@ static bool parse_c_attributes(KVCParser *kvc) {
 	}
 	skip_spaces (kvc);
 	// Store attribute
-	if (!kvc_attr_add (kvc, attr_name, attr_value, true)) {
+	if (!kvc_attr_add (kvc, attr_name, attr_value)) {
 		return false;
 	}
 	kvc_getch (kvc);
@@ -383,9 +403,72 @@ static void kvc_register_typedef(KVCParser *kvc, const char *name, const char *t
 
 static void kvc_sync_types(KVCParser *kvc);
 
-static RTypeDecl *kvc_declaration(KVCParser *kvc, RStrs span) {
+static bool kvc_semantic_attribute(const char *text) {
+	text += strlen ("__attribute__");
+	while (*text && (isspace ((ut8)*text) || *text == '(')) {
+		text++;
+	}
+	const char *start = text;
+	while (isalnum ((ut8)*text) || *text == '_') {
+		text++;
+	}
+	RStrs name = r_strs_new (start, text);
+	trim_underscores (&name);
+	return r_strs_equals (name, R_STRS_LIT ("r2_cc")) || r_strs_equals (name, R_STRS_LIT ("cdecl"))
+		|| r_strs_equals (name, R_STRS_LIT ("stdcall")) || r_strs_equals (name, R_STRS_LIT ("fastcall"))
+		|| r_strs_equals (name, R_STRS_LIT ("regparm"));
+}
+
+static char *kvc_declaration_text(KVCParser *kvc, RStrs span, bool metadata) {
+	RStrBuf text;
+	r_strbuf_init (&text);
+	const char *start = span.a;
+	const char *cursor = start;
+	int depth = 0;
+	char quote = 0;
+	while (cursor < span.b) {
+		char ch = *cursor;
+		if (quote) {
+			cursor++;
+			if (ch == '\\' && cursor < span.b) {
+				cursor++;
+			} else if (ch == quote) {
+				quote = 0;
+			}
+			continue;
+		}
+		if (metadata && !depth && (size_t)(span.b - cursor) >= strlen ("__attribute__")
+				&& !strncmp (cursor, "__attribute__", strlen ("__attribute__")) && !kvc_semantic_attribute (cursor)) {
+			RStrs saved = kvc->s;
+			kvc->s = r_strs_new (cursor, span.b);
+			bool parsed = parse_c_attributes (kvc);
+			const char *end = kvc->s.a;
+			kvc->s = saved;
+			if (!parsed || !r_strbuf_append_n (&text, start, cursor - start) || !r_strbuf_append (&text, " ")) {
+				kvc_error (kvc, "Cannot parse declaration attribute");
+				break;
+			}
+			start = cursor = end;
+			continue;
+		}
+		if (ch == '"' || ch == '\'') {
+			quote = ch;
+		} else if (ch == '(' || ch == '[') {
+			depth++;
+		} else if (ch == ')' || ch == ']') {
+			depth--;
+		}
+		cursor++;
+	}
+	bool ok = !kvc->error && r_strbuf_append_n (&text, start, span.b - start);
+	char *filtered = ok? collapse_whitespace (r_strs_from (r_strbuf_get (&text))): NULL;
+	r_strbuf_fini (&text);
+	return filtered;
+}
+
+static RTypeDecl *kvc_declaration(KVCParser *kvc, RStrs span, bool metadata) {
 	kvc_sync_types (kvc);
-	char *text = collapse_whitespace (span);
+	char *text = kvc_declaration_text (kvc, span, metadata);
 	char *error = NULL;
 	RTypeDecl *decl = text? r_type_decl_parse (text, R_TYPE_DECL_CONTEXT_NAMED, kvc->types, &error): NULL;
 	if (!decl) {
@@ -397,31 +480,8 @@ static RTypeDecl *kvc_declaration(KVCParser *kvc, RStrs span) {
 }
 
 static void emit_func_signature(KVCParser *kvc, const char *name, const RTypeDeclNode *function, bool is_static) {
-	const char *callconv = NULL;
-	KVCAttr *attr;
-	R_VEC_FOREACH (&kvc->attrs, attr) {
-		if (!attr->is_c) {
-			continue;
-		}
-		const char *supplied = NULL;
-		if (r_strs_equals (attr->key, R_STRS_LIT ("cdecl"))) {
-			supplied = "cdecl";
-		} else if (r_strs_equals (attr->key, R_STRS_LIT ("stdcall"))) {
-			supplied = "stdcall";
-		} else if (r_strs_equals (attr->key, R_STRS_LIT ("fastcall")) || r_strs_equals (attr->key, R_STRS_LIT ("regparm"))) {
-			kvc_error (kvc, "Unsupported calling convention attribute");
-			return;
-		}
-		if (supplied) {
-			if (!r_strs_equals (attr->c_value, R_STRS_LIT ("true")) || (callconv && strcmp (callconv, supplied))) {
-				kvc_error (kvc, "Invalid or conflicting calling convention attributes");
-				return;
-			}
-			callconv = supplied;
-		}
-	}
 	char *records = r_anal_function_signature_to_kv (kvc->types, name, function,
-		function->function.prototype? R_TYPE_FUNC_PROTOTYPE_FIXED: R_TYPE_FUNC_PROTOTYPE_UNSPECIFIED, callconv, false);
+		function->function.prototype? R_TYPE_FUNC_PROTOTYPE_FIXED: R_TYPE_FUNC_PROTOTYPE_UNSPECIFIED, false);
 	if (!records || !r_strbuf_append (kvc->sb, records)) {
 		kvc_error (kvc, "Cannot serialize function declaration");
 	}
@@ -489,7 +549,7 @@ static bool emit_typedef_declaration(KVCParser *kvc, const char *prefix) {
 		return false;
 	}
 	char *text = r_str_newf ("%s%.*s", prefix? prefix: "", (int)(end - start), start);
-	RTypeDecl *decl = text? kvc_declaration (kvc, r_strs_from (text)): NULL;
+	RTypeDecl *decl = text? kvc_declaration (kvc, r_strs_from (text), false): NULL;
 	free (text);
 	if (!decl) {
 		return false;
@@ -789,16 +849,7 @@ static bool parse_struct_body(KVCParser *kvc, const char *type, const char *sn, 
 			kvc_error (kvc, "Missing semicolon in struct member");
 			break;
 		}
-		const char *attr = r_strs_find_strs (r_strs_new (start, end), R_STRS_LIT ("__attribute__"));
-		const char *decl_end = attr? attr: end;
-		if (attr) {
-			kvc->s.a = attr;
-			if (!parse_c_attributes (kvc)) {
-				break;
-			}
-			kvc->s.a = end;
-		}
-		RTypeDecl *decl = kvc_declaration (kvc, r_strs_new (start, decl_end));
+		RTypeDecl *decl = kvc_declaration (kvc, r_strs_new (start, end), true);
 		if (!decl) {
 			break;
 		}
@@ -835,10 +886,8 @@ static bool parse_struct_body(KVCParser *kvc, const char *type, const char *sn, 
 			count = dimension;
 			decl->type = outer->child;
 		}
-		char *scope = r_str_newf ("%s.%s", sn, decl->name);
-		char *member_type = scope? kvc_object_type (kvc, decl, scope): NULL;
+		char *member_type = r_type_decl_render (decl, false);
 		if (!member_type) {
-			free (scope);
 			decl->type = outer;
 			r_type_decl_free (decl);
 			kvc_error (kvc, "Cannot serialize aggregate member");
@@ -852,7 +901,6 @@ static bool parse_struct_body(KVCParser *kvc, const char *type, const char *sn, 
 		char *member_key = r_str_newf ("%s.%s", sn, decl->name);
 		apply_attributes (kvc, type, member_key, space);
 		free (member_key);
-		free (scope);
 		free (member_type);
 		decl->type = outer;
 		r_type_decl_free (decl);
@@ -1000,9 +1048,6 @@ static bool parse_enum(KVCParser *kvc, const char *name) {
 static bool parse_function(KVCParser *kvc) {
 	parse_attributes (kvc);
 	skip_spaces (kvc);
-	while (parse_c_attributes (kvc)) {
-		skip_spaces (kvc);
-	}
 	if (kvc->error) {
 		return false;
 	}
@@ -1017,7 +1062,7 @@ static bool parse_function(KVCParser *kvc) {
 	if (!end) {
 		end = kvc->s.a;
 	}
-	RTypeDecl *decl = kvc_declaration (kvc, r_strs_new (start, end));
+	RTypeDecl *decl = kvc_declaration (kvc, r_strs_new (start, end), true);
 	if (!decl) {
 		return false;
 	}
