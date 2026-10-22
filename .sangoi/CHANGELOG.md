@@ -2,7 +2,9 @@
 
 ## 2026-10-22
 
-- Completed the native semantic-fidelity candidate's broad local Code Gate with DO_NOT_PROCEED and complete required semantic coverage across145 changed paths plus direct followers. The review establishes seven substantive defects, including actual ordinary/tag callback corruption and Win16 near/far volatile-read elimination, plus finite test/documentation followers. Passing operational-afc, host176, bridge28+74, native75/preparation10 and bounded MCP/game evidence retain their exact coverage, not whole-task approval. The Intent Contract is on hold for the current user's correction decision; narrow actual Claude quota dispensations do not count as approval. No remediation, global installation or push followed the verdict.
+- Implemented the selected lifetime, exact-lookup, project-tag, formatter-convention and native volatile-effect corrections, plus SDK/data/test followers. Current proof includes host type51/function52, project73 and exact fresh-Core restoration, native78/preparation10, bridge105/105/XML/reuse, both formatter counterexamples, and composed264 passing namespace/follower cases with one expected-broken and three network skips. The three new volatile integration cases fail on the prior plugin and pass on the matching updated engine. Callback owner representation remains undecided, and the task is on hold for that selection; no new formal Gate has approved this remediation. No global installation or push occurred.
+
+- Completed the preceding native semantic-fidelity candidate's broad local Code Gate with DO_NOT_PROCEED and complete required semantic coverage across145 changed paths plus direct followers. The review establishes seven substantive defects, including actual ordinary/tag callback corruption and Win16 near/far volatile-read elimination, plus finite test/documentation followers. Its component evidence retains the exact observed coverage, not whole-task approval. The user subsequently selected the remediation recorded above; narrow actual Claude quota dispensations do not count as approval.
 
 ## 2026-10-21
 
