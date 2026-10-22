@@ -1250,11 +1250,17 @@ typedef enum {
 	R_ANAL_SIGNATURE_APPLY_SHARED,
 	R_ANAL_SIGNATURE_APPLY_FUNCTION
 } RAnalFunctionSignatureApply;
+// Normalize an already constructed function declaration with explicit source facts into native records.
+R_API R_OWNED char *r_anal_function_signature_to_kv(Sdb *types, const char *name, const RTypeDeclNode *function, RTypeFunctionPrototype prototype, const char *callconv, bool noreturn);
 // Synchronously admit one normalized declaration through the selected parser before Core renames it.
 R_API R_OWNED RAnalFunctionSignaturePrepared *r_anal_function_signature_prepare(RAnal *anal, const char *signature, char **error);
+// Normalize trusted facts and bind a shared update; fcn may describe a prospective function.
+R_API R_OWNED RAnalFunctionSignaturePrepared *r_anal_function_signature_prepare_structured(RAnal *anal, RAnalFunction *fcn, const RAnalFunctionSignature *signature, char **error);
 R_API const char *r_anal_function_signature_prepared_name(const RAnalFunctionSignaturePrepared *prepared);
+// Bind to the exact existing or prospective function identity before changing names, flags, bodies or records.
+R_API bool r_anal_function_signature_prepare_target(RAnal *anal, RAnalFunctionSignaturePrepared *prepared, RAnalFunction *fcn, ut64 addr, const char *name, RAnalFunctionSignatureApply scope, char **error);
 // Shared application updates the effective type; function application leaves shared types intact and links only when needed.
-R_API bool r_anal_function_signature_apply(RAnal *anal, RAnalFunction *fcn, const RAnalFunctionSignaturePrepared *prepared, RAnalFunctionSignatureApply scope);
+R_API bool r_anal_function_signature_apply(RAnal *anal, RAnalFunction *fcn, const RAnalFunctionSignaturePrepared *prepared);
 R_API void r_anal_function_signature_prepared_free(RAnalFunctionSignaturePrepared *prepared);
 R_API RAnalFunctionSignature *r_anal_function_get_signature(RAnalFunction *function);
 R_API void r_anal_function_signature_free(RAnalFunctionSignature *signature);

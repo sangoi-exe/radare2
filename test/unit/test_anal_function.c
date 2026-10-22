@@ -481,6 +481,7 @@ bool test_r_anal_function_signature_preserves_declarator_shapes(void) {
 	for (i = 0; i < R_ARRAY_SIZE (cases); i++) {
 		RAnal *anal = r_anal_new ();
 		mu_assert_notnull (anal, "create analysis for structured signature");
+		anal->opt.tparser = strdup ("tcc");
 		mu_assert_true (r_anal_cc_set (anal, "void shapecc (stack)"), "seed independent calling convention");
 		RAnalFunction *fcn = r_anal_create_function (anal, "shaped", 0x3000, 0, NULL);
 		mu_assert_notnull (fcn, "create function for structured signature");
@@ -632,7 +633,8 @@ bool test_r_anal_function_signature_prepared_tag_namespace(void) {
 	mu_assert_notnull (prepared, "the selected TCC frontend prepares the actual tagged reference");
 	mu_assert_null (error, "the prepared tag declaration is admitted");
 	mu_assert_eq (r_type_kind (anal->sdb_types, "struct Fresh"), R_TYPE_INVALID, "preparation does not mutate the analysis tag namespace");
-	mu_assert_true (r_anal_function_signature_apply (anal, fcn, prepared, R_ANAL_SIGNATURE_APPLY_SHARED), "application retains the prepared child-namespace records");
+	mu_assert_true (r_anal_function_signature_prepare_target (anal, prepared, fcn, fcn->addr, fcn->name, R_ANAL_SIGNATURE_APPLY_SHARED, &error), "settle the final target and native records before application");
+	mu_assert_true (r_anal_function_signature_apply (anal, fcn, prepared), "application retains the prepared child-namespace records");
 	mu_assert_eq (r_type_kind (anal->sdb_types, "struct Fresh"), R_TYPE_STRUCT, "the applied signature carries its introduced tag identity");
 	mu_assert_eq (r_type_kind (anal->sdb_types, "Fresh"), R_TYPE_INVALID, "application does not fabricate an ordinary tag alias");
 	char *param = r_type_func_args_type (anal->sdb_types, "tagged", 0);
@@ -656,7 +658,8 @@ bool test_r_anal_function_signature_visible_typedef(void) {
 		RAnalFunctionSignaturePrepared *prepared = r_anal_function_signature_prepare (anal, inputs[i], &error);
 		mu_assert_notnull (prepared, "prepare the signature using visible analysis bindings before normalization");
 		mu_assert_null (error, "contextual signature admission has no diagnostic");
-		mu_assert_true (r_anal_function_signature_apply (anal, fcn, prepared, R_ANAL_SIGNATURE_APPLY_SHARED), "apply the admitted callback signature");
+		mu_assert_true (r_anal_function_signature_prepare_target (anal, prepared, fcn, fcn->addr, fcn->name, R_ANAL_SIGNATURE_APPLY_SHARED, &error), "settle the contextual signature target before application");
+		mu_assert_true (r_anal_function_signature_apply (anal, fcn, prepared), "apply the admitted callback signature");
 		r_anal_function_signature_prepared_free (prepared);
 		RAnalFunctionSignature *signature = r_anal_function_get_signature (fcn);
 		mu_assert_notnull (signature, "read back the real applied signature");
@@ -669,6 +672,47 @@ bool test_r_anal_function_signature_visible_typedef(void) {
 		r_anal_function_signature_free (signature);
 	}
 	r_anal_free (anal);
+	mu_end;
+}
+
+bool test_r_anal_function_signature_tagged_returns(void) {
+	RCore *core = r_core_new ();
+	r_config_set (core->config, "asm.arch", "x86");
+	r_config_set_i (core->config, "asm.bits", 64);
+	mu_assert_true (r_anal_import_c_decls (core->anal,
+		"struct Big {uint64_t words[3];}; union Choice {uint64_t word;};"
+		"enum State {READY=1}; struct Forward;", NULL), "seed genuine tag definitions and a forward declaration");
+	const char *returns[] = { "struct Big", "union Choice", "enum State", "struct Forward *" };
+	const char *names[] = { "large", "choice", "state", "forward_pointer" };
+	size_t i;
+	for (i = 0; i < R_ARRAY_SIZE (returns); i++) {
+		char *original = r_str_newf ("original%zu", i);
+		RAnalFunction *fcn = r_anal_create_function (core->anal, original, i * 0x10, R_ANAL_FCN_TYPE_FCN, NULL);
+		free (original);
+		RAnalBlock *block = r_anal_create_block (core->anal, fcn->addr, 1);
+		r_anal_function_add_block (fcn, block);
+		r_unref (block);
+		char *input = r_str_newf ("%s %s(void)", returns[i], names[i]);
+		char *error = NULL;
+		mu_assert_true (r_core_anal_function_set_signature (core, fcn->addr, input, &error), "the selected c2 frontend admits a function with an explicitly tagged return");
+		mu_assert_null (error, "tagged return classification does not enter aggregate-body parsing");
+		RAnalFunctionSignature *signature = r_anal_function_get_signature (fcn);
+		mu_assert_notnull (signature, "read the actual tagged-return contract");
+		mu_assert_streq (signature->ret_type, returns[i], "the function retains the explicit tag namespace and return shape");
+		mu_assert_eq (signature->prototype, R_TYPE_FUNC_PROTOTYPE_FIXED, "tagged return admission retains the fixed-empty formal list");
+		mu_assert_true (r_list_empty (signature->params), "no hidden-return parameter is fabricated by host admission");
+		r_anal_function_signature_free (signature);
+		free (input);
+	}
+	mu_assert_eq (r_anal_type_bitsize (core->anal, "struct Big"), 192, "the direct aggregate-return type retains its genuine three-word layout");
+	mu_assert_eq (r_type_kind (core->anal->sdb_types, "struct Forward"), R_TYPE_STRUCT, "forward-tag identity survives function classification");
+	mu_assert_eq (r_type_kind (core->anal->sdb_types, "Big"), R_TYPE_INVALID, "tagged return admission does not fabricate a typedef alias");
+	RAnalFunction *large = r_anal_get_function_at (core->anal, 0);
+	RAnalFunctionSignature input = { .ret_type = "struct Big", .prototype = R_TYPE_FUNC_PROTOTYPE_FIXED };
+	r_config_set (core->config, "types.plugin", "tcc");
+	mu_assert_true (r_anal_function_set_signature (core->anal, large, &input), "the same actual aggregate return is admitted through trusted structured construction under selected TCC");
+	mu_assert_streq (r_type_func_ret (core->anal->sdb_types, "large"), "struct Big", "structured normalization also retains genuine tag identity");
+	r_core_free (core);
 	mu_end;
 }
 
@@ -996,6 +1040,150 @@ bool test_r_core_afs_preserves_compound_return_name_and_flags(void) {
 	mu_end;
 }
 
+bool test_r_anal_function_structured_signature_preserves_raw_callconv(void) {
+	RAnal *anal = r_anal_new ();
+	r_anal_cc_reset (anal);
+	mu_assert_true (r_anal_cc_set (anal, "void configured (stack)"), "seed the effective default");
+	r_anal_set_cc_default (anal, "configured");
+	mu_assert_true (r_anal_import_c_decls (anal, "int scanf(const char *format);", NULL), "seed the canonical shared record");
+	RAnalFunction *fcn = r_anal_create_function (anal, "sym.imp.__isoc99_scanf", 0x1000, R_ANAL_FCN_TYPE_FCN, NULL);
+	anal->opt.tparser = strdup ("tcc");
+	RAnalFunctionSignature *signature = r_anal_function_get_signature (fcn);
+	mu_assert_notnull (signature, "read the effective signature");
+	mu_assert_nullable_streq (signature->type_name, "scanf", "raw facts belong to the canonical selected record");
+	mu_assert_streq (signature->callconv, "configured", "effective configuration remains available");
+	free (signature->callconv);
+	signature->callconv = NULL;
+	mu_assert_true (r_anal_function_set_signature (anal, fcn, signature), "structured writeback accepts an omitted source convention under TCC");
+	mu_assert_null (sdb_const_get (anal->sdb_types, "func.scanf.cc", NULL), "omission does not fabricate an explicit effective-default fact");
+	mu_assert_streq (r_anal_function_cc (fcn), "configured", "the effective default remains independent of source omission");
+	sdb_set (anal->sdb_types, "func.scanf.cc", "native_only", 0);
+	mu_assert_true (r_anal_function_set_signature (anal, fcn, signature), "omitted update retains an existing raw native-only convention");
+	mu_assert_streq (sdb_const_get (anal->sdb_types, "func.scanf.cc", NULL), "native_only", "the raw source fact is not replaced by a host-supported fallback");
+	mu_assert_streq (r_anal_function_cc (fcn), "configured", "existing effective-callconv policy remains unchanged");
+	signature->callconv = strdup ("replacement_native");
+	mu_assert_true (r_anal_function_set_signature (anal, fcn, signature), "explicit structured input updates the raw fact");
+	mu_assert_streq (sdb_const_get (anal->sdb_types, "func.scanf.cc", NULL), "replacement_native", "explicit input is retained without imposing host support");
+	signature->noreturn = true;
+	mu_assert_true (r_anal_function_set_signature (anal, fcn, signature), "structured noreturn is supplied independently of the declaration node");
+	mu_assert_true (fcn->is_noreturn, "the supplied noreturn fact reaches the function");
+	signature->noreturn = false;
+	mu_assert_true (r_anal_function_set_signature (anal, fcn, signature), "a structured update can clear noreturn");
+	mu_assert_false (fcn->is_noreturn, "false is not replaced by stale effective noreturn");
+	r_anal_function_signature_free (signature);
+	r_anal_free (anal);
+	mu_end;
+}
+
+bool test_r_core_signature_long_isolation_admission(void) {
+	int occupied;
+	for (occupied = 0; occupied < 2; occupied++) {
+		RCore *core = r_core_new ();
+		RAnalFunction *fcn = r_anal_create_function (core->anal, "keep", 0, R_ANAL_FCN_TYPE_FCN, NULL);
+		RAnalBlock *block = r_anal_create_block (core->anal, 0, 1);
+		r_anal_function_add_block (fcn, block);
+		r_unref (block);
+		mu_assert_true (r_anal_import_c_decls (core->anal, "int keep(int value);", NULL), "seed the existing contract");
+		RFlagItem *flag = r_flag_set_inspace (core->flags, R_FLAGS_FS_FUNCTIONS, "keep", 0, 1);
+		char name[240];
+		memset (name, 'a', sizeof (name) - 1);
+		name[sizeof (name) - 1] = 0;
+		if (occupied) {
+			char *header = r_str_newf ("long %s(void);", name);
+			mu_assert_true (r_anal_import_c_decls (core->anal, header, NULL), "the unsuffixed 239-character record is representable");
+			free (header);
+		}
+		char *before = sdb_querys (core->anal->sdb_types, NULL, 0, "*");
+		ut64 function_epoch = r_anal_function_dirty_epoch (fcn);
+		ut64 types_epoch = r_anal_types_dirty_epoch (core->anal);
+		char *input = r_str_newf ("char %s(void)", name);
+		char *error = NULL;
+		bool applied = r_core_anal_function_set_signature (core, 0, input, &error);
+		if (occupied) {
+			mu_assert_false (applied, "an unrepresentable final isolation key refuses before mutation");
+			mu_assert_notnull (error, "final-key refusal is reported");
+			mu_assert_streq (fcn->name, "keep", "isolation failure does not rename the function");
+			mu_assert_ptreq (r_flag_get (core->flags, "keep"), flag, "isolation failure preserves the function flag");
+			mu_assert_null (r_flag_get (core->flags, name), "isolation failure does not publish a destination flag");
+			mu_assert_eq (r_anal_function_dirty_epoch (fcn), function_epoch, "isolation failure preserves the function epoch");
+			mu_assert_eq (r_anal_types_dirty_epoch (core->anal), types_epoch, "isolation failure preserves the type epoch");
+			char *after = sdb_querys (core->anal->sdb_types, NULL, 0, "*");
+			mu_assert_streq (after, before, "isolation failure preserves every existing native record and link");
+			free (after);
+		} else {
+			mu_assert_true (applied, "a complete representable final key remains supported");
+			mu_assert_null (error, "representable long key has no refusal");
+			mu_assert_streq (fcn->name, name, "the long function name is not truncated or remapped");
+			RAnalFunctionSignature *actual = r_anal_function_get_signature (fcn);
+			mu_assert_notnull (actual, "the complete applied long-name contract is readable");
+			mu_assert_nullable_streq (actual->type_name, name, "the exact long key owns the admitted contract");
+			mu_assert_streq (actual->ret_type, "char", "long-name admission retains the return record");
+			mu_assert_eq (actual->prototype, R_TYPE_FUNC_PROTOTYPE_FIXED, "long-name admission retains parameter-list knowledge");
+			mu_assert_true (r_list_empty (actual->params), "the long-name fixed-empty list remains complete");
+			r_anal_function_signature_free (actual);
+		}
+		free (error);
+		free (input);
+		free (before);
+		r_core_free (core);
+	}
+	mu_end;
+}
+
+bool test_r_core_signature_preserves_independent_flags(void) {
+	int normalized;
+	for (normalized = 0; normalized < 2; normalized++) {
+		RCore *core = r_core_new ();
+		r_config_set (core->config, "asm.arch", "x86");
+		r_config_set_i (core->config, "asm.bits", 64);
+		RAnalFunction *fcn = r_anal_create_function (core->anal, "keep", 0, R_ANAL_FCN_TYPE_FCN, NULL);
+		RAnalBlock *block = r_anal_create_block (core->anal, 0, 1);
+		r_anal_function_add_block (fcn, block);
+		r_unref (block);
+		mu_assert_true (r_anal_import_c_decls (core->anal, "int keep(int value);", NULL), "seed the original signature");
+		RFlagItem *flag = r_flag_set_inspace (core->flags, R_FLAGS_FS_FUNCTIONS, "keep", 0, 1);
+		const char *destination = normalized? "fcn.00000000": "edited";
+		if (normalized) {
+			mu_assert_notnull (r_reg_get (core->anal->reg, "rax", -1), "the register-name witness exercises Core's established normalization");
+		}
+		RFlagItem *independent = r_flag_set_inspace (core->flags, R_FLAGS_FS_SYMBOLS, destination, 16, 8);
+		char *before = sdb_querys (core->anal->sdb_types, NULL, 0, "*");
+		ut64 function_epoch = r_anal_function_dirty_epoch (fcn);
+		ut64 types_epoch = r_anal_types_dirty_epoch (core->anal);
+		char *error = NULL;
+		mu_assert_false (r_core_anal_function_set_signature (core, 0, normalized? "char rax(void)": "char edited(void)", &error), "independent final flag ownership refuses before application");
+		mu_assert_notnull (error, "the independent flag conflict is reported");
+		mu_assert_streq (fcn->name, "keep", "flag refusal preserves function identity");
+		mu_assert_ptreq (r_flag_get (core->flags, "keep"), flag, "flag refusal preserves the function-owned flag");
+		mu_assert_ptreq (r_flag_get (core->flags, destination), independent, "the independent destination flag is not replaced");
+		mu_assert_eq (independent->addr, 16, "the independent flag is not moved");
+		mu_assert_eq (independent->size, 8, "the independent flag extent is unchanged");
+		mu_assert_eq (r_anal_function_dirty_epoch (fcn), function_epoch, "flag refusal preserves the function epoch");
+		mu_assert_eq (r_anal_types_dirty_epoch (core->anal), types_epoch, "flag refusal preserves the type epoch");
+		char *after = sdb_querys (core->anal->sdb_types, NULL, 0, "*");
+		mu_assert_streq (after, before, "flag refusal preserves native records and address links");
+		free (after);
+		free (before);
+		free (error);
+		r_core_free (core);
+	}
+	RCore *core = r_core_new ();
+	RAnalFunction *fcn = r_anal_create_function (core->anal, "keep", 0, R_ANAL_FCN_TYPE_FCN, NULL);
+	RAnalBlock *block = r_anal_create_block (core->anal, 0, 1);
+	r_anal_function_add_block (fcn, block);
+	r_unref (block);
+	RFlagItem *independent = r_flag_set_inspace (core->flags, R_FLAGS_FS_FUNCTIONS, "keep", 16, 8);
+	mu_assert_true (r_core_anal_function_set_signature (core, 0, "char edited(void)", NULL), "an unrelated old same-name flag does not own the addressed function");
+	mu_assert_ptreq (r_flag_get (core->flags, "keep"), independent, "an independent old same-name flag is not renamed");
+	mu_assert_eq (independent->addr, 16, "the independent old flag retains its address");
+	mu_assert_streq (fcn->name, "edited", "the addressed function still receives its admitted name");
+	RFlagItem *edited = r_flag_get (core->flags, "edited");
+	mu_assert_notnull (edited, "the addressed function receives its own new flag");
+	mu_assert_eq (edited->addr, 0, "the new function flag names the addressed owner");
+	r_core_free (core);
+	mu_end;
+}
+
 static int signature_parser_calls;
 static bool signature_parser_saw_original;
 static RAnalFunction *signature_parser_function;
@@ -1015,6 +1203,39 @@ static char *signature_parser_admit(RAnal *anal, const char *text) {
 	char *result = r_anal_cparse (anal, text, NULL);
 	anal->opt.tparser = parser;
 	return result;
+}
+
+static char *signature_parser_wrong_function(RAnal *anal, const char *text) {
+	signature_parser_refuse (anal, text);
+	return strdup ("other=func\nfunc.other.args=0\nfunc.other.ret=char\nfunc.other.prototype=fixed\n");
+}
+
+bool test_r_core_afs_requires_the_requested_function(void) {
+	RCore *core = r_core_new ();
+	RAnalFunction *fcn = r_anal_create_function (core->anal, "keep", 0, R_ANAL_FCN_TYPE_FCN, NULL);
+	RAnalBlock *block = r_anal_create_block (core->anal, 0, 1);
+	r_anal_function_add_block (fcn, block);
+	r_unref (block);
+	mu_assert_true (r_anal_str_to_fcn (core->anal, fcn, "int keep(int value);"), "seed the original contract");
+	RAnalPlugin parser = { .meta = { .name = "wrong_function" }, .tparse_text = signature_parser_wrong_function };
+	r_anal_plugin_add (core->anal, &parser);
+	r_config_set (core->config, "types.plugin", parser.meta.name);
+	signature_parser_calls = 0;
+	signature_parser_function = fcn;
+	ut64 function_epoch = r_anal_function_dirty_epoch (fcn);
+	ut64 types_epoch = r_anal_types_dirty_epoch (core->anal);
+	char *error = NULL;
+	mu_assert_false (r_core_anal_function_set_signature (core, 0, "char requested(void)", &error), "arbitrary parser output cannot substitute its first function for the requested declaration");
+	mu_assert_notnull (error, "missing requested function is an admission refusal");
+	mu_assert_eq (signature_parser_calls, 1, "the selected parser is consulted exactly once");
+	mu_assert_true (signature_parser_saw_original, "parser output is admitted before changing identity");
+	mu_assert_streq (fcn->name, "keep", "wrong-function output cannot rename the target");
+	mu_assert_eq (r_anal_function_dirty_epoch (fcn), function_epoch, "wrong-function refusal preserves the function epoch");
+	mu_assert_eq (r_anal_types_dirty_epoch (core->anal), types_epoch, "wrong-function refusal preserves the type epoch");
+	mu_assert_null (sdb_const_get (core->anal->sdb_types, "other", NULL), "unselected parser records are not published");
+	free (error);
+	r_core_free (core);
+	mu_end;
 }
 
 bool test_r_core_afs_selected_parser_refuses_before_mutation(void) {
@@ -1880,6 +2101,7 @@ int all_tests(void) {
 	mu_run_test (test_r_anal_str_to_fcn_defaults_omitted_return_type);
 	mu_run_test (test_r_anal_function_signature_parse_requires_a_named_function);
 	mu_run_test (test_r_anal_function_signature_visible_typedef);
+	mu_run_test (test_r_anal_function_signature_tagged_returns);
 	mu_run_test (test_r_anal_function_signature_prepared_tag_namespace);
 	mu_run_test (test_r_anal_function_signature_prototype_roundtrip);
 	mu_run_test (test_r_anal_function_set_signature_refuses_incomplete_fixed_snapshot);
@@ -1891,8 +2113,12 @@ int all_tests(void) {
 	mu_run_test (test_r_anal_str_to_fcn_does_not_retry_rejected_header);
 	mu_run_test (test_r_core_afs_preserves_compound_return_name_and_flags);
 	mu_run_test (test_r_core_afs_selected_parser_refuses_before_mutation);
+	mu_run_test (test_r_core_afs_requires_the_requested_function);
 	mu_run_test (test_r_core_afs_reuses_selected_parser_admission);
 	mu_run_test (test_r_core_afs_name_collision_preserves_state);
+	mu_run_test (test_r_anal_function_structured_signature_preserves_raw_callconv);
+	mu_run_test (test_r_core_signature_long_isolation_admission);
+	mu_run_test (test_r_core_signature_preserves_independent_flags);
 	mu_run_test (test_r_core_afs_updates_effective_binding);
 	mu_run_test (test_r_core_signature_isolation_avoids_other_name_matches);
 	mu_run_test (test_r_core_signature_isolation_preserves_dormant_peer_bindings);

@@ -3101,15 +3101,105 @@ static const RAnalFunctionParam *function_signature_default_param(const RAnalFun
 	return tmp;
 }
 
-static char *function_signature_string(Sdb *types, const char *name, const char *ret_type, RList *params, RTypeFunctionPrototype prototype, bool sanitize_name, bool fill_defaults) {
+static bool function_signature_identifier(Sdb *types, const char *name) {
+	char *text = r_str_newf ("void %s", name);
+	RTypeDecl *decl = text? r_type_decl_parse (text, R_TYPE_DECL_CONTEXT_NAMED, types, NULL): NULL;
+	bool valid = decl && decl->name && !strcmp (decl->name, name) && decl->type->kind == R_TYPE_DECL_BASE;
+	r_type_decl_free (decl);
+	free (text);
+	return valid;
+}
+
+R_API R_OWNED char *r_anal_function_signature_to_kv(Sdb *types, const char *name, const RTypeDeclNode *function, RTypeFunctionPrototype prototype, const char *callconv, bool noreturn) {
+	R_RETURN_VAL_IF_FAIL (types && name && function && function->kind == R_TYPE_DECL_FUNCTION && function->child, NULL);
+	const char *knowledge = r_type_func_prototype_name (prototype);
+	if (!knowledge || !function_signature_identifier (types, name) || strlen (name) + strlen ("func..prototype") >= SDB_MAX_KEY
+			|| (callconv && (strlen (callconv) >= SDB_MAX_VALUE || strpbrk (callconv, "\r\n")))) {
+		return NULL;
+	}
+	RStrBuf output, names;
+	r_strbuf_init (&output);
+	r_strbuf_init (&names);
+	RListIter *iter;
+	RTypeDecl *param;
+	int index = 0;
+	bool ok = r_strbuf_appendf (&output, "%s=func\n", name);
+	r_list_foreach (function->function.parameters, iter, param) {
+		RTypeDecl adjusted = *param;
+		RTypeDeclNode pointer = { .kind = R_TYPE_DECL_POINTER };
+		RTypeDecl *resolved = NULL;
+		RTypeDeclNode *type_node = param->type;
+		if (type_node->kind == R_TYPE_DECL_BASE) {
+			char *target = r_type_resolve_typedef (types, type_node->base.name);
+			resolved = target? r_type_decl_parse (target, R_TYPE_DECL_CONTEXT_ABSTRACT, types, NULL): NULL;
+			free (target);
+			if (resolved) {
+				type_node = resolved->type;
+			}
+		}
+		bool function_type = type_node->kind == R_TYPE_DECL_FUNCTION
+			|| (type_node->kind == R_TYPE_DECL_BASE && r_str_startswith (type_node->base.name, "func."));
+		if (type_node->kind == R_TYPE_DECL_ARRAY || function_type) {
+			pointer.child = function_type? param->type: type_node->child;
+			if (!function_type && resolved) {
+				pointer.child->qualifiers |= param->type->qualifiers;
+			}
+			adjusted.type = &pointer;
+		}
+		char *type = r_type_decl_render (&adjusted, false);
+		char *argument = param->name? strdup (param->name): r_str_newf ("arg%d", index);
+		char *key = r_str_newf ("func.%s.arg.%d", name, index);
+		ok = type && argument && key && function_signature_identifier (types, argument)
+			&& strlen (key) < SDB_MAX_KEY && strlen (type) + strlen (argument) + 1 < SDB_MAX_VALUE
+			&& r_strbuf_appendf (&output, "%s=%s,%s\n", key, type, argument)
+			&& r_strbuf_appendf (&names, "%s%s", index? ",": "", argument);
+		free (key);
+		free (argument);
+		free (type);
+		r_type_decl_free (resolved);
+		if (!ok || index == INT_MAX) {
+			ok = false;
+			break;
+		}
+		index++;
+	}
+	if (ok && function->function.variadic) {
+		char *key = r_str_newf ("func.%s.arg.%d", name, index);
+		ok = key && strlen (key) < SDB_MAX_KEY && index < INT_MAX
+			&& r_strbuf_appendf (&output, "%s=,...\n", key)
+			&& r_strbuf_appendf (&names, "%s...", index? ",": "");
+		free (key);
+		if (ok) {
+			index++;
+		}
+	}
+	RTypeDecl result = { .type = function->child };
+	char *ret = ok? r_type_decl_render (&result, false): NULL;
+	ok = ret && strlen (ret) < SDB_MAX_VALUE && r_strbuf_length (&names) < SDB_MAX_VALUE;
+	if (ok && R_STR_ISNOTEMPTY (callconv)) {
+		ok = r_strbuf_appendf (&output, "func.%s.cc=%s\n", name, callconv);
+	}
+	if (ok && noreturn) {
+		ok = r_strbuf_appendf (&output, "func.%s.noreturn=true\n", name);
+	}
+	if (ok) {
+		ok = r_strbuf_appendf (&output, "func.%s=%s\nfunc.%s.args=%d\nfunc.%s.ret=%s\nfunc.%s.prototype=%s\n", name, r_strbuf_get (&names), name, index, name, ret, name, knowledge);
+	}
+	free (ret);
+	r_strbuf_fini (&names);
+	if (!ok) {
+		r_strbuf_fini (&output);
+		return NULL;
+	}
+	return r_strbuf_drain_nofree (&output);
+}
+
+static RTypeDecl *function_signature_decl(Sdb *types, const char *ret_type, RList *params, RTypeFunctionPrototype prototype, bool fill_defaults) {
 	RListIter *iter;
 	RAnalFunctionParam *param;
-	char *sane = NULL;
-	char *signature = NULL;
 	size_t i = 0;
 	bool ok = true;
 
-	R_RETURN_VAL_IF_FAIL (name, NULL);
 	RTypeDecl *decl = r_type_decl_parse (r_str_get_fail (ret_type, "void"), R_TYPE_DECL_CONTEXT_ABSTRACT, types, NULL);
 	if (!decl) {
 		return NULL;
@@ -3146,22 +3236,29 @@ static char *function_signature_string(Sdb *types, const char *name, const char 
 			i++;
 		}
 	}
-	if (ok && sanitize_name) {
-		sane = r_name_filter_dup (name);
-		if (sane) {
-			r_str_replace_ch (sane, ':', '_', true);
-		}
+	if (!ok) {
+		r_type_decl_free (decl);
+		return NULL;
 	}
-	if (ok) {
-		free (decl->name);
-		// Keep the signature API's space before the outer argument list.
-		decl->name = r_str_newf ("%s ", r_str_get_fail (sane, name));
-		char *text = decl->name? r_type_decl_render (decl, true): NULL;
-		if (text) {
-			signature = r_str_newf ("%s;", text);
-		}
-		free (text);
+	return decl;
+}
+
+static char *function_signature_string(Sdb *types, const char *name, const char *ret_type, RList *params, RTypeFunctionPrototype prototype, bool sanitize_name, bool fill_defaults) {
+	R_RETURN_VAL_IF_FAIL (name, NULL);
+	RTypeDecl *decl = function_signature_decl (types, ret_type, params, prototype, fill_defaults);
+	if (!decl) {
+		return NULL;
 	}
+	char *sane = sanitize_name? r_name_filter_dup (name): NULL;
+	if (sane) {
+		r_str_replace_ch (sane, ':', '_', true);
+	}
+	free (decl->name);
+	// Keep the signature API's space before the outer argument list.
+	decl->name = r_str_newf ("%s ", r_str_get_fail (sane, name));
+	char *text = decl->name? r_type_decl_render (decl, true): NULL;
+	char *signature = text? r_str_newf ("%s;", text): NULL;
+	free (text);
 	free (sane);
 	r_type_decl_free (decl);
 	return signature;
@@ -3235,33 +3332,6 @@ static void function_signature_sync(RAnalFunction *fcn, const RAnalFunctionSigna
 	callconv = signature->callconv? signature->callconv: r_anal_cc_default (fcn->anal);
 	r_anal_function_store_callconv (fcn->anal, fcn, callconv);
 	fcn->is_noreturn = signature->noreturn;
-}
-
-static bool function_signature_set_attrs(RAnal *anal, const char *type_name, const char *callconv, bool noreturn, RTypeFunctionPrototype prototype) {
-	char *cc_key;
-	char *noreturn_key;
-
-	R_RETURN_VAL_IF_FAIL (anal && anal->sdb_types && R_STR_ISNOTEMPTY (type_name), false);
-	cc_key = r_str_newf ("func.%s.cc", type_name);
-	noreturn_key = r_str_newf ("func.%s.noreturn", type_name);
-	if (!cc_key || !noreturn_key) {
-		free (cc_key);
-		free (noreturn_key);
-		return false;
-	}
-	if (R_STR_ISNOTEMPTY (callconv)) {
-		sdb_set (anal->sdb_types, cc_key, callconv, 0);
-	} else {
-		sdb_unset (anal->sdb_types, cc_key, 0);
-	}
-	if (noreturn) {
-		sdb_set (anal->sdb_types, noreturn_key, "true", 0);
-	} else {
-		sdb_unset (anal->sdb_types, noreturn_key, 0);
-	}
-	free (cc_key);
-	free (noreturn_key);
-	return r_type_func_set_prototype (anal->sdb_types, type_name, prototype);
 }
 
 R_API void r_anal_function_signature_free(RAnalFunctionSignature *signature) {
@@ -3363,56 +3433,6 @@ R_API char *r_anal_function_get_signature_string(RAnalFunction *fcn) {
 	return res;
 }
 
-R_API bool r_anal_function_set_signature(RAnal *anal, RAnalFunction *fcn, const RAnalFunctionSignature *signature) {
-	char *decl = NULL;
-	char *type_name;
-	char *resolved_callconv = NULL;
-	const char *resolved_ret_type;
-	bool ok = false;
-
-	R_RETURN_VAL_IF_FAIL (anal && fcn && anal->sdb_types && signature, false);
-	if (!r_type_func_prototype_name (signature->prototype)) {
-		R_LOG_ERROR ("Invalid signature parameter-list specificity");
-		return false;
-	}
-	if (signature->prototype == R_TYPE_FUNC_PROTOTYPE_FIXED && signature->origin == R_ANAL_FUNCTION_SIGNATURE_ORIGIN_VARIABLES) {
-		R_LOG_ERROR ("Cannot set a fixed signature from an unavailable formal list");
-		return false;
-	}
-	type_name = function_signature_type_name (anal, fcn);
-	if (R_STR_ISEMPTY (type_name)) {
-		free (type_name);
-		return false;
-	}
-	resolved_ret_type = R_STR_ISNOTEMPTY (signature->ret_type)? signature->ret_type: "void";
-	const char *callconv = R_STR_ISNOTEMPTY (signature->callconv)
-		? signature->callconv
-		: function_signature_callconv (anal, fcn, type_name);
-	if (callconv) {
-		resolved_callconv = strdup (callconv);
-	}
-	decl = function_signature_string (anal->sdb_types, type_name, resolved_ret_type, signature->params, signature->prototype, false, true);
-	if (decl) {
-		ok = r_anal_str_to_fcn (anal, fcn, decl);
-		if (ok) {
-			ok = function_signature_set_attrs (anal, type_name, resolved_callconv, signature->noreturn, signature->prototype);
-		}
-	}
-	free (decl);
-	free (resolved_callconv);
-	free (type_name);
-	if (ok) {
-		RAnalFunctionSignature *signature = r_anal_function_get_signature (fcn);
-		if (signature) {
-			function_signature_sync (fcn, signature);
-			r_anal_function_signature_free (signature);
-		}
-		r_anal_types_bump_dirty_epoch (anal);
-		r_anal_function_bump_dirty_epoch (fcn);
-	}
-	return ok;
-}
-
 R_API R_OWNED RTypeDecl *r_anal_function_signature_parse(const char *sig, Sdb *types, char **error) {
 	R_RETURN_VAL_IF_FAIL (sig, NULL);
 	if (error) {
@@ -3461,14 +3481,27 @@ R_API R_OWNED RTypeDecl *r_anal_function_signature_parse(const char *sig, Sdb *t
 }
 
 struct r_anal_function_signature_prepared_t {
+	RAnal *anal;
 	char *name;
 	Sdb *types;
+	char *target_name;
+	char *type_name;
+	char *records;
+	ut64 addr;
+	bool has_noreturn;
+	bool noreturn;
+	bool preserve_callconv;
+	bool link;
+	bool unchanged;
 };
 
 R_API void r_anal_function_signature_prepared_free(RAnalFunctionSignaturePrepared *prepared) {
 	if (prepared) {
 		free (prepared->name);
 		sdb_free (prepared->types);
+		free (prepared->target_name);
+		free (prepared->type_name);
+		free (prepared->records);
 		free (prepared);
 	}
 }
@@ -3476,6 +3509,41 @@ R_API void r_anal_function_signature_prepared_free(RAnalFunctionSignaturePrepare
 R_API const char *r_anal_function_signature_prepared_name(const RAnalFunctionSignaturePrepared *prepared) {
 	R_RETURN_VAL_IF_FAIL (prepared, NULL);
 	return prepared->name;
+}
+
+static RAnalFunctionSignaturePrepared *function_signature_prepare_records(const char *name, const char *records) {
+	if (!records || !name || strlen (name) + strlen ("func..prototype") >= SDB_MAX_KEY) {
+		return NULL;
+	}
+	Sdb *types = sdb_new0 ();
+	RTypeFunctionPrototype prototype;
+	int argc;
+	if (!types || !sdb_query_lines (types, records) || r_type_kind (types, name) != R_TYPE_FUNCTION
+			|| !r_type_func_ret (types, name) || !r_type_func_args_count (types, name, &argc)
+			|| !r_type_func_get_prototype (types, name, &prototype)) {
+		sdb_free (types);
+		return NULL;
+	}
+	int i;
+	for (i = 0; i < argc; i++) {
+		char *type = r_type_func_args_type (types, name, i);
+		const char *argument = r_type_func_args_name (types, name, i);
+		bool vararg = type && r_type_arg_is_vararg (type, argument);
+		bool valid = type && (vararg? i == argc - 1: *type != 0);
+		free (type);
+		if (!valid) {
+			sdb_free (types);
+			return NULL;
+		}
+	}
+	RAnalFunctionSignaturePrepared *prepared = R_NEW0 (RAnalFunctionSignaturePrepared);
+	prepared->name = strdup (name);
+	prepared->types = types;
+	if (!prepared->name) {
+		r_anal_function_signature_prepared_free (prepared);
+		return NULL;
+	}
+	return prepared;
 }
 
 R_API RAnalFunctionSignaturePrepared *r_anal_function_signature_prepare(RAnal *anal, const char *sig, char **error) {
@@ -3486,28 +3554,45 @@ R_API RAnalFunctionSignaturePrepared *r_anal_function_signature_prepare(RAnal *a
 	free (text);
 	char *out = normalized? r_anal_cparse (anal, normalized, error): NULL;
 	free (normalized);
-	RAnalFunctionSignaturePrepared *prepared = NULL;
-	if (out) {
-		Sdb *types = sdb_new0 ();
-		RTypeFunctionPrototype prototype;
-		int argc;
-		if (types && sdb_query_lines (types, out)
-				&& r_type_kind (types, decl->name) == R_TYPE_FUNCTION
-				&& r_type_func_args_count (types, decl->name, &argc)
-				&& r_type_func_get_prototype (types, decl->name, &prototype)) {
-			prepared = R_NEW0 (RAnalFunctionSignaturePrepared);
-			prepared->name = decl->name;
-			decl->name = NULL;
-			prepared->types = types;
-		} else {
-			sdb_free (types);
-		}
-	}
+	RAnalFunctionSignaturePrepared *prepared = decl? function_signature_prepare_records (decl->name, out): NULL;
 	if (!prepared && error && !*error) {
 		*error = strdup ("Selected type parser did not admit the named function signature");
 	}
 	r_type_decl_free (decl);
 	free (out);
+	return prepared;
+}
+
+R_API RAnalFunctionSignaturePrepared *r_anal_function_signature_prepare_structured(RAnal *anal, RAnalFunction *fcn, const RAnalFunctionSignature *signature, char **error) {
+	R_RETURN_VAL_IF_FAIL (anal && anal->sdb_types && fcn && fcn->anal == anal && signature, NULL);
+	if (error) {
+		*error = NULL;
+	}
+	RAnalFunctionSignaturePrepared *prepared = NULL;
+	if (signature->prototype == R_TYPE_FUNC_PROTOTYPE_FIXED && signature->origin == R_ANAL_FUNCTION_SIGNATURE_ORIGIN_VARIABLES) {
+		if (error) {
+			*error = strdup ("Cannot set a fixed signature from an unavailable formal list");
+		}
+		return NULL;
+	}
+	char *name = function_signature_type_name (anal, fcn);
+	RTypeDecl *decl = function_signature_decl (anal->sdb_types, R_STR_ISNOTEMPTY (signature->ret_type)? signature->ret_type: "void", signature->params, signature->prototype, true);
+	char *records = decl && R_STR_ISNOTEMPTY (name)? r_anal_function_signature_to_kv (anal->sdb_types, name, decl->type, signature->prototype, signature->callconv, signature->noreturn): NULL;
+	prepared = function_signature_prepare_records (name, records);
+	if (prepared) {
+		prepared->has_noreturn = true;
+		prepared->noreturn = signature->noreturn;
+		prepared->preserve_callconv = R_STR_ISEMPTY (signature->callconv);
+		if (!r_anal_function_signature_prepare_target (anal, prepared, fcn, fcn->addr, fcn->name, R_ANAL_SIGNATURE_APPLY_SHARED, error)) {
+			r_anal_function_signature_prepared_free (prepared);
+			prepared = NULL;
+		}
+	} else if (error) {
+		*error = strdup ("Cannot normalize structured function signature");
+	}
+	free (name);
+	free (records);
+	r_type_decl_free (decl);
 	return prepared;
 }
 
@@ -3627,76 +3712,168 @@ static char *function_signature_unused_type_name(RAnal *anal, RAnalFunction *fcn
 	return candidate;
 }
 
-R_API bool r_anal_function_signature_apply(RAnal *anal, RAnalFunction *fcn, const RAnalFunctionSignaturePrepared *prepared, RAnalFunctionSignatureApply scope) {
-	R_RETURN_VAL_IF_FAIL (anal && fcn && prepared, false);
-	R_RETURN_VAL_IF_FAIL (scope == R_ANAL_SIGNATURE_APPLY_SHARED || scope == R_ANAL_SIGNATURE_APPLY_FUNCTION, false);
-	char *type_name;
-	if (scope == R_ANAL_SIGNATURE_APPLY_FUNCTION) {
-		char *effective = function_signature_type_name (anal, fcn);
-		bool unchanged = effective && function_signature_record_matches (anal->sdb_types, prepared, effective);
-		free (effective);
-		if (unchanged) {
-			return true;
+static bool function_signature_tags_admit(Sdb *types, Sdb *incoming) {
+	RList *roots = r_type_get_roots (incoming);
+	RListIter *iter;
+	RTypeIdentity *identity;
+	bool admitted = roots != NULL;
+	r_list_foreach (roots, iter, identity) {
+		if (identity->space != R_TYPE_NAMESPACE_TAG) {
+			continue;
 		}
-		type_name = function_signature_unused_type_name (anal, fcn, prepared->name);
+		Sdb *db = r_type_namespace (types, identity->space, false);
+		const char *kind = sdb_const_get (identity->db, identity->key, NULL);
+		const char *existing = db? sdb_const_get (db, identity->key, NULL): NULL;
+		if (existing && strcmp (existing, kind)) {
+			admitted = false;
+			break;
+		}
+	}
+	r_list_free (roots);
+	return admitted;
+}
+
+R_API bool r_anal_function_signature_prepare_target(RAnal *anal, RAnalFunctionSignaturePrepared *prepared, RAnalFunction *fcn, ut64 addr, const char *name, RAnalFunctionSignatureApply scope, char **error) {
+	R_RETURN_VAL_IF_FAIL (anal && anal->sdb_types && prepared && R_STR_ISNOTEMPTY (name) && !prepared->target_name, false);
+	R_RETURN_VAL_IF_FAIL (scope == R_ANAL_SIGNATURE_APPLY_SHARED || scope == R_ANAL_SIGNATURE_APPLY_FUNCTION, false);
+	R_RETURN_VAL_IF_FAIL (!fcn || (fcn->anal == anal && fcn->addr == addr), false);
+	RAnalFunction *existing = r_anal_get_function_byname (anal, name);
+	RAnalFunction *at = r_anal_get_function_at (anal, addr);
+	if ((existing && existing != fcn) || (at && at != fcn)) {
+		if (error && !*error) {
+			*error = strdup ("Function identity conflicts with an existing function");
+		}
+		return false;
+	}
+	RAnalFunction lookup = { .anal = anal, .addr = addr, .name = (char *)name };
+	char *type_name = NULL;
+	bool unchanged = false;
+	if (scope == R_ANAL_SIGNATURE_APPLY_FUNCTION) {
+		type_name = function_signature_type_name (anal, &lookup);
+		unchanged = type_name && function_signature_record_matches (anal->sdb_types, prepared, type_name);
+		if (!unchanged) {
+			free (type_name);
+			type_name = function_signature_unused_type_name (anal, fcn? fcn: &lookup, prepared->name);
+		}
 	} else {
-		type_name = function_signature_address_type_name (anal->sdb_types, fcn->addr);
+		type_name = function_signature_address_type_name (anal->sdb_types, addr);
 		if (!type_name) {
 			type_name = strdup (prepared->name);
 		}
 	}
 	char *prefix = r_str_newf ("func.%s", prepared->name);
-	if (!type_name || !prefix) {
-		free (type_name);
-		free (prefix);
-		return false;
-	}
 	RStrBuf output;
 	r_strbuf_init (&output);
 	SdbList *records = sdb_foreach_list (prepared->types, true);
 	SdbListIter *iter;
 	SdbKv *record;
-	size_t prefix_len = strlen (prefix);
-	bool ok = records != NULL;
-	ls_foreach (records, iter, record) {
-		const char *key = sdbkv_key (record);
-		const char *value = sdbkv_value (record);
-		if (!strcmp (key, prepared->name)) {
-			ok = r_strbuf_appendf (&output, "%s=%s\n", type_name, value);
-		} else if (!strncmp (key, prefix, prefix_len) && (!key[prefix_len] || key[prefix_len] == '.')) {
-			ok = r_strbuf_appendf (&output, "func.%s%s=%s\n", type_name, key + prefix_len, value);
-		} else {
-			ok = r_strbuf_appendf (&output, "%s=%s\n", key, value);
+	bool ok = type_name && prefix && records && strlen (type_name) + strlen ("func..prototype") < SDB_MAX_KEY;
+	if (ok && prepared->preserve_callconv) {
+		const char *cc = sdb_const_getf (anal->sdb_types, NULL, "func.%s.cc", type_name);
+		if (cc) {
+			ok = strlen (cc) < SDB_MAX_VALUE && !strpbrk (cc, "\r\n")
+				&& r_strbuf_appendf (&output, "func.%s.cc=%s\n", type_name, cc);
 		}
+	}
+	size_t prefix_len = prefix? strlen (prefix): 0;
+	ls_foreach (records, iter, record) {
 		if (!ok) {
 			break;
 		}
+		const char *key = sdbkv_key (record);
+		const char *value = sdbkv_value (record);
+		char *target;
+		if (!strcmp (key, prepared->name)) {
+			target = strdup (type_name);
+		} else if (!strncmp (key, prefix, prefix_len) && (!key[prefix_len] || key[prefix_len] == '.')) {
+			target = r_str_newf ("func.%s%s", type_name, key + prefix_len);
+		} else {
+			target = strdup (key);
+		}
+		ok = target && strlen (target) < SDB_MAX_KEY && strlen (value) < SDB_MAX_VALUE
+			&& !strpbrk (target, "\r\n=") && !strpbrk (value, "\r\n")
+			&& r_strbuf_appendf (&output, "%s=%s\n", target, value);
+		free (target);
 	}
 	ls_free (records);
 	free (prefix);
 	if (ok) {
 		char *children = sdb_querys (prepared->types, NULL, 0, "***");
-		if (children) {
-			ok = r_strbuf_append (&output, children);
-			free (children);
-		}
+		ok = !children || r_strbuf_append (&output, children);
+		free (children);
 	}
-	if (ok) {
-		r_anal_save_parsed_type (anal, r_strbuf_get (&output));
-		char *effective = function_signature_type_name (anal, fcn);
-		if (!effective || strcmp (effective, type_name)) {
-			ok = r_type_set_link (anal->sdb_types, type_name, fcn->addr);
+	Sdb *incoming = sdb_new0 ();
+	ok = ok && incoming && sdb_query_lines (incoming, r_strbuf_get (&output))
+		&& function_signature_tags_admit (anal->sdb_types, incoming);
+	bool link = false;
+	if (ok && !unchanged) {
+		// Resolve binding in the prospective type environment, not after mutating Core identity.
+		Sdb *types = sdb_new0 ();
+		if (types) {
+			sdb_copy (anal->sdb_types, types);
+			sdb_query_lines (types, r_strbuf_get (&output));
+		}
+		RAnalFunctionSignatureOrigin origin;
+		char *effective = types? function_signature_type_name_origin (anal, &lookup, types, &origin): NULL;
+		ok = effective != NULL;
+		link = effective && strcmp (effective, type_name);
+		if (ok && link) {
+			ok = r_type_set_link (types, type_name, addr);
 		}
 		free (effective);
-		RAnalFunctionSignature *signature = ok? r_anal_function_get_signature (fcn): NULL;
-		ok = signature != NULL;
-		if (signature) {
-			function_signature_sync (fcn, signature);
-			r_anal_function_signature_free (signature);
+		sdb_free (types);
+	}
+	sdb_free (incoming);
+	char *target_name = ok? strdup (name): NULL;
+	ok = ok && target_name;
+	if (ok) {
+		prepared->anal = anal;
+		prepared->target_name = target_name;
+		prepared->type_name = type_name;
+		prepared->records = r_strbuf_drain_nofree (&output);
+		prepared->addr = addr;
+		prepared->link = link;
+		prepared->unchanged = unchanged;
+	} else {
+		free (target_name);
+		free (type_name);
+		r_strbuf_fini (&output);
+		if (error && !*error) {
+			*error = strdup ("Cannot prepare the final function type records and address binding");
 		}
 	}
-	r_strbuf_fini (&output);
-	free (type_name);
+	return ok;
+}
+
+R_API bool r_anal_function_signature_apply(RAnal *anal, RAnalFunction *fcn, const RAnalFunctionSignaturePrepared *prepared) {
+	R_RETURN_VAL_IF_FAIL (anal && fcn && fcn->anal == anal && prepared && prepared->anal == anal && prepared->target_name, false);
+	R_RETURN_VAL_IF_FAIL (fcn->addr == prepared->addr && !strcmp (fcn->name, prepared->target_name), false);
+	if (prepared->unchanged) {
+		return true;
+	}
+	r_anal_save_parsed_type (anal, prepared->records);
+	if (prepared->link && !r_type_set_link (anal->sdb_types, prepared->type_name, fcn->addr)) {
+		return false;
+	}
+	RAnalFunctionSignature signature = {
+		.callconv = (char *)function_signature_callconv (anal, fcn, prepared->type_name),
+		.noreturn = prepared->has_noreturn? prepared->noreturn: function_signature_is_noreturn (anal->sdb_types, prepared->type_name, fcn->is_noreturn)
+	};
+	function_signature_sync (fcn, &signature);
+	r_anal_function_bump_dirty_epoch (fcn);
+	return true;
+}
+
+R_API bool r_anal_function_set_signature(RAnal *anal, RAnalFunction *fcn, const RAnalFunctionSignature *signature) {
+	R_RETURN_VAL_IF_FAIL (anal && fcn && fcn->anal == anal && anal->sdb_types && signature, false);
+	char *error = NULL;
+	RAnalFunctionSignaturePrepared *prepared = r_anal_function_signature_prepare_structured (anal, fcn, signature, &error);
+	bool ok = prepared && r_anal_function_signature_apply (anal, fcn, prepared);
+	r_anal_function_signature_prepared_free (prepared);
+	if (error) {
+		R_LOG_ERROR ("%s", error);
+	}
+	free (error);
 	return ok;
 }
 
@@ -3705,7 +3882,8 @@ R_API int r_anal_str_to_fcn(RAnal *a, RAnalFunction *f, const char *sig) {
 	R_RETURN_VAL_IF_FAIL (a && f && sig, false);
 	char *error = NULL;
 	RAnalFunctionSignaturePrepared *prepared = r_anal_function_signature_prepare (a, sig, &error);
-	bool ok = prepared && r_anal_function_signature_apply (a, f, prepared, R_ANAL_SIGNATURE_APPLY_SHARED);
+	bool ok = prepared && r_anal_function_signature_prepare_target (a, prepared, f, f->addr, f->name, R_ANAL_SIGNATURE_APPLY_SHARED, &error)
+		&& r_anal_function_signature_apply (a, f, prepared);
 	r_anal_function_signature_prepared_free (prepared);
 	if (error) {
 		R_LOG_ERROR ("%s", error);

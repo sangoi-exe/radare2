@@ -498,7 +498,8 @@ static bool test_tasm_complete_owner(void) {
 	free (original);
 	free (named);
 	mu_assert_null (r_anal_get_function_at (core->anal, 0x6c4d), "no direct prepopulation");
-	mu_assert_eq (borland_tasm31_profile (core->anal), 44, "direct production fact owner, distinct from registered-path tests");
+	r_config_set (core->config, "types.plugin", "tcc");
+	mu_assert_eq (borland_tasm31_profile (core->anal), 44, "native structured contracts apply under selected TCC, distinct from registered-path tests");
 	mu_assert_true (tasm_check_complete_facts (core, &ctx), "complete finite production-owner facts");
 	int functions = r_list_length (core->anal->fcns), labels = r_flag_count (core->flags, NULL);
 	ut64 references = r_anal_xrefs_count (core->anal);

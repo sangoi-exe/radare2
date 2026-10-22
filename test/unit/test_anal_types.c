@@ -1933,6 +1933,22 @@ static bool test_anal_x86_16_declaration_layout(void) {
 	argument = r_type_func_args_type (anal->sdb_types, "aliases", 2);
 	mu_assert_streq (argument, "CB", "a callback pointer typedef does not acquire another pointer");
 	free (argument);
+	RAnalFunction *structured = r_anal_create_function (anal, "structured_aliases", 0x3000, R_ANAL_FCN_TYPE_FCN, NULL);
+	RAnalFunctionParam values[] = { { "items", "Row" }, { "callback", "FN" }, { "qualified", "CB" } };
+	RList *params = r_list_new ();
+	size_t index;
+	for (index = 0; index < R_ARRAY_SIZE (values); index++) {
+		r_list_append (params, &values[index]);
+	}
+	RAnalFunctionSignature input = { .ret_type = "void", .params = params, .prototype = R_TYPE_FUNC_PROTOTYPE_FIXED };
+	mu_assert_true (r_anal_function_set_signature (anal, structured, &input), "trusted structured parameters use the same visible typedef adjustment");
+	r_list_free (params);
+	const char *adjusted[] = { "int *", "FN *", "CB" };
+	for (index = 0; index < R_ARRAY_SIZE (adjusted); index++) {
+		argument = r_type_func_args_type (anal->sdb_types, "structured_aliases", index);
+		mu_assert_streq (argument, adjusted[index], "structured normalization preserves array/function decay and callback pointer identity");
+		free (argument);
+	}
 	mu_assert_eq (r_anal_type_bitsize (anal, "FN"), 0, "function typedef is not globally coerced to a pointer object");
 	mu_assert_null (sdb_const_get (anal->sdb_types, "func.CB.cc", NULL), "pointer qualification does not invent a calling convention");
 	RAnalBaseType *record = r_anal_get_base_type (anal, "Mixed", R_TYPE_NAMESPACE_TAG);

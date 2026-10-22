@@ -381,25 +381,6 @@ static void kvc_register_typedef(KVCParser *kvc, const char *name, const char *t
 	sdb_setf (kvc->types, type, 0, "typedef.%s", name);
 }
 
-static char *kvc_resolve_typedef(KVCParser *kvc, const char *name) {
-	const char *current = name;
-	int links;
-	for (links = 0; links < 4096; links++) {
-		const char *target = sdb_const_getf (kvc->types, NULL, "typedef.%s", current);
-		if (!target && !kvc->layout_ready && kvc->host_types) {
-			target = sdb_const_getf (kvc->host_types, NULL, "typedef.%s", current);
-			if (target) {
-				sdb_setf (kvc->types, target, 0, "typedef.%s", current);
-			}
-		}
-		if (!target) {
-			break;
-		}
-		current = target;
-	}
-	return r_type_resolve_typedef (kvc->types, name);
-}
-
 static void kvc_sync_types(KVCParser *kvc);
 
 static RTypeDecl *kvc_declaration(KVCParser *kvc, RStrs span) {
@@ -439,74 +420,15 @@ static void emit_func_signature(KVCParser *kvc, const char *name, const RTypeDec
 			callconv = supplied;
 		}
 	}
-	RStrBuf *names = r_strbuf_new ("");
-	RListIter *iter;
-	RTypeDecl *param;
-	int index = 0;
-	r_list_foreach (function->function.parameters, iter, param) {
-		RTypeDecl adjusted = *param;
-		RTypeDeclNode pointer = { .kind = R_TYPE_DECL_POINTER };
-		RTypeDecl *resolved = NULL;
-		RTypeDeclNode *type_node = param->type;
-		if (type_node->kind == R_TYPE_DECL_BASE) {
-			char *target = kvc_resolve_typedef (kvc, type_node->base.name);
-			resolved = target? r_type_decl_parse (target, R_TYPE_DECL_CONTEXT_ABSTRACT, kvc->types, NULL): NULL;
-			free (target);
-			if (resolved) {
-				type_node = resolved->type;
-			}
-		}
-		bool function_type = type_node->kind == R_TYPE_DECL_FUNCTION
-			|| (type_node->kind == R_TYPE_DECL_BASE && r_str_startswith (type_node->base.name, "func."));
-		if (type_node->kind == R_TYPE_DECL_ARRAY || function_type) {
-			pointer.child = function_type? param->type: type_node->child;
-			if (!function_type && resolved) {
-				pointer.child->qualifiers |= param->type->qualifiers;
-			}
-			adjusted.type = &pointer;
-		}
-		char *type = r_type_decl_render (&adjusted, false);
-		char *argument = param->name? strdup (param->name): r_str_newf ("arg%d", index);
-		if (!type || !argument) {
-			free (type);
-			free (argument);
-			r_type_decl_free (resolved);
-			kvc_error (kvc, "Cannot serialize function parameter");
-			break;
-		}
-		r_strbuf_appendf (kvc->sb, "func.%s.arg.%d=%s,%s\n", name, index, type, argument);
-		r_strbuf_appendf (names, "%s%s", index? ",": "", argument);
-		free (argument);
-		free (type);
-		r_type_decl_free (resolved);
-		index++;
+	char *records = r_anal_function_signature_to_kv (kvc->types, name, function,
+		function->function.prototype? R_TYPE_FUNC_PROTOTYPE_FIXED: R_TYPE_FUNC_PROTOTYPE_UNSPECIFIED, callconv, false);
+	if (!records || !r_strbuf_append (kvc->sb, records)) {
+		kvc_error (kvc, "Cannot serialize function declaration");
 	}
-	if (kvc->error) {
-		r_strbuf_free (names);
-		return;
-	}
-	if (function->function.variadic) {
-		r_strbuf_appendf (kvc->sb, "func.%s.arg.%d=,...\n", name, index);
-		r_strbuf_appendf (names, "%s...", index? ",": "");
-		index++;
-	}
-	RTypeDecl result = { .type = function->child };
-	char *ret = r_type_decl_render (&result, false);
-	if (!ret) {
-		kvc_error (kvc, "Cannot serialize function return type");
-		r_strbuf_free (names);
-		return;
-	}
-	if (callconv) {
-		r_strbuf_appendf (kvc->sb, "func.%s.cc=%s\n", name, callconv);
-	}
-	r_strbuf_appendf (kvc->sb, "func.%s=%s\nfunc.%s.args=%d\nfunc.%s.ret=%s\n", name, r_strbuf_get (names), name, index, name, ret);
-	r_strbuf_appendf (kvc->sb, "func.%s.prototype=%s\n", name, function->function.prototype? "fixed": "unspecified");
-	if (is_static) {
+	free (records);
+	if (is_static && !kvc->error) {
 		r_strbuf_appendf (kvc->sb, "func.%s.@.static=true\n", name);
 	}
-	free (ret);
-	r_strbuf_free (names);
 }
 
 static char *kvc_object_type(KVCParser *kvc, RTypeDecl *decl, const char *scope) {
@@ -522,7 +444,6 @@ static char *kvc_object_type(KVCParser *kvc, RTypeDecl *decl, const char *scope)
 	if (kvc->error) {
 		return NULL;
 	}
-	r_strbuf_appendf (kvc->sb, "%s=func\n", scope);
 	RTypeDeclNode reference = { .kind = R_TYPE_DECL_BASE };
 	reference.base.name = r_str_newf ("func.%s", scope);
 	if (!reference.base.name) {
@@ -1105,7 +1026,6 @@ static bool parse_function(KVCParser *kvc) {
 		r_type_decl_free (decl);
 		return false;
 	}
-	r_strbuf_appendf (kvc->sb, "%s=func\n", decl->name);
 	emit_func_signature (kvc, decl->name, decl->type, is_static);
 	apply_attributes (kvc, "func", decl->name, R_TYPE_NAMESPACE_ORDINARY);
 	r_type_decl_free (decl);
@@ -1141,6 +1061,22 @@ static bool tryparse(KVCParser *kvc, const char *word, const char *type, KVCPars
 	return false;
 }
 
+static bool kvc_tagged_function(KVCParser *kvc) {
+	KVCParser lookahead = *kvc;
+	const char *start = lookahead.s.a;
+	const char *end = scan_to_semicolon (&lookahead);
+	if (!end) {
+		return false;
+	}
+	kvc_sync_types (kvc);
+	char *text = collapse_whitespace (r_strs_new (start, end));
+	RTypeDecl *decl = text? r_type_decl_parse (text, R_TYPE_DECL_CONTEXT_NAMED, kvc->types, NULL): NULL;
+	bool function = decl && decl->type->kind == R_TYPE_DECL_FUNCTION;
+	r_type_decl_free (decl);
+	free (text);
+	return function;
+}
+
 R_IPI char *kvc_parse(RAnal *anal, const char *header_content, char **errmsg) {
 	// Initialize a preprocessing state for this parse
 	PPState *pps = pp_new ();
@@ -1162,23 +1098,15 @@ R_IPI char *kvc_parse(RAnal *anal, const char *header_content, char **errmsg) {
 		const char *word = kvc_peekn (kvc, 6);
 		bool hasparse = false;
 		if (word) {
-#if 1
 			hasparse = tryparse (kvc, word, "typedef", parse_typedef);
-			hasparse |= tryparse (kvc, word, "struct", parse_struct);
-			hasparse |= tryparse (kvc, word, "union", parse_struct);
-			hasparse |= tryparse (kvc, word, "enum", parse_enum);
-#else
-			hasparse = tryparse (kvc, word, "typedef", parse_typedef);
-			if (!hasparse) {
+			bool tagged = (r_str_startswith (word, "struct") && isspace ((ut8)word[6]))
+				|| (r_str_startswith (word, "union") && isspace ((ut8)word[5]))
+				|| (r_str_startswith (word, "enum") && isspace ((ut8)word[4]));
+			if (!hasparse && (!tagged || !kvc_tagged_function (kvc))) {
 				hasparse = tryparse (kvc, word, "struct", parse_struct);
+				hasparse |= tryparse (kvc, word, "union", parse_struct);
+				hasparse |= tryparse (kvc, word, "enum", parse_enum);
 			}
-			if (!hasparse) {
-				hasparse = tryparse (kvc, word, "union", parse_struct);
-			}
-			if (!hasparse) {
-				hasparse = tryparse (kvc, word, "enum", parse_enum);
-			}
-#endif
 		}
 		if (kvc->error) {
 			break;

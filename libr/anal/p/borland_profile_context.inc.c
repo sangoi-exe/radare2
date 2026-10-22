@@ -474,6 +474,7 @@ typedef struct {
 	bool *leaders;
 	RAnalFunction *function;
 	bool same_signature;
+	RAnalFunctionSignaturePrepared *signature;
 } BorlandFunctionCheck;
 
 static void profile_function_check_fini(BorlandFunctionCheck *check) {
@@ -483,12 +484,14 @@ static void profile_function_check_fini(BorlandFunctionCheck *check) {
 	}
 	free (check->ranges);
 	free (check->leaders);
+	r_anal_function_signature_prepared_free (check->signature);
 	*check = (BorlandFunctionCheck){0};
 }
 
 static bool profile_function_preflight(BorlandProfileContext *ctx, const BorlandProfileRange *input, int count, const char *name, int purge, const RAnalFunctionSignature *expected, BorlandFunctionCheck *check) {
 	RAnal *anal = ctx->anal;
 	*check = (BorlandFunctionCheck){0};
+	RAnalFunctionSignaturePrepared *prepared = NULL;
 	size_t allocation, total = 0;
 	if (count < 1 || r_mul_overflow ((size_t)count, sizeof (BorlandCodeRange), &allocation)) {
 		return false;
@@ -575,9 +578,18 @@ static bool profile_function_preflight(BorlandProfileContext *ctx, const Borland
 			}
 		}
 	}
-	*check = (BorlandFunctionCheck){ ranges, count, leaders, fcn, same };
+	if (expected && !same) {
+		RAnalFunction lookup = { .anal = anal, .addr = address, .name = (char *)name };
+		prepared = r_anal_function_signature_prepare_structured (anal, fcn? fcn: &lookup, expected, NULL);
+		if (!prepared) {
+			R_LOG_WARN ("Borland profile: cannot prepare the native signature at FILE 0x%08"PFMT64x, input[0].physical);
+			goto beach;
+		}
+	}
+	*check = (BorlandFunctionCheck){ ranges, count, leaders, fcn, same, prepared };
 	return true;
 beach:
+	r_anal_function_signature_prepared_free (prepared);
 	for (i = 0; i < count; i++) {
 		free (ranges[i].ops);
 	}
@@ -629,7 +641,7 @@ static bool profile_function_apply(BorlandProfileContext *ctx, BorlandFunctionCh
 		}
 	}
 	if (expected) {
-		if ((!check->same_signature && !r_anal_function_set_signature (anal, fcn, expected))
+		if ((!check->same_signature && !r_anal_function_signature_apply (anal, fcn, check->signature))
 				|| !r_anal_function_store_callconv (anal, fcn, expected->callconv)) {
 			return false;
 		}
