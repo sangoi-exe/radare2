@@ -2884,7 +2884,7 @@ R_API int r_anal_function_complexity(RAnalFunction *fcn) {
 }
 
 static char *function_signature_type_name(RAnal *anal, RAnalFunction *fcn);
-static void function_signature_sync(RAnalFunction *fcn, const RAnalFunctionSignature *signature);
+static void function_signature_sync(RAnalFunction *fcn, const RAnalFunctionSignature *signature, bool preserve_operational_callconv);
 
 R_API bool r_anal_function_del_signature(RAnal *a, const char *name) {
 	int i;
@@ -3325,12 +3325,12 @@ static bool function_signature_fallback_to_vars(RAnal *anal, RAnalFunction *fcn,
 	return ok;
 }
 
-static void function_signature_sync(RAnalFunction *fcn, const RAnalFunctionSignature *signature) {
-	const char *callconv;
-
+static void function_signature_sync(RAnalFunction *fcn, const RAnalFunctionSignature *signature, bool preserve_operational_callconv) {
 	R_RETURN_IF_FAIL (fcn && fcn->anal && signature);
-	callconv = signature->callconv? signature->callconv: r_anal_cc_default (fcn->anal);
-	r_anal_function_store_callconv (fcn->anal, fcn, callconv);
+	if (!preserve_operational_callconv) {
+		const char *callconv = signature->callconv? signature->callconv: r_anal_cc_default (fcn->anal);
+		r_anal_function_store_callconv (fcn->anal, fcn, callconv);
+	}
 	fcn->is_noreturn = signature->noreturn;
 }
 
@@ -3491,6 +3491,7 @@ struct r_anal_function_signature_prepared_t {
 	bool has_noreturn;
 	bool noreturn;
 	bool preserve_callconv;
+	bool preserve_operational_callconv;
 	bool link;
 	bool unchanged;
 };
@@ -3563,7 +3564,7 @@ R_API RAnalFunctionSignaturePrepared *r_anal_function_signature_prepare(RAnal *a
 	return prepared;
 }
 
-R_API RAnalFunctionSignaturePrepared *r_anal_function_signature_prepare_structured(RAnal *anal, RAnalFunction *fcn, const RAnalFunctionSignature *signature, char **error) {
+R_API RAnalFunctionSignaturePrepared *r_anal_function_signature_prepare_structured(RAnal *anal, RAnalFunction *fcn, const RAnalFunctionSignature *signature, bool preserve_operational_callconv, char **error) {
 	R_RETURN_VAL_IF_FAIL (anal && anal->sdb_types && fcn && fcn->anal == anal && signature, NULL);
 	if (error) {
 		*error = NULL;
@@ -3583,6 +3584,7 @@ R_API RAnalFunctionSignaturePrepared *r_anal_function_signature_prepare_structur
 		prepared->has_noreturn = true;
 		prepared->noreturn = signature->noreturn;
 		prepared->preserve_callconv = R_STR_ISEMPTY (signature->callconv);
+		prepared->preserve_operational_callconv = preserve_operational_callconv;
 		if (!r_anal_function_signature_prepare_target (anal, prepared, fcn, fcn->addr, fcn->name, R_ANAL_SIGNATURE_APPLY_SHARED, error)) {
 			r_anal_function_signature_prepared_free (prepared);
 			prepared = NULL;
@@ -3859,7 +3861,7 @@ R_API bool r_anal_function_signature_apply(RAnal *anal, RAnalFunction *fcn, cons
 		.callconv = (char *)function_signature_callconv (anal, fcn, prepared->type_name),
 		.noreturn = prepared->has_noreturn? prepared->noreturn: function_signature_is_noreturn (anal->sdb_types, prepared->type_name, fcn->is_noreturn)
 	};
-	function_signature_sync (fcn, &signature);
+	function_signature_sync (fcn, &signature, prepared->preserve_operational_callconv);
 	r_anal_function_bump_dirty_epoch (fcn);
 	return true;
 }
@@ -3867,7 +3869,7 @@ R_API bool r_anal_function_signature_apply(RAnal *anal, RAnalFunction *fcn, cons
 R_API bool r_anal_function_set_signature(RAnal *anal, RAnalFunction *fcn, const RAnalFunctionSignature *signature) {
 	R_RETURN_VAL_IF_FAIL (anal && fcn && fcn->anal == anal && anal->sdb_types && signature, false);
 	char *error = NULL;
-	RAnalFunctionSignaturePrepared *prepared = r_anal_function_signature_prepare_structured (anal, fcn, signature, &error);
+	RAnalFunctionSignaturePrepared *prepared = r_anal_function_signature_prepare_structured (anal, fcn, signature, false, &error);
 	bool ok = prepared && r_anal_function_signature_apply (anal, fcn, prepared);
 	r_anal_function_signature_prepared_free (prepared);
 	if (error) {

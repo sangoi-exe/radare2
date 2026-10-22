@@ -580,7 +580,7 @@ static bool profile_function_preflight(BorlandProfileContext *ctx, const Borland
 	}
 	if (expected && !same) {
 		RAnalFunction lookup = { .anal = anal, .addr = address, .name = (char *)name };
-		prepared = r_anal_function_signature_prepare_structured (anal, fcn? fcn: &lookup, expected, NULL);
+		prepared = r_anal_function_signature_prepare_structured (anal, fcn? fcn: &lookup, expected, false, NULL);
 		if (!prepared) {
 			R_LOG_WARN ("Borland profile: cannot prepare the native signature at FILE 0x%08"PFMT64x, input[0].physical);
 			goto beach;

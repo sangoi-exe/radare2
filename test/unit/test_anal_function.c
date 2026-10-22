@@ -1075,6 +1075,60 @@ bool test_r_anal_function_structured_signature_preserves_raw_callconv(void) {
 	mu_end;
 }
 
+bool test_r_anal_function_structured_signature_preserves_operational_callconv(void) {
+	const char *source_callconvs[] = { "source_cc", NULL };
+	size_t i;
+	for (i = 0; i < R_ARRAY_SIZE (source_callconvs); i++) {
+		RAnal *anal = r_anal_new ();
+		r_anal_cc_reset (anal);
+		mu_assert_true (r_anal_cc_set (anal, "void source_cc (stack)"), "seed the source convention model");
+		mu_assert_true (r_anal_cc_set (anal, "void operational_cc (stack)"), "seed a distinct supported operational convention");
+		r_anal_set_cc_default (anal, "source_cc");
+		RAnalFunction *fcn = r_anal_create_function (anal, "preserved", 0x4000, R_ANAL_FCN_TYPE_FCN, NULL);
+		RAnalFunctionParam param = { .name = "before", .type = "int" };
+		RList *params = r_list_new ();
+		r_list_append (params, &param);
+		RAnalFunctionSignature input = {
+			.ret_type = "int", .callconv = (char *)source_callconvs[i], .params = params,
+			.prototype = R_TYPE_FUNC_PROTOTYPE_FIXED
+		};
+		mu_assert_true (r_anal_function_set_signature (anal, fcn, &input), "seed the original native signature record");
+		param.name = "after";
+		param.type = "char *";
+		input.ret_type = "char";
+		input.noreturn = true;
+		char *error = NULL;
+		RAnalFunctionSignaturePrepared *prepared = r_anal_function_signature_prepare_structured (anal, fcn, &input, true, &error);
+		mu_assert_notnull (prepared, "prepare a genuinely changed signature while preserving operational convention");
+		mu_assert_null (error, "changed structured facts are admitted");
+		mu_assert_streq (r_type_func_ret (anal->sdb_types, "preserved"), "int", "preparation has not applied the return change");
+		mu_assert_true (r_anal_function_set_callconv (anal, fcn, "operational_cc"), "a later explicit operational selection is admitted");
+		const char *operational = r_anal_function_cc (fcn);
+		ut64 function_epoch = r_anal_function_dirty_epoch (fcn);
+		ut64 types_epoch = r_anal_types_dirty_epoch (anal);
+		mu_assert_true (r_anal_function_signature_apply (anal, fcn, prepared), "apply changed source facts without changing the operational selection");
+		r_anal_function_signature_prepared_free (prepared);
+		mu_assert_ptreq (r_anal_function_cc (fcn), operational, "application leaves the concrete function convention untouched");
+		mu_assert_streq (operational, "operational_cc", "the operational convention remains independently selected");
+		mu_assert_nullable_streq (sdb_const_get (anal->sdb_types, "func.preserved.cc", NULL), source_callconvs[i], "source convention or omission remains independent of operational selection");
+		mu_assert_streq (r_type_func_ret (anal->sdb_types, "preserved"), "char", "the return type really changes during preserving application");
+		mu_assert_streq (sdb_const_get (anal->sdb_types, "func.preserved.arg.0", NULL), "char *,after", "the parameter type and name really change during preserving application");
+		mu_assert_true (fcn->is_noreturn, "preserving operational convention still applies supplied noreturn");
+		mu_assert_neq (r_anal_function_dirty_epoch (fcn), function_epoch, "changed signature facts still dirty the function");
+		mu_assert_neq (r_anal_types_dirty_epoch (anal), types_epoch, "changed source records still dirty types");
+		input.ret_type = "short";
+		input.callconv = "source_cc";
+		input.noreturn = false;
+		mu_assert_true (r_anal_function_set_signature (anal, fcn, &input), "ordinary structured assignment still synchronizes intentionally");
+		mu_assert_streq (r_anal_function_cc (fcn), "source_cc", "ordinary assignment applies its supplied convention to the function");
+		mu_assert_streq (r_type_func_ret (anal->sdb_types, "preserved"), "short", "ordinary assignment applies its actual return change");
+		mu_assert_false (fcn->is_noreturn, "ordinary assignment still clears supplied noreturn");
+		r_list_free (params);
+		r_anal_free (anal);
+	}
+	mu_end;
+}
+
 bool test_r_core_signature_long_isolation_admission(void) {
 	int occupied;
 	for (occupied = 0; occupied < 2; occupied++) {
@@ -2117,6 +2171,7 @@ int all_tests(void) {
 	mu_run_test (test_r_core_afs_reuses_selected_parser_admission);
 	mu_run_test (test_r_core_afs_name_collision_preserves_state);
 	mu_run_test (test_r_anal_function_structured_signature_preserves_raw_callconv);
+	mu_run_test (test_r_anal_function_structured_signature_preserves_operational_callconv);
 	mu_run_test (test_r_core_signature_long_isolation_admission);
 	mu_run_test (test_r_core_signature_preserves_independent_flags);
 	mu_run_test (test_r_core_afs_updates_effective_binding);
