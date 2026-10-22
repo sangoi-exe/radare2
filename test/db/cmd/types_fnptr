@@ -129,3 +129,55 @@ struct Layers {
 };
 EOF
 RUN
+
+NAME=idd retains callback commas and nonzero member offsets
+FILE=malloc://32
+ARGS=-a x86 -b 64
+CMDS=<<EOF
+'td struct Callback {char lead;int (*cb)(int,int);char tail;};
+tk tags/struct.Callback.cb
+tk tags/struct.Callback.tail
+idddj struct Callback
+iddt struct Callback.cb
+idda struct Callback.cb
+iddd struct Callback
+EOF
+EXPECT=<<EOF
+int (*)(int, int),8,0
+char,16,0
+{"name":"struct Callback","size":24,"inbits":false,"struct":true,"members":[{"name":"lead","type":"char ","typedef":false,"struct":false,"union":false,"pointer":0,"const":false,"volatile":false,"function":false,"enum":false,"array":false,"size":1,"inbits":false,"offset":0},{"name":"cb","type":"int (*)(int, int)","typedef":false,"struct":false,"union":false,"pointer":1,"const":false,"volatile":false,"function":false,"enum":false,"array":false,"size":8,"inbits":false,"offset":8},{"name":"tail","type":"char ","typedef":false,"struct":false,"union":false,"pointer":0,"const":false,"volatile":false,"function":false,"enum":false,"array":false,"size":1,"inbits":false,"offset":16}]}
+type : int (*)(int, int)
+size : 8
+addr = 0x8
+struct Callback {
+  char lead;
+  int (*cb)(int, int);
+  char tail;
+};
+EOF
+RUN
+
+NAME=idd separates callback parameter pointers from member layers
+FILE=malloc://32
+ARGS=-a x86 -b 64
+CMDS=<<EOF
+'td struct Callback {char lead;int (*cb)(char *);char tail;};
+tk tags/struct.Callback.cb
+idddj struct Callback
+iddt struct Callback.cb
+idda struct Callback.cb
+iddd struct Callback
+EOF
+EXPECT=<<EOF
+int (*)(char *),8,0
+{"name":"struct Callback","size":24,"inbits":false,"struct":true,"members":[{"name":"lead","type":"char ","typedef":false,"struct":false,"union":false,"pointer":0,"const":false,"volatile":false,"function":false,"enum":false,"array":false,"size":1,"inbits":false,"offset":0},{"name":"cb","type":"int (*)(char *)","typedef":false,"struct":false,"union":false,"pointer":1,"const":false,"volatile":false,"function":false,"enum":false,"array":false,"size":8,"inbits":false,"offset":8},{"name":"tail","type":"char ","typedef":false,"struct":false,"union":false,"pointer":0,"const":false,"volatile":false,"function":false,"enum":false,"array":false,"size":1,"inbits":false,"offset":16}]}
+type : int (*)(char *)
+size : 8
+addr = 0x8
+struct Callback {
+  char lead;
+  int (*cb)(char *);
+  char tail;
+};
+EOF
+RUN

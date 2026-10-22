@@ -1028,9 +1028,9 @@ static bool test_anal_cparse_supplied_calling_conventions(void) {
 			free (error);
 			error = NULL;
 		}
-		mu_assert_null (sdb_const_get (anal->sdb_types, "func.outer.cc", NULL), "nested convention refusal does not attach a fact to the outer function");
 		if (parsers[i]) {
 			mu_assert_false (r_anal_import_c_decls (anal, "void outer(int (__attribute__((stdcall)) *nested)(int));", NULL), "TCC refuses an unrepresentable inline callback convention");
+			mu_assert_null (sdb_const_get (anal->sdb_types, "func.outer.cc", NULL), "actual nested convention refusal does not attach a fact to the outer function");
 			mu_assert_false (r_anal_import_c_decls (anal, "void carrier(__attribute__((r2_cc(\"named\"))) int value);", NULL), "TCC must not silently ignore the analysis convention carrier");
 			mu_assert_true (r_anal_import_c_decls (anal,
 				"int trailing(void) __attribute__((stdcall));"
@@ -1041,6 +1041,31 @@ static bool test_anal_cparse_supplied_calling_conventions(void) {
 			mu_assert_false (r_anal_import_c_decls (anal, "typedef int (__attribute__((stdcall)) *ExplicitCB)(int);", NULL), "TCC refuses callback serialization that cannot retain the convention");
 			mu_assert_false (r_anal_import_c_decls (anal, "int (__attribute__((stdcall)) *object_cb)(int);", NULL), "a pointer object cannot silently become a convention-bearing ordinary function");
 		} else {
+			mu_assert_true (r_anal_import_c_decls (anal, "void outer(int (__attribute__((stdcall)) *nested)(int));", &error), "C2 admits the convention-bearing nested callback");
+			mu_assert_null (error, "nested callback convention imports without a diagnostic");
+			mu_assert_null (sdb_const_get (anal->sdb_types, "func.outer.cc", NULL), "the admitted outer function has no supplied convention");
+			char *type = r_type_func_args_type (anal->sdb_types, "outer", 0);
+			mu_assert_notnull (type, "the admitted outer function retains its callback argument");
+			RTypeDecl *decl = r_type_decl_parse (type, R_TYPE_DECL_CONTEXT_ABSTRACT, anal->sdb_types, &error);
+			mu_assert_null (error, "the imported callback reparses through the shared declaration owner");
+			mu_assert_notnull (decl, "the imported callback retains its declaration tree");
+			mu_assert_eq (decl->type->kind, R_TYPE_DECL_POINTER, "the callback argument has an outer pointer");
+			mu_assert_notnull (decl->type->child, "the callback pointer retains its target");
+			mu_assert_eq (decl->type->child->kind, R_TYPE_DECL_FUNCTION, "the callback pointer targets the inner function");
+			mu_assert_streq (decl->type->child->function.callconv, "stdcall", "the supplied convention stays on the actual inner function");
+			r_type_decl_free (decl);
+			free (type);
+			mu_assert_true (r_anal_import_c_decls (anal,
+				"static int plain_static(void);"
+				"__attribute__((cdecl)) static int h(void);"
+				"__attribute__((note(mark))) static int n(void);", &error), "C2 prepares static storage across leading semantic and generic attributes");
+			mu_assert_null (error, "attributed static declarations import without a diagnostic");
+			mu_assert_streq (sdb_const_get (anal->sdb_types, "func.plain_static.@.static", NULL), "true", "ordinary static-only declarations retain their storage metadata");
+			mu_assert_null (sdb_const_get (anal->sdb_types, "func.plain_static.cc", NULL), "static storage does not supply a calling convention");
+			mu_assert_streq (sdb_const_get (anal->sdb_types, "func.h.@.static", NULL), "true", "leading semantic attributes preserve static storage");
+			mu_assert_streq (sdb_const_get (anal->sdb_types, "func.h.cc", NULL), "cdecl", "static preparation preserves the supplied function convention");
+			mu_assert_streq (sdb_const_get (anal->sdb_types, "func.n.@.static", NULL), "true", "leading generic attributes preserve static storage");
+			mu_assert_streq (sdb_const_get (anal->sdb_types, "func.n.@.note", NULL), "mark", "static preparation preserves generic attribute metadata");
 			mu_assert_true (r_anal_import_c_decls (anal, "/// @cdecl\nint annotated(void);", &error), "generic user annotations retain their existing metadata meaning");
 			mu_assert_null (sdb_const_get (anal->sdb_types, "func.annotated.cc", NULL), "a generic annotation does not assert a C calling convention");
 			mu_assert_streq (sdb_const_get (anal->sdb_types, "func.annotated.@.cdecl", NULL), "true", "generic annotation metadata remains intact");

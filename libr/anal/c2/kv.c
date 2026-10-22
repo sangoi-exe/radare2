@@ -419,13 +419,15 @@ static bool kvc_semantic_attribute(const char *text) {
 		|| r_strs_equals (name, R_STRS_LIT ("regparm"));
 }
 
-static char *kvc_declaration_text(KVCParser *kvc, RStrs span, bool metadata) {
+static char *kvc_declaration_text(KVCParser *kvc, RStrs span, bool metadata, bool *is_static) {
 	RStrBuf text;
 	r_strbuf_init (&text);
 	const char *start = span.a;
 	const char *cursor = start;
 	int depth = 0;
 	char quote = 0;
+	bool prefix = is_static != NULL;
+	bool prefix_attribute = false;
 	while (cursor < span.b) {
 		char ch = *cursor;
 		if (quote) {
@@ -437,19 +439,43 @@ static char *kvc_declaration_text(KVCParser *kvc, RStrs span, bool metadata) {
 			}
 			continue;
 		}
-		if (metadata && !depth && (size_t)(span.b - cursor) >= strlen ("__attribute__")
-				&& !strncmp (cursor, "__attribute__", strlen ("__attribute__")) && !kvc_semantic_attribute (cursor)) {
-			RStrs saved = kvc->s;
-			kvc->s = r_strs_new (cursor, span.b);
-			bool parsed = parse_c_attributes (kvc);
-			const char *end = kvc->s.a;
-			kvc->s = saved;
-			if (!parsed || !r_strbuf_append_n (&text, start, cursor - start) || !r_strbuf_append (&text, " ")) {
-				kvc_error (kvc, "Cannot parse declaration attribute");
-				break;
+		if (!depth && (size_t)(span.b - cursor) >= strlen ("__attribute__")
+				&& !strncmp (cursor, "__attribute__", strlen ("__attribute__"))) {
+			if (metadata && !kvc_semantic_attribute (cursor)) {
+				RStrs saved = kvc->s;
+				kvc->s = r_strs_new (cursor, span.b);
+				bool parsed = parse_c_attributes (kvc);
+				const char *end = kvc->s.a;
+				kvc->s = saved;
+				if (!parsed || !r_strbuf_append_n (&text, start, cursor - start) || !r_strbuf_append (&text, " ")) {
+					kvc_error (kvc, "Cannot parse declaration attribute");
+					break;
+				}
+				start = cursor = end;
+				continue;
 			}
-			start = cursor = end;
-			continue;
+			if (prefix) {
+				prefix_attribute = true;
+				cursor += strlen ("__attribute__");
+				continue;
+			}
+		}
+		if (!depth && prefix && !prefix_attribute && !isspace ((ut8)ch)) {
+			if ((size_t)(span.b - cursor) > 6 && !strncmp (cursor, "static", 6) && isspace ((ut8)cursor[6])) {
+				if (!r_strbuf_append_n (&text, start, cursor - start) || !r_strbuf_append (&text, " ")) {
+					kvc_error (kvc, "Cannot prepare static declaration");
+					break;
+				}
+				*is_static = true;
+				prefix = false;
+				RStrs saved = kvc->s;
+				kvc->s = r_strs_new (cursor + 6, span.b);
+				skip_spaces (kvc);
+				start = cursor = kvc->s.a;
+				kvc->s = saved;
+				continue;
+			}
+			prefix = false;
 		}
 		if (ch == '"' || ch == '\'') {
 			quote = ch;
@@ -457,6 +483,9 @@ static char *kvc_declaration_text(KVCParser *kvc, RStrs span, bool metadata) {
 			depth++;
 		} else if (ch == ')' || ch == ']') {
 			depth--;
+			if (!depth) {
+				prefix_attribute = false;
+			}
 		}
 		cursor++;
 	}
@@ -466,9 +495,9 @@ static char *kvc_declaration_text(KVCParser *kvc, RStrs span, bool metadata) {
 	return filtered;
 }
 
-static RTypeDecl *kvc_declaration(KVCParser *kvc, RStrs span, bool metadata) {
+static RTypeDecl *kvc_declaration(KVCParser *kvc, RStrs span, bool metadata, bool *is_static) {
 	kvc_sync_types (kvc);
-	char *text = kvc_declaration_text (kvc, span, metadata);
+	char *text = kvc_declaration_text (kvc, span, metadata, is_static);
 	char *error = NULL;
 	RTypeDecl *decl = text? r_type_decl_parse (text, R_TYPE_DECL_CONTEXT_NAMED, kvc->types, &error): NULL;
 	if (!decl) {
@@ -549,7 +578,7 @@ static bool emit_typedef_declaration(KVCParser *kvc, const char *prefix) {
 		return false;
 	}
 	char *text = r_str_newf ("%s%.*s", prefix? prefix: "", (int)(end - start), start);
-	RTypeDecl *decl = text? kvc_declaration (kvc, r_strs_from (text), false): NULL;
+	RTypeDecl *decl = text? kvc_declaration (kvc, r_strs_from (text), false, NULL): NULL;
 	free (text);
 	if (!decl) {
 		return false;
@@ -849,7 +878,7 @@ static bool parse_struct_body(KVCParser *kvc, const char *type, const char *sn, 
 			kvc_error (kvc, "Missing semicolon in struct member");
 			break;
 		}
-		RTypeDecl *decl = kvc_declaration (kvc, r_strs_new (start, end), true);
+		RTypeDecl *decl = kvc_declaration (kvc, r_strs_new (start, end), true, NULL);
 		if (!decl) {
 			break;
 		}
@@ -1051,18 +1080,13 @@ static bool parse_function(KVCParser *kvc) {
 	if (kvc->error) {
 		return false;
 	}
-	const char *prefix = kvc_peekn (kvc, 7);
-	bool is_static = prefix && !strncmp (prefix, "static", 6) && isspace ((ut8)prefix[6]);
-	if (is_static) {
-		kvc_skipn (kvc, 6);
-		skip_spaces (kvc);
-	}
+	bool is_static = false;
 	const char *start = kvc->s.a;
 	const char *end = scan_to_semicolon (kvc);
 	if (!end) {
 		end = kvc->s.a;
 	}
-	RTypeDecl *decl = kvc_declaration (kvc, r_strs_new (start, end), true);
+	RTypeDecl *decl = kvc_declaration (kvc, r_strs_new (start, end), true, &is_static);
 	if (!decl) {
 		return false;
 	}

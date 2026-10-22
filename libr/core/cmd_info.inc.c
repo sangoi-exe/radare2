@@ -2786,38 +2786,37 @@ static void cmd_idl(RCore *core, const char *input) {
 	free (linkname);
 }
 
-static char *idd_type_base(const char *type, int *ptrs, int *array_count) {
-	char *base = strdup (r_str_trim_head_ro (type));
-	if (!base) {
+static RTypeDecl *idd_type_parse(RCore *core, const char *type) {
+	RTypeDecl *decl = r_type_decl_parse (type, R_TYPE_DECL_CONTEXT_ABSTRACT, core->anal->sdb_types, NULL);
+	if (!decl || decl->name) {
+		r_type_decl_free (decl);
+		R_LOG_ERROR ("Cannot parse type declaration: %s", type);
 		return NULL;
 	}
-	r_str_trim (base);
-	char *bracket = strchr (base, '[');
-	if (bracket) {
-		if (array_count) {
-			*array_count = atoi (bracket + 1);
-		}
-		*bracket = 0;
+	return decl;
+}
+
+static char *idd_type_base(RCore *core, const char *type, int *ptrs, int *array_count) {
+	RTypeDecl *decl = idd_type_parse (core, type);
+	if (!decl) {
+		return NULL;
+	}
+	RTypeDeclNode *node = decl->type;
+	if (array_count) {
+		*array_count = node->kind == R_TYPE_DECL_ARRAY? atoi (node->array.count): 0;
 	}
 	int n_ptrs = 0;
-	char *p = base;
-	while (*p) {
-		if (*p == '*') {
+	while (node->kind == R_TYPE_DECL_POINTER || node->kind == R_TYPE_DECL_ARRAY) {
+		if (node->kind == R_TYPE_DECL_POINTER) {
 			n_ptrs++;
-			*p = ' ';
 		}
-		p++;
+		node = node->child;
 	}
 	if (ptrs) {
 		*ptrs = n_ptrs;
 	}
-	if (r_str_startswith (base, "const ")) {
-		memmove (base, base + 6, strlen (base + 6) + 1);
-	}
-	if (r_str_startswith (base, "volatile ")) {
-		memmove (base, base + 9, strlen (base + 9) + 1);
-	}
-	r_str_trim (base);
+	char *base = node->kind == R_TYPE_DECL_BASE? strdup (node->base.name): NULL;
+	r_type_decl_free (decl);
 	return base;
 }
 
@@ -2830,25 +2829,29 @@ static const char *idd_type_kind(RCore *core, const char *type) {
 }
 
 static char *idd_type_display(RCore *core, const char *type) {
-	int ptrs = 0;
-	int array_count = 0;
-	char *base = idd_type_base (type, &ptrs, &array_count);
-	if (!base) {
+	RTypeDecl *decl = idd_type_parse (core, type);
+	if (!decl) {
 		return NULL;
 	}
-	RStrBuf *sb = r_strbuf_new ("");
-	r_strbuf_append (sb, base);
-	if (ptrs > 0) {
-		r_strbuf_append (sb, " ");
-		int i;
-		for (i = 0; i < ptrs; i++) {
-			r_strbuf_append (sb, "*");
-		}
-	} else {
-		r_strbuf_append (sb, " ");
+	RTypeDeclNode *node = decl->type;
+	while (node->kind == R_TYPE_DECL_ARRAY) {
+		node = node->child;
 	}
-	free (base);
-	return r_strbuf_drain (sb);
+	RTypeDecl display = { .type = node };
+	while (node->kind == R_TYPE_DECL_POINTER || node->kind == R_TYPE_DECL_ARRAY) {
+		node = node->child;
+	}
+	if (node->kind == R_TYPE_DECL_BASE) {
+		node->qualifiers &= ~(R_TYPE_DECL_CONST | R_TYPE_DECL_VOLATILE);
+	}
+	char *text = r_type_decl_render (&display, false);
+	if (text && display.type->kind == R_TYPE_DECL_BASE) {
+		char *spaced = r_str_newf ("%s ", text);
+		free (text);
+		text = spaced;
+	}
+	r_type_decl_free (decl);
+	return text;
 }
 
 static int idd_type_size(RCore *core, const char *type) {
@@ -2857,8 +2860,7 @@ static int idd_type_size(RCore *core, const char *type) {
 }
 
 static bool idd_member_info(RCore *core, const char *type, const char *member, char **member_type, ut64 *offset) {
-	int ptrs = 0;
-	char *base = idd_type_base (type, &ptrs, NULL);
+	char *base = idd_type_base (core, type, NULL, NULL);
 	if (!base) {
 		return false;
 	}
@@ -2867,7 +2869,7 @@ static bool idd_member_info(RCore *core, const char *type, const char *member, c
 		const char *real_type = sdb_const_getf (core->anal->sdb_types, NULL, "typedef.%s", base);
 		if (real_type) {
 			free (base);
-			base = idd_type_base (real_type, NULL, NULL);
+			base = idd_type_base (core, real_type, NULL, NULL);
 			kind = base? idd_type_kind (core, base): NULL;
 		}
 	}
@@ -2877,21 +2879,11 @@ static bool idd_member_info(RCore *core, const char *type, const char *member, c
 	}
 	char *key = NULL;
 	Sdb *db = r_type_base_db (core->anal->sdb_types, base, &key);
-	const char *member_value = db? sdb_const_getf (db, NULL, "%s.%s.%s", kind, key, member): NULL;
+	char *member_key = db? r_str_newf ("%s.%s.%s", kind, key, member): NULL;
+	*member_type = member_key? r_type_get_member (db, member_key, offset, NULL): NULL;
+	free (member_key);
 	free (key);
 	free (base);
-	char *value = member_value? strdup (member_value): NULL;
-	if (!value) {
-		return false;
-	}
-	int vlen = r_str_split (value, ',');
-	if (vlen < 2) {
-		free (value);
-		return false;
-	}
-	*member_type = strdup (r_str_word_get0 (value, 0));
-	*offset = r_num_get (NULL, r_str_word_get0 (value, 1));
-	free (value);
 	return *member_type != NULL;
 }
 
@@ -2933,7 +2925,13 @@ static bool idd_resolve_path(RCore *core, const char *path, ut64 *addr, char **t
 		cur_addr += offset;
 		if (i + 1 < nargs) {
 			int ptrs = 0;
-			char *base = idd_type_base (member_type, &ptrs, NULL);
+			char *base = idd_type_base (core, member_type, &ptrs, NULL);
+			if (!base) {
+				free (member_type);
+				free (cur_type);
+				free (words);
+				return false;
+			}
 			if (ptrs > 0) {
 				cur_addr = idd_read_num (core, cur_addr, core->anal->config->bits / 8);
 			}
@@ -2982,16 +2980,21 @@ static void cmd_iddd(RCore *core, const char *input, bool json) {
 			if (idd_member_info (core, name, member, &member_type, &offset)) {
 				int ptrs = 0;
 				int array_count = 0;
-				char *base = idd_type_base (member_type, &ptrs, &array_count);
+				char *base = idd_type_base (core, member_type, &ptrs, &array_count);
 				const char *member_kind = base? idd_type_kind (core, base): NULL;
 				bool is_typedef = member_kind && !strcmp (member_kind, "typedef");
 				if (!is_typedef && !member_kind && base && r_str_endswith (base, "_t")) {
 					is_typedef = true;
 				}
 				char *display = idd_type_display (core, member_type);
+				if (!display) {
+					free (base);
+					free (member_type);
+					continue;
+				}
 				pj_o (pj);
 				pj_ks (pj, "name", member);
-				pj_ks (pj, "type", display? display: member_type);
+				pj_ks (pj, "type", display);
 				pj_kb (pj, "typedef", is_typedef);
 				pj_kb (pj, "struct", member_kind && !strcmp (member_kind, "struct"));
 				pj_kb (pj, "union", member_kind && !strcmp (member_kind, "union"));
@@ -3030,18 +3033,11 @@ static void cmd_iddd(RCore *core, const char *input, bool json) {
 			char *member_type = NULL;
 			ut64 offset = 0;
 			if (idd_member_info (core, name, member, &member_type, &offset)) {
-				int array_count = 0;
-				char *base = idd_type_base (member_type, NULL, &array_count);
-				free (base);
-				char *display = idd_type_display (core, member_type);
+				char *display = type_c_declaration (core->anal->sdb_types, member_type, member, 0);
 				if (display) {
-					r_cons_printf (core->cons, "  %s%s", display, member);
+					r_cons_printf (core->cons, "  %s;\n", display);
 					free (display);
 				}
-				if (array_count > 0) {
-					r_cons_printf (core->cons, "[%d]", array_count);
-				}
-				r_cons_println (core->cons, ";");
 				free (member_type);
 			}
 		}
@@ -3149,8 +3145,10 @@ static void cmd_idd(RCore *core, const char *input) {
 		char *type = NULL;
 		if (idd_resolve_path (core, input + 3, &addr, &type)) {
 			char *display = idd_type_display (core, type);
-			r_cons_printf (core->cons, "type : %s\n", display? display: type);
-			r_cons_printf (core->cons, "size : %d\n", idd_type_size (core, type));
+			if (display) {
+				r_cons_printf (core->cons, "type : %s\n", display);
+				r_cons_printf (core->cons, "size : %d\n", idd_type_size (core, type));
+			}
 			free (display);
 			free (type);
 		}

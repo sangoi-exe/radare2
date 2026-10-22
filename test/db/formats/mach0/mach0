@@ -289,7 +289,7 @@ EOF
 EXPECT=<<EOF
 paddr=0x000013d8 vaddr=0x1000013d8 haddr=0x00000648 vhaddr=0x100000648 type=program
 --
-info/mach0_uuid_command.format=[4]Ed[16]b (mach0_load_command_type)cmd cmdsize uuid
+info/mach0_uuid_command.format=[4]Ed[16]b (enum mach0_load_command_type)cmd cmdsize uuid
 info/mach0_cmd_8.format=mach0_uuid_command
 info/uuid.0=ff4d6c2e1dc0369d98d0d3040a8049e8
 info/mach0_cmd_8.cmd=uuid
