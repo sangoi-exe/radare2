@@ -31,6 +31,10 @@ Native preparation and Meson build reuse validate matching patches/source inputs
 
 Last reviewed: 2026-10-23 on `master`. Maintainers changing topology, ownership, build/test entry points or dependency integration must refresh this map and the affected child guidance against live files; branch names and installed components are not proof that this map is current.
 
+## Historical native task archives
+
+Completed-task archives are stored at `I:\.wsl\archives\radare2\2026-10-23\` on Windows, accessible at `/mnt/i/.wsl/archives/radare2/2026-10-23/` in WSL. The [archive inventory and restoration record](.sangoi/task-logs/2026-10-23-native-review-remediation.md#authorized-historical-cache-archival-and-disk-recovery) maps each archive to its original path under `/home/lucas/.cache/codex`. The archives retain their original relative paths; external symlink targets are not bundled. These historical archives are not the current task's runtime inputs.
+
 ## Shared prospective commit attribution
 
 Commits materially authored by Codex in any of the four native repositories must include the exact trailer `Co-authored-by: Codex <codex@openai.com>` unless the current user explicitly says otherwise. Apply this prospectively without rewriting existing history or changing Git author/committer configuration.
