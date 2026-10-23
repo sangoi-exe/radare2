@@ -21,11 +21,15 @@ Host type identity belongs to `libr/util/utype.c` and `libr/anal/type.c`. Ordina
 
 Declaration producers record supplied calling-convention facts without inventing `cdecl` for an omitted convention. Current Analysis consumers retain effective-default selection from the active configuration. A generic parser annotation is not a supplied C calling convention; pointer representation does not select a near/far call model.
 
+NE analysis uses `((ut64)selector << 32) | offset32`; the selector is a synthetic segment ordinal, not an observed Windows runtime selector. NE loading and raw relocation encoding belong to `libr/bin/format/ne/ne.c` and `libr/bin/p/bin_ne.c`; raw far-pointer bytes and physical file offsets remain distinct from analysis coordinates. The bridge and isolated native Protected Mode specification consume the same coordinate while retaining ordinary near2/far4 pointers and a 16-bit stack. MZ/OMF and Real Mode retain their existing address models.
+
+Project admission belongs to `libr/core/project.c` and `libr/core/p/newprj/`, with shared binary reading in `read.inc.c`. Identifiable old NE projects refuse before reset or state application. Old NE analysis requires fresh analysis, without migration; partial projects or arbitrary scripts without sufficient identity have no guaranteed automatic detection. A successful load is not evidence of old-coordinate compatibility.
+
 Validation entry points are the host Make build and `r2r`/unit tests below, bridge Meson and `test/db/extras/`, engine `make test`, and the MCP root Make build/test targets; child guidance narrows the component procedures. [The qualified local-component procedure](r2ghidra/doc/win16-fmovmem.md) describes the existing private host/bridge/engine build and matching runtime inputs. Directory nesting or an MCP checkout alone does not select matching linked host libraries, plugins or language files, or establish runtime readiness. File-switch preservation and saved-analysis roundtrips require production-path observation, not source inspection alone; persistence belongs to the host, while the server owns its RCore lifecycle.
 
 Native preparation and Meson build reuse validate matching patches/source inputs through the engine's shared runner. Stale or ambiguous preparation refuses without changing source bytes; preserve changes and prepare a new matching checkout or distribution rather than removing `patch.done` and retrying. Matching prepared distributions remain buildable without Git. The child guides own the preparation details and combined native/bridge test procedure.
 
-Last reviewed: 2026-10-22 on `master`. Maintainers changing topology, ownership, build/test entry points or dependency integration must refresh this map and the affected child guidance against live files; branch names and installed components are not proof that this map is current.
+Last reviewed: 2026-10-23 on `master`. Maintainers changing topology, ownership, build/test entry points or dependency integration must refresh this map and the affected child guidance against live files; branch names and installed components are not proof that this map is current.
 
 ## Shared prospective commit attribution
 
