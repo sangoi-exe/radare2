@@ -2,6 +2,8 @@
 
 ## 2026-10-23
 
+- Implemented user-selected E-A at native9ac11c4 and bridge3a129ec: native enum construction accepts an explicit per-type width, and the bridge consumes the host's effective layout without changing global defaults or identity. Matching private qualification passes95 native,10 preparation,1 XML and113 bridge cases; the only changed existing golden now represents its declared four-byte enum correctly. The bridge pins the tested local engine commit. Full-width CALLF design investigation is complete, but the concrete address representation, old-NE-state disposition and directly exposed BP-offset correction await user selection. The complete task remains unreviewed by its final Code Gate; no global install, push or original-input mutation occurred.
+
 - Reproduced the supplied native/host review findings through real engine, SDK and bridge paths. Native `e6145a1` preserves volatile memory dependencies and single-member union reads while retaining CALLOTHER encoding; native 94/94, preparation 10/10 and root 3/3 decisive checks pass. Host `86f689fecd` preserves effective enum width through read/save; host `213b26aa22` applies explicitly supplied conventions without persisted-readback substitution while preserving later-afc priority. Private full build/install, 107 units, 9 CLI controls and real SDK/plugin probes pass. These are local validated checkpoints, not final review approval. Bridge enum construction and CALLF representation require current-user decisions; final pin/integration/Code Gate remain pending. No global installation, push or original-input mutation.
 
 ## 2026-10-22

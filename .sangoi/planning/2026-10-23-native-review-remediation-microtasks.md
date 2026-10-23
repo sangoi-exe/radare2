@@ -28,10 +28,6 @@ Owner: [Intent Contract](2026-10-23-native-review-remediation.md). This annex re
 - Validation: confirm actual private library/plugin paths, run target-int16 enum read/save and explicit8/32 controls; run concrete new-application, known-convention and intentional-afc controls. No production correction is authorized by this entry.
 - Stop: unmatched component identity, unsupported actual API, required footprint expansion, materially different precedence policy, or a failed setup that cannot be bounded to existing tools. Report exact observed state rather than masking it.
 
-## Pending packages
-
-Volatile correction, union correction, enum coherence, explicit convention application and CALLF correction remain high-level Intent Contract packages. Root will admit concrete correction entries only after the decisive evidence and mechanism are established. These entries are not speculative implementation instructions.
-
 ## N2 — preserve native volatile memory effects and single-member qualifiers
 
 - Objective: Correct V1/V2 while retaining existing CALLOTHER representation and native owners.
@@ -59,4 +55,24 @@ Volatile correction, union correction, enum coherence, explicit convention appli
 
 ## Current execution boundary
 
-N1/H1/N2/H2 are complete. No implementation lane is running. Remaining bridge enum/CALLF/pin/integration/review work is blocked on the Intent Contract's current-user decisions E and F. Do not infer a new task or dispatch from the completed entries.
+N1/H1/N2/H2/N3/B1 are complete. The current user selected E-A and the F-B direction; the epoch2 Strategy-reset audit admitted enum implementation. Read-only F-B design investigation is complete on `/root/full_width_address_design`, including the BP-variable contract and bounded project-admission follow-ups. No address implementation entry is admitted before the concrete design and persisted-data disposition are selected.
+
+## N3 — explicit native enum width
+
+- Objective: Extend the existing native enum factory with explicit per-type byte width while retaining default construction, configured metatype, identity/display and interning.
+- Status: complete on `/root/enum_native_width`; committed at native `9ac11c4a2d8220cc6740398b3d8dad54990595f1`. Focused11/11, full native95/95, preparation10/10 and matching reuse pass; root repeated explicit-width/identity controls2/2.
+- Effective write footprint: canonical `r2ghidra/ghidra-native/patches/0300-explicit-native-type-identity.patch`; fresh generated source/build/test/log outputs only below `/home/lucas/.cache/codex/radare2/native-review-remediation-2026-10-23/enum-native/`.
+- Dependencies: nativee6145a1, stable existing patch stack, closed E-A selection. B1 may inspect/edit its disjoint source but cannot build against changing N3 inputs. Read-only F-B investigation uses committed baselines, not N3's changed enum hunks.
+- Mechanism: append an optional explicit byte-size parameter to the current getTypeEnum boundary. Zero/omission retains the existing configured default; positive size constructs directly with the existing private metatype, name/id/display and findAdd path. Do not change global defaults, create an adapter or add another factory owner.
+- Local discretion: exact parameter name, equivalent local expression and assertions. Existing live default callers retain their intended default behavior; this is not a deprecated alias or dual API.
+- Acceptance: differently sized enums retain identity/display/metatype and values; a later default enum retains its original width. Existing identity and codec controls pass. Validate canonical preparation and focused native tests with matching source; preserve completed proof trees.
+- Stop: required owner/API change beyond selected getTypeEnum boundary, codec/representation change, stale preparation, regression-loop trigger or write expansion. Root commits the tested native candidate before binding the bridge pin.
+
+## B1 — consume host enum width and integrate matching components
+
+- Objective: Import host effective enum width through the selected native factory boundary and qualify it with the corrected host/native components.
+- Status: complete on `/root/enum_bridge_width`, committed at bridge `3a129ec340579815b0d7023c1c4750d922f70e62`. The bounded aeropause64 EXPECT correction passes1/1 and both complete files pass113/113 (resolution37, types76), with no failed, broken or skipped cases. Combined native95/95, preparation10/10, XML1/1 and matching reuse pass. Root verified the complete diff and equality of all four canonical files with their tested copies.
+- Effective write footprint: canonical `r2ghidra/src/R2TypeFactory.cpp`, `r2ghidra/test/db/extras/r2ghidra_type_resolution`, `r2ghidra/subprojects/ghidra-native.wrap`, plus ONLY the `aeropause64 (many features combined)` EXPECT block in `r2ghidra/test/db/extras/r2ghidra_types`; fresh source/build/language/log outputs only below `/home/lucas/.cache/codex/radare2/native-review-remediation-2026-10-23/enum-bridge/`.
+- Mechanism: resolve effective layout through the current host owner with root target context; convert a valid byte extent to the explicit native width. Preserve current enum identity/value handling and existing alias route. Do not route unknown width through the factory's default sentinel, alter global enum defaults or introduce codec adaptation.
+- Acceptance: real H1 inputs yield host8/32 → native1/4 and array3/12; omitted enum width on target16 yields native2 bytes. Preserve ordinary/tag identity and existing type-resolution/convention controls. Combined native/preparation/XML and bridge regression tests use the new exact native pin and H2 private SDK. No fixture pull or global installation.
+- Stop: missing host layout/capacity contract, required source or policy expansion, changing native input during build, stale preparation, or regression-loop trigger. Root owns final rendered-independent runtime inspection, docs and Git.
