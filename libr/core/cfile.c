@@ -1013,7 +1013,7 @@ R_API bool r_core_bin_load(RCore *r, const char *filenameuri, ut64 baddr) {
 	}
 	const ut32 baseline_bin_id = binfile? binfile->id: UT32_MAX;
 	RBinObject *baseline_object = binfile? binfile->bo: NULL;
-	RBuffer *baseline_input = binfile? r_ref (binfile->buf): NULL;
+	RBuffer *baseline_input = binfile && binfile->buf? r_ref (binfile->buf): NULL;
 #if 0
 	//r_core_bin_set_env (r, binfile);
 	if (plugin && plugin->name) {
