@@ -121,20 +121,44 @@ static RVecRBinReloc *patch_relocs(RBinFile *bf) {
 	if (!all_relocs) {
 		return NULL;
 	}
-	size_t imports_size = RVecRBinImport_length (&ne->imports) * 4;
+	size_t imports_size;
+	if (r_mul_overflow (RVecRBinImport_length (&ne->imports), (size_t)4, &imports_size)) {
+		R_LOG_ERROR ("NE import backing size overflow");
+		RVecRBinReloc_free (all_relocs);
+		return NULL;
+	}
 	if (imports_size) {
 		char *uri = r_str_newf ("malloc://%zu", imports_size);
-		RIODesc *desc = b->iob.open_at (b->iob.io, uri, R_PERM_R, 0664, ne->imports_base);
+		RIODesc *desc = b->iob.open (b->iob.io, uri, R_PERM_R, 0664);
 		free (uri);
 		if (!desc) {
 			R_LOG_ERROR ("Cannot map NE artificial import targets");
+			b->iob.desc_use (b->iob.io, bf->fd);
 			RVecRBinReloc_free (all_relocs);
 			return NULL;
 		}
-		RIOMap *map = b->iob.map_get_at (b->iob.io, ne->imports_base);
-		if (map) {
+		bool mapped = true;
+		size_t delta;
+		for (delta = 0; delta < imports_size; delta += 0x10000) {
+			ut64 address;
+			if (!r_bin_ne_import_address (ne, delta / 4, &address)) {
+				mapped = false;
+				break;
+			}
+			RIOMap *map = b->iob.map_add (b->iob.io, desc->fd, R_PERM_R, delta, address, R_MIN ((size_t)0x10000, imports_size - delta));
+			if (!map) {
+				mapped = false;
+				break;
+			}
 			free (map->name);
 			map->name = strdup ("ne.imports");
+		}
+		if (!mapped) {
+			R_LOG_ERROR ("Cannot map NE artificial import targets");
+			b->iob.fd_close (b->iob.io, desc->fd);
+			b->iob.desc_use (b->iob.io, bf->fd);
+			RVecRBinReloc_free (all_relocs);
+			return NULL;
 		}
 		b->iob.desc_use (b->iob.io, bf->fd);
 	}

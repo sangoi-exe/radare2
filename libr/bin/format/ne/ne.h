@@ -41,6 +41,15 @@ typedef struct {
 	char *os;
 } r_bin_ne_obj_t;
 
+static inline bool r_bin_ne_import_address(const r_bin_ne_obj_t *bin, size_t index, ut64 *address) {
+	ut64 selector = bin->imports_base >> 32;
+	if (selector > UT16_MAX || index >= (0x10000 - selector) * 0x4000) {
+		return false;
+	}
+	*address = ((selector + index / 0x4000) << 32) | ((index % 0x4000) * 4);
+	return true;
+}
+
 bool r_bin_ne_get_header_offset(RBuffer *buf, R_OUT ut32 *offset);
 void r_bin_ne_free(r_bin_ne_obj_t *bin);
 r_bin_ne_obj_t *r_bin_ne_new_buf(RBuffer *buf, bool verbose);

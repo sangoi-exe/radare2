@@ -389,6 +389,7 @@ pi 1 @0x123489abcdef
 wx e80000 @0x123489abc020
 pi 1 @0x123489abc020
 ?v $ij @0x123489abc020
+aoj 1 @0x123489abc020~{[0].fail}
 e asm.syntax=att
 pi 1 @0x123489abcdef
 pi 1 @0x123489abc020
@@ -396,6 +397,7 @@ omv 1 0x1234ffff0000
 wx 66e800000000 @0x1234fffffffa
 pi 1 @0x1234fffffffa
 ?v $ij @0x1234fffffffa
+aoj 1 @0x1234fffffffa~{[0].fail}
 EOF
 EXPECT=<<EOF
 0xabcd12345678
@@ -404,10 +406,12 @@ call 0x123489abcdf5
 0x123489abcdf5
 call 0x12340000c023
 0x12340000c023
+20016857333795
 calll 0x123489abcdf5
 callw 0x12340000c023
 calll 0x123400000000
 0x123400000000
+20014547599360
 EOF
 RUN
 

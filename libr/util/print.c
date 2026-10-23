@@ -458,7 +458,7 @@ static int r_print_addr_tostring(RPrint *p, ut64 addr, char *buf, size_t buf_siz
 	}
 	if (use_segoff) {
 		ut32 s, a;
-		r_num_segaddr (addr, p && p->config? p->config->segbas: 0, p && p->config? p->config->seggrn: 4, &s, &a);
+		r_num_segaddr (addr, 0, p && p->config? p->config->seggrn: 4, &s, &a);
 		if (dec) {
 			if (use_color) {
 				return snprintf (buf, buf_size, "%s%9u:%-5u" Color_RESET "%c", pre, s, a, ch);
@@ -1195,7 +1195,7 @@ R_API void r_print_hexdump(RPrint *p, ut64 addr, const ut8 *buf, int len, int ba
 			if (use_segoff) {
 				int seggrn = (p && p->config)? p->config->seggrn: 4;
 				ut32 s, a;
-				r_num_segaddr (addr, p && p->config? p->config->segbas: 0, seggrn, &s, &a);
+				r_num_segaddr (addr, 0, seggrn, &s, &a);
 				snprintf (soff, sizeof (soff), "%04x:%04x ", s, a);
 				delta += strlen (soff) - 10;
 			} else {

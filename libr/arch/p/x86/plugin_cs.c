@@ -4424,6 +4424,10 @@ static bool decode(RArchSession *as, RAnalOp *op, RArchDecodeMask mask) {
 			break;
 		}
 		anop (as, op, addr, buf, len, &handle, insn);
+		if (mode == CS_MODE_16 && as->config->seggrn > 16 && as->config->seggrn <= 32 && op->fail != UT64_MAX) {
+			ut64 offset_mask = (1ULL << as->config->seggrn) - 1;
+			op->fail = (addr & ~offset_mask) | (op->fail & offset_mask);
+		}
 		set_opdir (op, insn);
 		if (mask & R_ARCH_OP_MASK_ESIL) {
 			anop_esil (as, op, addr, buf, len, handle, insn);

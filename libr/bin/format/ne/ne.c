@@ -220,13 +220,18 @@ void r_bin_ne_load_symbols(r_bin_ne_obj_t *bin, RVecRBinSymbol *symbols) {
 	RBinImport *imp;
 	size_t index = 0;
 	R_VEC_FOREACH (&bin->imports, imp) {
+		ut64 address;
+		if (!r_bin_ne_import_address (bin, index++, &address)) {
+			R_LOG_ERROR ("Invalid NE import symbol slot");
+			return;
+		}
 		RBinSymbol *sym = RVecRBinSymbol_emplace_back (symbols);
 		if (!sym) {
 			return;
 		}
 		sym->name = r_bin_name_clone (imp->name);
 		sym->paddr = UT64_MAX;
-		sym->vaddr = bin->imports_base + index++ * 4;
+		sym->vaddr = address;
 		sym->ordinal = imp->ordinal;
 		sym->is_imported = true;
 		sym->type = R_BIN_TYPE_FUNC_STR;
@@ -465,7 +470,9 @@ static RBinImport *ne_reloc_import(r_bin_ne_obj_t *bin, NE_image_reloc_item *rel
 	bool found;
 	size_t index = ht_uu_find (imports_by_key, key, &found);
 	if (found) {
-		*target = bin->imports_base + index * 4;
+		if (!r_bin_ne_import_address (bin, index, target)) {
+			return NULL;
+		}
 		return RVecRBinImport_at (&bin->imports, index);
 	}
 	if (!rel->index || rel->index > bin->ne_header->ModRefs) {
@@ -484,12 +491,11 @@ static RBinImport *ne_reloc_import(r_bin_ne_obj_t *bin, NE_image_reloc_item *rel
 		return NULL;
 	}
 	index = RVecRBinImport_length (&bin->imports);
-	if ((bin->imports_base >> 32) > UT16_MAX || index > (UT32_MAX - 3) / 4) {
+	if (!r_bin_ne_import_address (bin, index, target)) {
 		free (module);
 		free (func);
 		return NULL;
 	}
-	*target = bin->imports_base + (ut64)index * 4;
 	RBinImport *imp = RVecRBinImport_emplace_back (&bin->imports);
 	if (imp) {
 		imp->name = r_bin_name_new_from (r_str_newf ("%s.%s", module, func));

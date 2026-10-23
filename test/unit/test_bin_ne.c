@@ -1,4 +1,5 @@
 #include <r_core.h>
+#include "../../libr/bin/format/ne/ne.h"
 #include "minunit.h"
 
 // Protect the established native NE loader behavior and its evidence-status boundary.
@@ -191,10 +192,162 @@ static bool test_ne_coordinates_and_relocation_bytes(void) {
 	mu_end;
 }
 
+static int failed_import_fd;
+
+static RIOMap *ne_fail_spill_map(RIO *io, int fd, int flags, ut64 delta, ut64 address, ut64 size) {
+	if (address == 0x300000000ULL) {
+		failed_import_fd = fd;
+		return NULL;
+	}
+	return r_io_map_add (io, fd, flags, delta, address, size);
+}
+
+static bool test_ne_import_selector_spill(void) {
+	const size_t unique_count = 0x4002, record_count = unique_count + 2;
+	const size_t size = 0x142 + record_count * 8;
+	ut8 *bytes = calloc (1, size);
+	mu_assert_notnull (bytes, "bounded import-boundary input allocation");
+	ne_image (bytes);
+	r_write_le16 (bytes + 0x5e, 1);
+	r_write_le16 (bytes + 0x68, 0x58);
+	r_write_le16 (bytes + 0x6a, 0x5a);
+	r_write_le16 (bytes + 0x82, 0x40);
+	r_write_le16 (bytes + 0x86, 0x40);
+	memcpy (bytes + 0x9a, "\x03" "DLL", 4);
+	memset (bytes + 0x100, 0, 0x40);
+	size_t i;
+	for (i = 0; i < 28; i += 4) {
+		r_write_le16 (bytes + 0x100 + i, UT16_MAX);
+	}
+	r_write_le16 (bytes + 0x140, record_count);
+	for (i = 0; i < record_count; i++) {
+		size_t slot = i;
+		if (i == unique_count) {
+			slot = 0;
+		} else if (i > unique_count) {
+			slot = 0x4000;
+		}
+		ut16 source = i < 0x3ffe? 0: 4 * (i - 0x3ffe + 1);
+		ut8 *record = bytes + 0x142 + 8 * i;
+		record[0] = 3;
+		record[1] = 1;
+		r_write_le16 (record + 2, source);
+		r_write_le16 (record + 4, 1);
+		r_write_le16 (record + 6, slot + 1);
+	}
+	RCore *core = r_core_new ();
+	r_config_set_b (core->config, "bin.relocs.apply", true);
+	char *uri = r_str_newf ("malloc://%zu", size);
+	mu_assert_notnull (r_core_file_open (core, uri, R_PERM_RWX, 0), "real in-memory NE import-boundary input");
+	free (uri);
+	mu_assert_eq (r_io_fd_write_at (core->io, core->io->desc->fd, 0, bytes, size), size, "physical original input");
+	mu_assert_true (r_core_bin_load (core, NULL, UT64_MAX), "actual Core import-boundary load and patching");
+	RBinFile *file = r_bin_cur (core->bin);
+	mu_assert_streq (file->bo->plugin->meta.name, "ne", "native NE loader selected");
+	mu_assert_eq (RVecRBinImport_length (&file->bo->imports_vec), unique_count, "cross-selector imports retain all distinct identities");
+	mu_assert_eq (RVecRBinReloc_length (file->bo->relocs), record_count, "repeated identities retain their source applications");
+	const struct { size_t record; ut16 ordinal; ut16 source; ut64 target; ut32 pointer; } cases[] = {
+		{ 0x3ffe, 0x3fff, 4, 0x20000fff8ULL, 0x0002fff8 },
+		{ 0x3fff, 0x4000, 8, 0x20000fffcULL, 0x0002fffc },
+		{ 0x4000, 0x4001, 12, 0x300000000ULL, 0x00030000 },
+		{ 0x4001, 0x4002, 16, 0x300000004ULL, 0x00030004 },
+		{ 0x4002, 1, 20, 0x200000000ULL, 0x00020000 },
+		{ 0x4003, 0x4001, 24, 0x300000000ULL, 0x00030000 },
+	};
+	for (i = 0; i < R_ARRAY_SIZE (cases); i++) {
+		char key[96];
+		snprintf (key, sizeof (key), "ne.reloc.1.%zu.target_vaddr", cases[i].record);
+		mu_assert_eq (sdb_num_get (file->sdb_info, key, NULL), cases[i].target, "resolved import target preserves selector and offset16");
+		snprintf (key, sizeof (key), "ne.reloc.1.%zu.application.0.target_vaddr", cases[i].record);
+		mu_assert_eq (sdb_num_get (file->sdb_info, key, NULL), cases[i].target, "source observation uses the same target");
+		RBinSymbol *symbol;
+		int symbols = 0;
+		R_VEC_FOREACH (&file->bo->symbols_vec, symbol) {
+			if (symbol->is_imported && symbol->ordinal == cases[i].ordinal) {
+				mu_assert_eq (symbol->vaddr, cases[i].target, "imported symbol agrees with resolved identity");
+				symbols++;
+			}
+		}
+		mu_assert_eq (symbols, 1, "one symbol for each deduplicated identity");
+		RBinReloc *reloc;
+		int applications = 0;
+		R_VEC_FOREACH (file->bo->relocs, reloc) {
+			if (reloc->paddr == 0x100 + cases[i].source) {
+				mu_assert_notnull (reloc->import, "returned relocation retains its import");
+				mu_assert_eq (reloc->laddr, cases[i].target, "returned import target agrees");
+				applications++;
+			}
+		}
+		mu_assert_eq (applications, 1, "one returned relocation at each selected source");
+		ut8 current[4];
+		mu_assert_true (r_io_read_at (core->io, 0x100000000ULL + cases[i].source, current, sizeof (current)), "read actual relocation overlay");
+		mu_assert_eq (r_read_le32 (current), cases[i].pointer, "far bytes preserve all import identity bits");
+		mu_assert_eq (((ut64)r_read_le16 (current + 2) << 32) | r_read_le16 (current), cases[i].target, "raw far pointer resolves to the allocated coordinate");
+	}
+	RIOMap *first = r_io_map_get_at (core->io, 0x200000000ULL);
+	RIOMap *second = r_io_map_get_at (core->io, 0x300000000ULL);
+	mu_assert_notnull (first, "first import selector map");
+	mu_assert_notnull (second, "spill selector map");
+	mu_assert_true (first != second, "selector-spaced windows remain distinct");
+	mu_assert_eq (first->fd, second->fd, "one backing descriptor");
+	RList *maps = r_io_map_get_by_fd (core->io, first->fd);
+	mu_assert_eq (r_list_length (maps), 2, "only the two selector-spaced windows are mapped");
+	r_list_free (maps);
+	mu_assert_eq (first->delta, 0, "first backing window begins at zero");
+	mu_assert_eq (first->itv.size, 0x10000, "first window covers offset16");
+	mu_assert_eq (second->delta, 0x10000, "spill map advances the backing offset");
+	mu_assert_eq (second->itv.size, 8, "spill map contains the remaining slots");
+	mu_assert_streq (first->name, "ne.imports", "first map name retained");
+	mu_assert_streq (second->name, "ne.imports", "spill map name retained");
+	mu_assert_eq (first->perm, R_PERM_R, "import map permission retained");
+	mu_assert_eq (core->io->desc->fd, file->fd, "original descriptor selection retained");
+	RIOMapAdd map_add = core->bin->iob.map_add;
+	core->bin->iob.map_add = ne_fail_spill_map;
+	failed_import_fd = -1;
+	RVecRBinReloc *failed = file->bo->plugin->patch_relocs (file);
+	core->bin->iob.map_add = map_add;
+	mu_assert_null (failed, "required spill-map failure refuses relocation patching");
+	mu_assert_true (failed_import_fd >= 0, "failure injected after allocating the owned backing descriptor");
+	mu_assert_null (r_io_desc_get (core->io, failed_import_fd), "failed backing descriptor is closed");
+	maps = r_io_map_get_by_fd (core->io, failed_import_fd);
+	mu_assert_eq (r_list_length (maps), 0, "all maps owned by the failed descriptor are removed");
+	r_list_free (maps);
+	mu_assert_ptreq (r_io_map_get_at (core->io, 0x200000000ULL), first, "failed attempt removes only its own first window");
+	mu_assert_ptreq (r_io_map_get_at (core->io, 0x300000000ULL), second, "existing spill mapping retained");
+	mu_assert_eq (core->io->desc->fd, file->fd, "mapping failure restores original descriptor selection");
+	ut8 *original = malloc (size);
+	mu_assert_notnull (original, "bounded original-byte comparison allocation");
+	mu_assert_eq (r_buf_read_at (file->buf, 0, original, size), size, "read actual original input after patching");
+	mu_assert_memeq (original, bytes, size, "selector spill never changes original NE input");
+	free (original);
+	free (bytes);
+	r_core_free (core);
+	mu_end;
+}
+
+static bool test_ne_import_capacity(void) {
+	r_bin_ne_obj_t bin = { .imports_base = 0x200000000ULL };
+	ut64 address;
+	const size_t old_capacity = (UT32_MAX - (2ULL << 16) - 3) / 4 + 1;
+	mu_assert_eq (old_capacity, 65534ULL * 16384, "previous packed selector-limited capacity");
+	mu_assert_true (r_bin_ne_import_address (&bin, old_capacity - 1, &address), "last previously representable import remains admitted");
+	mu_assert_eq (address, 0xffff0000fffcULL, "last slot uses selectorffff and offsetfffc");
+	mu_assert_false (r_bin_ne_import_address (&bin, old_capacity, &address), "selector exhaustion refuses without wrap");
+	bin.imports_base = 0xffff00000000ULL;
+	mu_assert_true (r_bin_ne_import_address (&bin, 16383, &address), "last available selector retains every four-byte slot");
+	mu_assert_eq (address, 0xffff0000fffcULL, "last selector boundary");
+	mu_assert_false (r_bin_ne_import_address (&bin, 16384, &address), "no selector remains afterffff");
+	bin.imports_base = 0x1000000000000ULL;
+	mu_assert_false (r_bin_ne_import_address (&bin, 0, &address), "no import selector remains after maximum NE segment count");
+	mu_end;
+}
+
 int all_tests(void) {
 	mu_run_test (test_ne_resolution_status);
 	mu_run_test (test_ne_incomplete_and_empty);
 	mu_run_test (test_ne_coordinates_and_relocation_bytes);
+	mu_run_test (test_ne_import_selector_spill);
+	mu_run_test (test_ne_import_capacity);
 	return tests_passed != tests_run;
 }
 
