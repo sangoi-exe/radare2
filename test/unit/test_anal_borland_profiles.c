@@ -6,7 +6,7 @@
 #include "../../libr/anal/p/anal_borland.c"
 #undef r_anal_plugin_borland
 
-#define PROFILE_ADDR 0x10000
+#define PROFILE_ADDR 0x100000000ULL
 #define PROFILE_NAME "qualified_test_profile"
 
 static BorlandProfileContext local_profile_bytes(const ut8 *bytes, int size) {
@@ -17,6 +17,7 @@ static BorlandProfileContext local_profile_bytes(const ut8 *bytes, int size) {
 	free (uri);
 	r_config_set (core->config, "asm.arch", "x86");
 	r_config_set_i (core->config, "asm.bits", 16);
+	r_config_set_i (core->config, "asm.addr.segment.bits", 32);
 	r_io_write_at (core->io, PROFILE_ADDR, bytes, size);
 	desc->perm = R_PERM_R;
 	static RBinPlugin plugin = { .meta = { .name = "ne" } };
@@ -310,7 +311,7 @@ static bool test_scrantic_metadata_spaces(void) {
 		RCore *core = original_core ();
 		mu_assert_notnull (core, "actual read-only SCRANTIC metadata witness");
 		RAnal *anal = core->anal;
-		ut64 entry = helper? 0x1033a: 0x105e2, at = helper? 0x1033b: 0x105e4;
+		ut64 entry = helper? 0x10000033aULL: 0x1000005e2ULL, at = helper? 0x10000033bULL: 0x1000005e4ULL;
 		RSpace *manual = r_spaces_set (&anal->meta_spaces, "manual");
 		mu_assert_true (r_meta_set (anal, R_META_TYPE_DATA, at, 2, "manual definition"), "actual LSEEK profile or F_SCOPY helper conflicts with independent DATA");
 		RIntervalNode *data = r_meta_get_in (anal, at, R_META_TYPE_DATA);
@@ -323,9 +324,9 @@ static bool test_scrantic_metadata_spaces(void) {
 		mu_assert_ptreq (r_spaces_current (&anal->meta_spaces), selected, "profile admission preserves current metadata space");
 		mu_assert_null (r_anal_get_function_at (anal, entry), "no global profile/helper function over independent DATA");
 		mu_assert_null (r_type_link_at (anal->sdb_types, entry), "no dependent original-backed prototype");
-		mu_assert_null (r_flag_get (core->flags, helper? "qualified_borland_f_scopy.0001033a": "scrantic_cwm31_lseek_correspondence"), "no dependent profile/helper label");
+		mu_assert_null (r_flag_get (core->flags, helper? "qualified_borland_f_scopy.10000033a": "scrantic_cwm31_lseek_correspondence"), "no dependent profile/helper label");
 		mu_assert_null (r_meta_get_string (anal, R_META_TYPE_COMMENT, entry), "no dependent profile/helper comment");
-		mu_assert_notnull (r_anal_get_function_at (anal, helper? 0x105e2: 0x1033a), "unrelated original function remains qualified");
+		mu_assert_notnull (r_anal_get_function_at (anal, helper? 0x1000005e2ULL: 0x10000033aULL), "unrelated original function remains qualified");
 		RAnalMetaItem *item = data->data;
 		mu_assert_ptreq (item->space, manual, "original-backed DATA space preserved");
 		mu_assert_eq (item->type, R_META_TYPE_DATA, "original-backed DATA kind preserved");
@@ -497,63 +498,63 @@ static bool test_simtower_selected_code(void) {
 	mu_assert_notnull (core, "real SimTower native load");
 	BorlandProfileContext ctx;
 	mu_assert_true (simtower_context (core, &ctx), "literal SimTower original identity");
-	mu_assert_eq (profile_mapped (&ctx, 0x2200, 378, true), 0x10000, "canonical startup mapping");
+	mu_assert_eq (profile_mapped (&ctx, 0x2200, 378, true), 0x100000000ULL, "canonical startup mapping");
 	ut8 startup_bytes[378];
-	mu_assert_true (profile_current (&ctx, 0x2200, 378, 0x10000, startup_bytes), "current relocated startup bytes and context");
+	mu_assert_true (profile_current (&ctx, 0x2200, 378, 0x100000000ULL, startup_bytes), "current relocated startup bytes and context");
 	HelperOp startup[378];
-	mu_assert_true (profile_code (&ctx, 0x2200, 378, 0x10000, startup), "complete startup observation beyond former ceiling");
-	mu_assert_null (r_anal_get_function_at (core->anal, 0x10000), "observed startup is not an invented complete function");
+	mu_assert_true (profile_code (&ctx, 0x2200, 378, 0x100000000ULL, startup), "complete startup observation beyond former ceiling");
+	mu_assert_null (r_anal_get_function_at (core->anal, 0x100000000ULL), "observed startup is not an invented complete function");
 	ut8 current[70];
-	mu_assert_true (profile_current (&ctx, 0x65030, 70, 0x520030, current), "data bytes use the same native original/current qualifier");
-	mu_assert_true (profile_current (&ctx, 0x6029a, 5, 0x4f009a, current), "separate selector/offset current fields qualify without code coverage");
+	mu_assert_true (profile_current (&ctx, 0x65030, 70, 0x5200000030ULL, current), "data bytes use the same native original/current qualifier");
+	mu_assert_true (profile_current (&ctx, 0x6029a, 5, 0x4f0000009aULL, current), "separate selector/offset current fields qualify without code coverage");
 	mu_assert_true (profile_function (&ctx, 0x4224, 13, "simtower_vprinter_scan_entry", R_ANAL_CC_STACK_POP_UNKNOWN, NULL), "independent scanner");
 	mu_assert_true (profile_function (&ctx, 0x423a, 52, "simtower_vprinter_flush_entry", R_ANAL_CC_STACK_POP_UNKNOWN, NULL), "independent flush and shared RET");
 	mu_assert_true (profile_function (&ctx, 0x4231, 9, "simtower_vprinter_emit_entry", R_ANAL_CC_STACK_POP_UNKNOWN, NULL), "exclusive emitter has valid external edges");
-	RAnalFunction *flush = r_anal_get_function_at (core->anal, 0x1203a);
-	RAnalFunction *emitter = r_anal_get_function_at (core->anal, 0x12031);
+	RAnalFunction *flush = r_anal_get_function_at (core->anal, 0x10000203aULL);
+	RAnalFunction *emitter = r_anal_get_function_at (core->anal, 0x100002031ULL);
 	RAnalBlock *emit = r_list_first (emitter->bbs);
-	mu_assert_eq (emit->jump, 0x1206d, "emitter conditional edge to shared RET");
-	mu_assert_eq (emit->fail, 0x1203a, "emitter falls through to separate flush");
+	mu_assert_eq (emit->jump, 0x10000206dULL, "emitter conditional edge to shared RET");
+	mu_assert_eq (emit->fail, 0x10000203aULL, "emitter falls through to separate flush");
 	mu_assert_eq (r_anal_function_realsize (emitter), 9, "external edges do not absorb flush");
 	mu_assert_true (simtower_main (&ctx), "complete VPRINTER exact union");
-	RAnalFunction *main = r_anal_get_function_at (core->anal, 0x1200a);
+	RAnalFunction *main = r_anal_get_function_at (core->anal, 0x10000200aULL);
 	mu_assert_eq (r_anal_function_realsize (main), 1095, "union byte count excludes74 independent bytes");
 	RListIter *iter;
 	RAnalBlock *bb;
 	r_list_foreach (main->bbs, iter, bb) {
-		mu_assert_true (bb->addr + bb->size <= 0x12024 || bb->addr >= 0x1206e, "no main block owns scanner/emitter/flush/shared RET");
+		mu_assert_true (bb->addr + bb->size <= 0x100002024ULL || bb->addr >= 0x10000206eULL, "no main block owns scanner/emitter/flush/shared RET");
 	}
 	RAnalBlock *entry = r_list_first (main->bbs);
-	mu_assert_eq (entry->jump, 0x1206e, "original EB4A remains a branch to the second range");
-	mu_assert_eq (R_ANAL_REF_TYPE_MASK (reference_type (core->anal, 0x12022, 0x1206e)), R_ANAL_REF_TYPE_CODE, "union JMP is not rewritten as a call");
-	mu_assert_ptreq (r_anal_get_function_at (core->anal, 0x1203a), flush, "flush owner retained");
+	mu_assert_eq (entry->jump, 0x10000206eULL, "original EB4A remains a branch to the second range");
+	mu_assert_eq (R_ANAL_REF_TYPE_MASK (reference_type (core->anal, 0x100002022ULL, 0x10000206eULL)), R_ANAL_REF_TYPE_CODE, "union JMP is not rewritten as a call");
+	mu_assert_ptreq (r_anal_get_function_at (core->anal, 0x10000203aULL), flush, "flush owner retained");
 	mu_assert_true (simtower_main (&ctx), "exact union rerun");
-	mu_assert_ptreq (r_anal_get_function_at (core->anal, 0x1200a), main, "union not recreated");
-	r_core_cmd0 (core, "afbt tbl=0x1249b esz=2 n=24 base=0x10000 @0x120db");
-	RList *dispatch_blocks = r_anal_get_blocks_in (core->anal, 0x120db);
+	mu_assert_ptreq (r_anal_get_function_at (core->anal, 0x10000200aULL), main, "union not recreated");
+	r_core_cmd0 (core, "afbt tbl=0x10000249b esz=2 n=24 base=0x100000000 @0x1000020db");
+	RList *dispatch_blocks = r_anal_get_blocks_in (core->anal, 0x1000020dbULL);
 	RAnalBlock *dispatch = r_list_first (dispatch_blocks);
 	mu_assert_notnull (dispatch, "actual dispatch instruction block");
 	RAnalSwitchOp *switch_op = dispatch->switch_op;
 	mu_assert_notnull (switch_op, "native switch owner reads actual24-WORD table");
 	mu_assert_eq (r_list_length (switch_op->cases), 24, "native switch retains24 cells including repeated targets");
-	int switch_reference = reference_type (core->anal, 0x120db, 0x120f9);
+	int switch_reference = reference_type (core->anal, 0x1000020dbULL, 0x1000020f9ULL);
 	mu_assert_eq (R_ANAL_REF_TYPE_MASK (switch_reference), R_ANAL_REF_TYPE_CODE, "native switch has a real case reference");
 	mu_assert_true (simtower_main (&ctx), "independent native switch metadata does not alone reject the exact body");
 	mu_assert_ptreq (dispatch->switch_op, switch_op, "switch metadata is not deleted/recreated");
 	mu_assert_eq (r_list_length (switch_op->cases), 24, "independent switch cases retained");
-	mu_assert_eq (reference_type (core->anal, 0x120db, 0x120f9), switch_reference, "native switch reference retained");
+	mu_assert_eq (reference_type (core->anal, 0x1000020dbULL, 0x1000020f9ULL), switch_reference, "native switch reference retained");
 	r_list_free (dispatch_blocks);
 	mu_assert_true (profile_function (&ctx, 0x5024, 69, "simtower_sprintf_copy_callback", 10, NULL), "actual known callback purge10");
 	mu_assert_true (profile_function (&ctx, 0x606f, 124, "simtower_crt45_candidate_exit_local_helper", 6, NULL), "actual known EXIT local purge6");
 	mu_assert_eq (main->meta.stack_pop, 12, "actual VPRINTER purge12");
-	mu_assert_eq (r_anal_get_function_at (core->anal, 0x12e24)->meta.stack_pop, 10, "callback purge is distinct");
-	mu_assert_eq (r_anal_get_function_at (core->anal, 0x13e6f)->meta.stack_pop, 6, "EXIT purge is distinct");
+	mu_assert_eq (r_anal_get_function_at (core->anal, 0x100002e24ULL)->meta.stack_pop, 10, "callback purge is distinct");
+	mu_assert_eq (r_anal_get_function_at (core->anal, 0x100003e6fULL)->meta.stack_pop, 6, "EXIT purge is distinct");
 	mu_assert_true (profile_number_is (&ctx, "ne.reloc.1.6", "flags", 7), "actual OS instruction-fixup record");
 	mu_assert_true (profile_number_is (&ctx, "ne.reloc.1.6", "application_count", 0), "native loader intentionally does not address-relocate OS instructions");
-	mu_assert_true (profile_current (&ctx, 0x23a9, 2, 0x101a9, current), "unchanged OS instruction bytes qualify against original");
+	mu_assert_true (profile_current (&ctx, 0x23a9, 2, 0x1000001a9ULL, current), "unchanged OS instruction bytes qualify against original");
 	ut8 patch = current[0] ^ 0xff;
-	core->anal->iob.overlay_write_at (core->io, 0x101a9, &patch, 1);
-	mu_assert_false (profile_current (&ctx, 0x23a9, 2, 0x101a9, current), "OS instruction patches are not normalized away");
+	core->anal->iob.overlay_write_at (core->io, 0x1000001a9ULL, &patch, 1);
+	mu_assert_false (profile_current (&ctx, 0x23a9, 2, 0x1000001a9ULL, current), "OS instruction patches are not normalized away");
 	r_core_free (core);
 	mu_end;
 }
@@ -569,31 +570,31 @@ static bool test_simtower_code_preservation(void) {
 		BorlandProfileContext ctx;
 		mu_assert_true (simtower_context (core, &ctx), "preservation original identity");
 		ut8 entry_bytes[26];
-		mu_assert_eq (profile_mapped (&ctx, 0x420a, 26, true), 0x1200a, "canonical main entry mapping");
-		mu_assert_true (profile_current (&ctx, 0x420a, 26, 0x1200a, entry_bytes), "current main entry bytes and context");
+		mu_assert_eq (profile_mapped (&ctx, 0x420a, 26, true), 0x10000200aULL, "canonical main entry mapping");
+		mu_assert_true (profile_current (&ctx, 0x420a, 26, 0x10000200aULL, entry_bytes), "current main entry bytes and context");
 		mu_assert_true (simtower_main (&ctx), "initial exact main body");
-		RAnalFunction *fcn = r_anal_get_function_at (core->anal, 0x1200a);
+		RAnalFunction *fcn = r_anal_get_function_at (core->anal, 0x10000200aULL);
 		RAnalBlock *entry = r_list_first (fcn->bbs);
 		switch (scenario) {
-		case 0: r_anal_hint_set_type (core->anal, 0x12022, R_ANAL_OP_TYPE_CALL); break;
-		case 1: entry->jump = 0x12024; break;
+		case 0: r_anal_hint_set_type (core->anal, 0x100002022ULL, R_ANAL_OP_TYPE_CALL); break;
+		case 1: entry->jump = 0x100002024ULL; break;
 		case 2: fcn->meta.stack_pop = 0; break;
-		case 3: r_anal_hint_set_bits (core->anal, 0x1200b, 32); r_anal_hint_set_bits (core->anal, 0x1200c, 16); break;
+		case 3: r_anal_hint_set_bits (core->anal, 0x10000200bULL, 32); r_anal_hint_set_bits (core->anal, 0x10000200cULL, 16); break;
 		case 4: {
 			ut8 zero = 0;
-			core->anal->iob.overlay_write_at (core->io, 0x12499, &zero, 1);
+			core->anal->iob.overlay_write_at (core->io, 0x100002499ULL, &zero, 1);
 			break;
 		}
 		}
 		ut64 jump = entry->jump;
 		int pop = fcn->meta.stack_pop;
 		mu_assert_false (simtower_main (&ctx), "override-only hint, flow, cleanup, context or RET12-to-RET0 patch refuses");
-		mu_assert_ptreq (r_anal_get_function_at (core->anal, 0x1200a), fcn, "conflicted function retained");
+		mu_assert_ptreq (r_anal_get_function_at (core->anal, 0x10000200aULL), fcn, "conflicted function retained");
 		mu_assert_eq (entry->jump, jump, "independent flow retained");
 		mu_assert_eq (fcn->meta.stack_pop, pop, "independent cleanup retained");
 		mu_assert_eq (r_anal_function_realsize (fcn), 1095, "conflicted union remains intact");
 		if (!scenario) {
-			RAnalHint *hint = r_anal_hint_get (core->anal, 0x12022);
+			RAnalHint *hint = r_anal_hint_get (core->anal, 0x100002022ULL);
 			mu_assert_notnull (hint, "override-only native hint retained");
 			mu_assert_eq (hint->type, R_ANAL_OP_TYPE_CALL, "hint was not silently cleared");
 			r_anal_hint_free (hint);
@@ -604,14 +605,14 @@ static bool test_simtower_code_preservation(void) {
 	mu_assert_notnull (core, "ordinary selected native analysis input");
 	BorlandProfileContext ctx;
 	mu_assert_true (simtower_context (core, &ctx), "ordinary analysis original identity");
-	r_core_cmd0 (core, "af @0x1206e");
-	RAnalFunction *continuation = r_anal_get_function_at (core->anal, 0x1206e);
+	r_core_cmd0 (core, "af @0x10000206e");
+	RAnalFunction *continuation = r_anal_get_function_at (core->anal, 0x10000206eULL);
 	mu_assert_notnull (continuation, "native independent continuation owner");
 	ut64 size = r_anal_function_realsize (continuation);
 	mu_assert_false (simtower_main (&ctx), "independent native continuation cannot be absorbed or deleted");
-	mu_assert_ptreq (r_anal_get_function_at (core->anal, 0x1206e), continuation, "ordinary continuation remains separately owned");
+	mu_assert_ptreq (r_anal_get_function_at (core->anal, 0x10000206eULL), continuation, "ordinary continuation remains separately owned");
 	mu_assert_eq (r_anal_function_realsize (continuation), size, "ordinary incomplete analysis is not repaired");
-	mu_assert_null (r_anal_get_function_at (core->anal, 0x1200a), "refused union does not create an entry");
+	mu_assert_null (r_anal_get_function_at (core->anal, 0x10000200aULL), "refused union does not create an entry");
 	r_core_free (core);
 	mu_end;
 }
@@ -627,7 +628,7 @@ static bool test_scrantic_production(void) {
 	r_anal_plugin_action (core->anal, R_ANAL_PLUGIN_ACTION_PRE_ANALYSIS, NULL);
 	size_t i;
 	for (i = 0; i < R_ARRAY_SIZE (scrantic_functions); i++) {
-		ut64 addr = 0x10000 + scrantic_functions[i].start - 0x800;
+		ut64 addr = 0x100000000ULL + scrantic_functions[i].start - 0x800;
 		RAnalFunction *fcn = r_anal_get_function_at (core->anal, addr);
 		mu_assert_notnull (fcn, "automatic profile function");
 		mu_assert_streq (fcn->name, scrantic_functions[i].name, "qualified, nonhistorical name");
@@ -639,8 +640,8 @@ static bool test_scrantic_production(void) {
 			mu_assert_notnull (strstr (comment, "no proved net-cleanup override"), "source uncertainty retained");
 		}
 	}
-	mu_assert_eq (R_ANAL_REF_TYPE_MASK (reference_type (core->anal, 0x126e3, 0xd07e5)), R_ANAL_REF_TYPE_DATA, "first exact FAR DATA binding");
-	mu_assert_eq (R_ANAL_REF_TYPE_MASK (reference_type (core->anal, 0x12798, 0xd0962)), R_ANAL_REF_TYPE_DATA, "second exact FAR DATA binding");
+	mu_assert_eq (R_ANAL_REF_TYPE_MASK (reference_type (core->anal, 0x1000026e3ULL, 0xd000007e5ULL)), R_ANAL_REF_TYPE_DATA, "first exact FAR DATA binding");
+	mu_assert_eq (R_ANAL_REF_TYPE_MASK (reference_type (core->anal, 0x100002798ULL, 0xd00000962ULL)), R_ANAL_REF_TYPE_DATA, "second exact FAR DATA binding");
 	for (i = 0; i < R_ARRAY_SIZE (scrantic_annotations); i++) {
 		BorlandProfileContext ctx = { core->anal, core->bin->cur, NULL };
 		ut64 addr = profile_mapped (&ctx, scrantic_annotations[i].physical, 1, false);
@@ -651,20 +652,20 @@ static bool test_scrantic_production(void) {
 			mu_assert_eq (flag->addr, addr, "label coordinate");
 		}
 	}
-	RAnalFunction *unknown = r_anal_get_function_at (core->anal, 0x1229c);
+	RAnalFunction *unknown = r_anal_get_function_at (core->anal, 0x10000229cULL);
 	unknown->meta.stack_pop = 8;
 	const char *cc = unknown->callconv;
-	r_meta_set_string (core->anal, R_META_TYPE_COMMENT, 0x105e2, "manual original comment");
+	r_meta_set_string (core->anal, R_META_TYPE_COMMENT, 0x1000005e2ULL, "manual original comment");
 	char *output = r_anal_cmd (core->anal, "borland");
 	mu_assert_notnull (output, "real explicit production entry");
 	free (output);
 	mu_assert_eq (unknown->meta.stack_pop, 8, "source UNKNOWN does not reset native inference");
 	mu_assert_ptreq (unknown->callconv, cc, "no fake heap convention");
-	mu_assert_notnull (strstr (r_meta_get_string (core->anal, R_META_TYPE_COMMENT, 0x105e2), "manual original comment"), "original manual comment appended, not replaced");
-	char *comment = strdup (r_meta_get_string (core->anal, R_META_TYPE_COMMENT, 0x105e2));
+	mu_assert_notnull (strstr (r_meta_get_string (core->anal, R_META_TYPE_COMMENT, 0x1000005e2ULL), "manual original comment"), "original manual comment appended, not replaced");
+	char *comment = strdup (r_meta_get_string (core->anal, R_META_TYPE_COMMENT, 0x1000005e2ULL));
 	output = r_anal_cmd (core->anal, "borland");
 	free (output);
-	mu_assert_streq (r_meta_get_string (core->anal, R_META_TYPE_COMMENT, 0x105e2), comment, "original rerun idempotence");
+	mu_assert_streq (r_meta_get_string (core->anal, R_META_TYPE_COMMENT, 0x1000005e2ULL), comment, "original rerun idempotence");
 	free (comment);
 	r_core_free (core);
 	mu_end;
@@ -681,24 +682,24 @@ static bool test_scrantic_production_preservation(void) {
 		BorlandProfileContext ctx;
 		mu_assert_true (profile_identity (core->anal, &ctx, "ne", 295952, "f0552c281a2a9b367ad5f41402a907a3c99e73ad0a221ba14d063e31cff594ac"), "literal original identity");
 		mu_assert_true (profile_function (&ctx, 0x2eb8, 73, scrantic_functions[1].name, 0, scrantic_functions[1].comment), "qualified initial FHEAP73 body");
-		RAnalFunction *fcn = r_anal_get_function_at (core->anal, 0x126b8);
+		RAnalFunction *fcn = r_anal_get_function_at (core->anal, 0x1000026b8ULL);
 		RAnalBlock *bb = r_list_first (fcn->bbs);
 		switch (scenario) {
 		case 0: r_anal_function_rename (fcn, "manual_fheap73"); break;
 		case 1: bb->size--; break;
 		case 2: fcn->meta.stack_pop = 8; break;
-		case 3: r_anal_hint_set_bits (core->anal, 0x126bb, 32); r_anal_hint_set_bits (core->anal, 0x126bc, 16); break;
+		case 3: r_anal_hint_set_bits (core->anal, 0x1000026bbULL, 32); r_anal_hint_set_bits (core->anal, 0x1000026bcULL, 16); break;
 		case 4: {
 			ut8 patched = 0x90;
-			core->anal->iob.overlay_write_at (core->io, 0x126b8, &patched, 1);
+			core->anal->iob.overlay_write_at (core->io, 0x1000026b8ULL, &patched, 1);
 			break;
 		}
-		case 5: bb->jump = 0x126b9; break;
-		case 6: r_flag_set (core->flags, scrantic_functions[1].name, 0x126b9, 99); break;
+		case 5: bb->jump = 0x1000026b9ULL; break;
+		case 6: r_flag_set (core->flags, scrantic_functions[1].name, 0x1000026b9ULL, 99); break;
 		}
 		ut64 size = bb->size, jump = bb->jump;
 		int pop = fcn->meta.stack_pop;
-		int original_ref = reference_type (core->anal, 0x126e3, 0xd07e5);
+		int original_ref = reference_type (core->anal, 0x1000026e3ULL, 0xd000007e5ULL);
 		char *name = strdup (fcn->name);
 		char *output = r_anal_cmd (core->anal, "borland");
 		mu_assert_notnull (output, "actual production refusal path");
@@ -709,20 +710,20 @@ static bool test_scrantic_production_preservation(void) {
 		mu_assert_eq (bb->jump, jump, "original flow retained");
 		mu_assert_null (r_flag_get (core->flags, "scrantic_fheap_getmem_binding"), "refused prerequisite stops field label");
 		mu_assert_null (r_flag_get (core->flags, "scrantic_fheap_subordinate_13_07e5"), "refused prerequisite stops target label");
-		mu_assert_eq (reference_type (core->anal, 0x126e3, 0xd07e5), original_ref, "refusal preserves preexisting native loader reference");
+		mu_assert_eq (reference_type (core->anal, 0x1000026e3ULL, 0xd000007e5ULL), original_ref, "refusal preserves preexisting native loader reference");
 		free (name);
 		r_core_free (core);
 	}
 	RCore *core = original_core ();
 	mu_assert_notnull (core, "real read-only independent reference input");
-	r_anal_xrefs_set (core->anal, 0x126e3, 0xd07e5, R_ANAL_REF_TYPE_CODE);
-	r_anal_xrefs_set (core->anal, 0x126e3, 0xd07e6, R_ANAL_REF_TYPE_DATA);
-	int previous_code = reference_type (core->anal, 0x126e3, 0xd07e5);
-	int previous_data = reference_type (core->anal, 0x126e3, 0xd07e6);
+	r_anal_xrefs_set (core->anal, 0x1000026e3ULL, 0xd000007e5ULL, R_ANAL_REF_TYPE_CODE);
+	r_anal_xrefs_set (core->anal, 0x1000026e3ULL, 0xd000007e6ULL, R_ANAL_REF_TYPE_DATA);
+	int previous_code = reference_type (core->anal, 0x1000026e3ULL, 0xd000007e5ULL);
+	int previous_data = reference_type (core->anal, 0x1000026e3ULL, 0xd000007e6ULL);
 	char *output = r_anal_cmd (core->anal, "borland");
 	free (output);
-	mu_assert_eq (reference_type (core->anal, 0x126e3, 0xd07e5), previous_code, "same-pair independent reference not retyped");
-	mu_assert_eq (reference_type (core->anal, 0x126e3, 0xd07e6), previous_data, "other independent reference retained");
+	mu_assert_eq (reference_type (core->anal, 0x1000026e3ULL, 0xd000007e5ULL), previous_code, "same-pair independent reference not retyped");
+	mu_assert_eq (reference_type (core->anal, 0x1000026e3ULL, 0xd000007e6ULL), previous_data, "other independent reference retained");
 	mu_assert_null (r_flag_get (core->flags, "scrantic_fheap_getmem_binding"), "preserved conflicting reference stops dependent binding label");
 	mu_assert_null (r_flag_get (core->flags, "scrantic_fheap_subordinate_13_07e5"), "preserved conflicting reference stops dependent target label");
 	r_core_free (core);

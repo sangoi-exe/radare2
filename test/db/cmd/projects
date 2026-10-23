@@ -968,3 +968,75 @@ EXPECT=<<EOF
             0x00000000      57             push rdi
 EOF
 RUN
+
+NAME=Named projects refuse identified old NE scripts and selected binary state before reset
+FILE=bins/ne/anim8.exe
+CMDS=<<EOF_CMDS
+mkdir .tmp
+e prj.vc=false
+e dir.projects=.tmp/h4-old-ne
+e asm.addr.segment.bits=0x10
+f old.saved=0x10020
+e prj.new=false
+P+ oldlegacy
+e prj.new=true
+P+ oldbinary
+o--
+o malloc://0x100
+omp 1 rwx
+e asm.arch=x86
+e asm.bits=16
+e asm.addr.segment.bits=4
+e asm.lines=false
+e prj.name=current_guard
+wx 4090 @0x20
+f current.marker=0x20
+af+ 0x20 current_function
+afb+ 0x20 0x20 2
+e prj.new=false
+P oldlegacy
+o*~?
+om*~?
+p8 2 @0x20
+f~current.marker
+f~old.saved
+afl~current_function
+e asm.addr.segment.bits
+e asm.lines
+e prj.name
+e prj.new=true
+P oldbinary
+o*~?
+om*~?
+p8 2 @0x20
+f~current.marker
+f~old.saved
+afl~current_function
+e asm.addr.segment.bits
+e asm.lines
+e prj.name
+rmrf .tmp/h4-old-ne
+EOF_CMDS
+EXPECT=<<EOF_EXPECT
+1
+1
+4090
+0x00000020 1 current.marker
+0x00000020    1      2 current_function
+4
+false
+current_guard
+1
+1
+4090
+0x00000020 1 current.marker
+0x00000020    1      2 current_function
+4
+false
+current_guard
+EOF_EXPECT
+EXPECT_ERR=<<EOF_ERR
+ERROR: Old NE project coordinates are unsupported; analyze the original binary again
+ERROR: Old NE project coordinates are unsupported; analyze the original binary again
+EOF_ERR
+RUN

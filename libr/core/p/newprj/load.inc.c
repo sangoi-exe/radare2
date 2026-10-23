@@ -155,40 +155,6 @@ static void rprj_eval_load(RPrjCursor *cur, int mode, ut64 next_entry) {
 	}
 }
 
-static ut8 *rprj_find(RBuffer *b, ut32 type, ut32 *size) {
-	r_buf_seek (b, RPRJ_HEADER_SIZE, SEEK_SET);
-	const ut64 last = r_buf_size (b);
-	ut64 at = r_buf_at (b);
-	*size = 0;
-	while (r_buf_at (b) < last) {
-		R2ProjectEntry entry = {0};
-		if (!rprj_entry_read (b, &entry)) {
-			R_LOG_ERROR ("find: Cannot read entry");
-			break;
-		}
-		if (entry.size < RPRJ_ENTRY_SIZE || entry.size > last - at) {
-			R_LOG_ERROR ("invalid size");
-			break;
-		}
-		if (entry.type == type) {
-			const ut32 data_size = entry.size - RPRJ_ENTRY_SIZE;
-			ut8 *buf = data_size? malloc (data_size): R_NEWS0 (ut8, 1);
-			if (buf) {
-				if (data_size && r_buf_read_at (b, at + RPRJ_ENTRY_SIZE, buf, data_size) != (st64)data_size) {
-					free (buf);
-					return NULL;
-				}
-				*size = data_size;
-				return buf;
-			}
-			return NULL;
-		}
-		at += entry.size;
-		r_buf_seek (b, at, SEEK_SET); // entry.size, SEEK_CUR);
-	}
-	return NULL;
-}
-
 static bool read_flag_extra_str(RPrjCursor *cur, ut64 next_entry, const char **out) {
 	RBuffer *b = cur->b;
 	ut32 idx;
@@ -1793,23 +1759,12 @@ static bool rprj_load_entries(RPrjCursor *cur, int mode) {
 }
 
 static char *r_core_newprj_load(RCore *core, const char *file, int mode) {
-	RBuffer *b = r_buf_new_from_file (file);
-	if (!b) {
-		R_LOG_ERROR ("Cannot open file");
-		return NULL;
-	}
 	R2ProjectHeader hdr;
-	if (!rprj_header_read (b, &hdr)) {
-		R_LOG_ERROR ("Invalid file type");
-		r_unref (b);
-		return NULL;
-	}
-	if (hdr.version != RPRJ_VERSION) {
-		R_LOG_ERROR ("Unsupported project version %d (this build understands version %d)", hdr.version, RPRJ_VERSION);
-		r_unref (b);
-		return NULL;
-	}
 	R2ProjectStringTable st = {0};
+	RBuffer *b = rprj_read_open (file, &hdr, &st);
+	if (!b) {
+		return NULL;
+	}
 	RStrBuf *out = r_strbuf_new ("");
 	RPrjCursor cur = {
 		.core = core,
@@ -1828,13 +1783,8 @@ static char *r_core_newprj_load(RCore *core, const char *file, int mode) {
 	ut8 *modsbuf = NULL;
 	ut8 *statebuf = NULL;
 	bool valid = false;
-	st.data = rprj_find (b, RPRJ_STRS, &st.size);
-	if (!st.data) {
-		R_LOG_ERROR ("Missing string table (RPRJ_STRS) in project file");
-		goto done;
-	}
-	if (!rprj_st_is_valid (&st)) {
-		R_LOG_ERROR ("Invalid string table (RPRJ_STRS) in project file");
+	if ((mode & R_CORE_NEWPRJ_MODE_LOAD) && rprj_is_old_ne (b, &st)) {
+		R_LOG_ERROR ("Old NE project coordinates are unsupported; analyze the original binary again");
 		goto done;
 	}
 	if (mode & R_CORE_NEWPRJ_MODE_RESTORE) {

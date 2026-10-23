@@ -6815,7 +6815,7 @@ static char *ds_sub_jumps(RDisasmState *ds, const char *str) {
 					ut64 seg = r_num_get (NULL, ptr);
 					ut64 off = r_num_get (NULL, colon + 1);
 					*colon = ':';
-					numval = (seg << seggrn) + off;
+					numval = seggrn >= 0 && seggrn <= 32? (seg << seggrn) + off: UT64_MAX;
 				} else {
 					char *s = colon + 1;
 					if (s && isdigit ((ut8)*s)) {

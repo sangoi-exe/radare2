@@ -1377,25 +1377,25 @@ CMDS=<<EOF
 mkdir .tmp
 rm .tmp/newprj-restore-ne.prj
 e io.cache=true
-wx 40919293 @ 0x10020
-wx aabb @ 0x10021
+wx 40919293 @ 0x100000020
+wx aabb @ 0x100000021
 wc++
-wx cc @ 0x10022
-wx dd @ 0x10030
-f persisted.flag=0x10020
-af+ 0x10020 persisted.native
-afb+ 0x10020 0x10020 4
-CC persisted.comment @ 0x10020
-Ct int16_t @ 0x10020
+wx cc @ 0x100000022
+wx dd @ 0x100000030
+f persisted.flag=0x100000020
+af+ 0x100000020 persisted.native
+afb+ 0x100000020 0x100000020 4
+CC persisted.comment @ 0x100000020
+Ct int16_t @ 0x100000020
 tcc void projectopaque (ax)
-afc projectopaque @ 0x10020
+afc projectopaque @ 0x100000020
 tcc- projectopaque
 "td struct ProjectPair { int x; int y; };"
-axd 0x10030 0x10020
-ahi 7 @ 0x10020
+axd 0x100000030 0x100000020
+ahi 7 @ 0x100000020
 e asm.lines=true
 prj snapshot .tmp/newprj-restore-ne.prj
-!r2 -NNq -e bin.relocs.apply=true -c 'e asm.lines=false;prj restore .tmp/newprj-restore-ne.prj;i~format;p8 4 @0x10001;p8 4 @0x10020;p8 1 @0x10030;f~persisted.flag;afl~persisted.native;afb @0x10020;CC. @0x10020;Ct. @0x10020;afc @0x10020;tsc struct ProjectPair;axf @0x10020~[0-1];ah. @0x10020;e asm.lines' bins/ne/anim8.exe
+!r2 -NNq -e bin.relocs.apply=true -c 'e asm.lines=false;prj restore .tmp/newprj-restore-ne.prj;i~format;p8 4 @0x100000001;p8 4 @0x100000020;p8 1 @0x100000030;f~persisted.flag;afl~persisted.native;afb @0x100000020;CC. @0x100000020;Ct. @0x100000020;afc @0x100000020;tsc struct ProjectPair;axf @0x100000020~[0-1];ah. @0x100000020;e asm.lines' bins/ne/anim8.exe
 rm .tmp/newprj-restore-ne.prj
 EOF
 EXPECT=<<EOF
@@ -1403,9 +1403,9 @@ format   ne
 00000300
 40aacc93
 dd
-0x00010020 1 persisted.flag
-0x00010020    1      4 persisted.native
-0x00010020 0x00010024 00:0000 4
+0x100000020 1 persisted.flag
+0x100000020    1      4 persisted.native
+0x100000020 0x100000024 00:0000 4
 persisted.comment
 int16_t
 projectopaque
@@ -1413,8 +1413,8 @@ struct ProjectPair {
   int x;
   int y;
 };
-DATA 0x10030
- 0x00010020 => immbase=7
+DATA 0x100000030
+ 0x100000020 => immbase=7
 false
 EOF
 RUN
@@ -1524,7 +1524,7 @@ ARGS=-e bin.relocs.apply=true
 CMDS=<<EOF
 mkdir .tmp
 rm .tmp/newprj-restore-refuse.prj
-f saved.only=0x10020
+f saved.only=0x100000020
 prj save .tmp/newprj-restore-refuse.prj
 o--
 o malloc://0x100
@@ -1554,39 +1554,39 @@ mkdir .tmp
 rm .tmp/newprj-opcode-seed.prj
 rm .tmp/newprj-warm.prj
 rm .tmp/newprj-post-warm.prj
-!r2 -NNq -e bin.relocs.apply=true -c 'e io.cache=true;wx 90 @0x10000;prj save .tmp/newprj-opcode-seed.prj' bins/ne/anim8.exe
+!r2 -NNq -e bin.relocs.apply=true -c 'e io.cache=true;wx 90 @0x100000000;prj save .tmp/newprj-opcode-seed.prj' bins/ne/anim8.exe
 prj restore .tmp/newprj-opcode-seed.prj
-p8 5 @ 0x10000
+p8 5 @ 0x100000000
 e anal.nopskip=false
-wx 4091929394 @ 0x10020
-af+ 0x10000 saved_entry
-afb+ 0x10000 0x10000 5
-afs uint16_t saved_entry (uint16_t value) @ 0x10000
-af+ 0x10020 saved_call
-afb+ 0x10020 0x10020 5
-afs uint16_t saved_call (uint16_t value) @ 0x10020
+wx 4091929394 @ 0x100000020
+af+ 0x100000000 saved_entry
+afb+ 0x100000000 0x100000000 5
+afs uint16_t saved_entry (uint16_t value) @ 0x100000000
+af+ 0x100000020 saved_call
+afb+ 0x100000020 0x100000020 5
+afs uint16_t saved_call (uint16_t value) @ 0x100000020
 tcc void projectopaque (ax)
-afc projectopaque @ 0x10020
+afc projectopaque @ 0x100000020
 tcc- projectopaque
-CC saved comment @ 0x10020
-axd 0x10030 0x10020
+CC saved comment @ 0x100000020
+axd 0x100000030 0x100000020
 prj save .tmp/newprj-warm.prj
-afn unsaved_entry @ 0x10000
-afs void unsaved_entry () @ 0x10000
-afn unsaved_call @ 0x10020
-afs void unsaved_call () @ 0x10020
+afn unsaved_entry @ 0x100000000
+afs void unsaved_entry () @ 0x100000000
+afn unsaved_call @ 0x100000020
+afs void unsaved_call () @ 0x100000020
 o--
 o bins/ne/anim8.exe
 prj restore .tmp/newprj-warm.prj
-p8 5 @ 0x10000
+p8 5 @ 0x100000000
 afl~saved_
-afs @ 0x10000
-afs @ 0x10020
-afc @ 0x10020
-CC. @ 0x10020
-axf @ 0x10020~[0-1]
+afs @ 0x100000000
+afs @ 0x100000020
+afc @ 0x100000020
+CC. @ 0x100000020
+axf @ 0x100000020~[0-1]
 prj save .tmp/newprj-post-warm.prj
-!r2 -NNq -e bin.cache=true -e bin.relocs.apply=true -c 'prj restore .tmp/newprj-post-warm.prj;afl~saved_;afs @0x10000;afs @0x10020' bins/ne/anim8.exe
+!r2 -NNq -e bin.cache=true -e bin.relocs.apply=true -c 'prj restore .tmp/newprj-post-warm.prj;afl~saved_;afs @0x100000000;afs @0x100000020' bins/ne/anim8.exe
 rm .tmp/newprj-opcode-seed.prj
 rm .tmp/newprj-warm.prj
 rm .tmp/newprj-post-warm.prj
@@ -1594,15 +1594,15 @@ EOF
 EXPECT=<<EOF
 9000000300
 9000000300
-0x00010000    1      5 saved_entry
-0x00010020    1      5 saved_call
+0x100000000    1      5 saved_entry
+0x100000020    1      5 saved_call
 uint16_t saved_entry (uint16_t value);
 uint16_t saved_call (uint16_t value);
 projectopaque
 saved comment
-DATA 0x10030
-0x00010000    1      5 saved_entry
-0x00010020    1      5 saved_call
+DATA 0x100000030
+0x100000000    1      5 saved_entry
+0x100000020    1      5 saved_call
 uint16_t saved_entry (uint16_t value);
 uint16_t saved_call (uint16_t value);
 EOF
@@ -1731,10 +1731,10 @@ ARGS=-B 0 -e bin.cache=true -e bin.relocs.apply=true
 CMDS=<<EOF
 mkdir .tmp
 rm .tmp/newprj-baseline-lifecycle.prj
-CCu saved_comment @ 0x10020
+CCu saved_comment @ 0x100000020
 prj snapshot .tmp/newprj-baseline-lifecycle.prj
-!r2 -NNq -B 0 -e bin.cache=true -e bin.relocs.apply=true -c 'CCu current_comment @0x10020;omv 1 0x40000;omv 1 0x20000;prj restore .tmp/newprj-baseline-lifecycle.prj || echo stale-map-refused;CC. @0x10020;p8 4 @0x10001' bins/ne/anim8.exe
-!r2 -NNq -B 0 -e bin.cache=true -e bin.relocs.apply=true -c 'CCu current_comment @0x10020;obr 0x100000;obr 0;prj restore .tmp/newprj-baseline-lifecycle.prj || echo stale-object-refused;CC. @0x10020;p8 4 @0x10001' bins/ne/anim8.exe
+!r2 -NNq -B 0 -e bin.cache=true -e bin.relocs.apply=true -c 'CCu current_comment @0x100000020;omv 1 0x400000000;omv 1 0x200000000;prj restore .tmp/newprj-baseline-lifecycle.prj || echo stale-map-refused;CC. @0x100000020;p8 4 @0x100000001' bins/ne/anim8.exe
+!r2 -NNq -B 0 -e bin.cache=true -e bin.relocs.apply=true -c 'CCu current_comment @0x100000020;obr 0x100000;obr 0;prj restore .tmp/newprj-baseline-lifecycle.prj || echo stale-object-refused;CC. @0x100000020;p8 4 @0x100000001' bins/ne/anim8.exe
 rm .tmp/newprj-baseline-lifecycle.prj
 EOF
 EXPECT=<<EOF
@@ -1826,18 +1826,18 @@ CMDS=<<EOF
 mkdir .tmp
 rm .tmp/newprj-relocation-edit.prj
 e io.cache=true
-wx aa @0x10002
-f relocation.saved=0x10020
-CCu saved_comment @0x10020
+wx aa @0x100000002
+f relocation.saved=0x100000020
+CCu saved_comment @0x100000020
 prj snapshot .tmp/newprj-relocation-edit.prj
-!r2 -NNq -e bin.cache=true -e bin.relocs.apply=true -c 'p8 4 @0x10001;prj restore .tmp/newprj-relocation-edit.prj && echo fresh-restored;p8 4 @0x10001;f~relocation.saved;CC. @0x10020;prj restore .tmp/newprj-relocation-edit.prj && echo compatible-restored;p8 4 @0x10001' bins/ne/anim8.exe
+!r2 -NNq -e bin.cache=true -e bin.relocs.apply=true -c 'p8 4 @0x100000001;prj restore .tmp/newprj-relocation-edit.prj && echo fresh-restored;p8 4 @0x100000001;f~relocation.saved;CC. @0x100000020;prj restore .tmp/newprj-relocation-edit.prj && echo compatible-restored;p8 4 @0x100000001' bins/ne/anim8.exe
 rm .tmp/newprj-relocation-edit.prj
 EOF
 EXPECT=<<EOF
 00000300
 fresh-restored
 00aa0300
-0x00010020 1 relocation.saved
+0x100000020 1 relocation.saved
 saved_comment
 compatible-restored
 00aa0300
@@ -1874,17 +1874,17 @@ ARGS=-e bin.relocs.apply=true
 CMDS=<<EOF
 mkdir .tmp
 rm .tmp/newprj-missing-loader.prj
-f loader.saved=0x10020
-CCu saved_comment @0x10020
+f loader.saved=0x100000020
+CCu saved_comment @0x100000020
 prj snapshot .tmp/newprj-missing-loader.prj
-!r2 -NNq -e bin.cache=true -e bin.relocs.apply=true -c 'p8 4 @0x10001;wcr;p8 4 @0x10001;f loader.current=0x10020;CCu current_comment @0x10020;prj restore .tmp/newprj-missing-loader.prj || echo loader-refused;f~loader.saved;f~loader.current;CC. @0x10020;p8 4 @0x10001' bins/ne/anim8.exe
+!r2 -NNq -e bin.cache=true -e bin.relocs.apply=true -c 'p8 4 @0x100000001;wcr;p8 4 @0x100000001;f loader.current=0x100000020;CCu current_comment @0x100000020;prj restore .tmp/newprj-missing-loader.prj || echo loader-refused;f~loader.saved;f~loader.current;CC. @0x100000020;p8 4 @0x100000001' bins/ne/anim8.exe
 rm .tmp/newprj-missing-loader.prj
 EOF
 EXPECT=<<EOF
 00000300
 ffff0000
 loader-refused
-0x00010020 1 loader.current
+0x100000020 1 loader.current
 current_comment
 ffff0000
 EOF
@@ -1899,10 +1899,10 @@ ARGS=-e bin.relocs.apply=true
 CMDS=<<EOF
 mkdir .tmp
 rm .tmp/newprj-inactive-map.prj
-CCu saved_comment @0x10020
+CCu saved_comment @0x100000020
 prj snapshot .tmp/newprj-inactive-map.prj
-!r2 -NNq -e bin.relocs.apply=true -c 'CCu current_comment @0x10020;omp 2 ---;prj restore .tmp/newprj-inactive-map.prj || echo unreadable-refused;CC. @0x10020;p8 4 @0x10020' bins/ne/anim8.exe
-!r2 -NNq -e bin.relocs.apply=true -c 'CCu current_comment @0x10020;ombd 2;prj restore .tmp/newprj-inactive-map.prj || echo inactive-refused;CC. @0x10020;p8 4 @0x10020' bins/ne/anim8.exe
+!r2 -NNq -e bin.relocs.apply=true -c 'CCu current_comment @0x100000020;omp 2 ---;prj restore .tmp/newprj-inactive-map.prj || echo unreadable-refused;CC. @0x100000020;p8 4 @0x100000020' bins/ne/anim8.exe
+!r2 -NNq -e bin.relocs.apply=true -c 'CCu current_comment @0x100000020;ombd 2;prj restore .tmp/newprj-inactive-map.prj || echo inactive-refused;CC. @0x100000020;p8 4 @0x100000020' bins/ne/anim8.exe
 rm .tmp/newprj-inactive-map.prj
 EOF
 EXPECT=<<EOF
@@ -1926,18 +1926,18 @@ CMDS=<<EOF
 mkdir .tmp
 rm .tmp/newprj-loader-read-mode.prj
 e io.cache.read=false
-f readmode.saved=0x10020
-CCu saved_comment @0x10020
+f readmode.saved=0x100000020
+CCu saved_comment @0x100000020
 prj snapshot .tmp/newprj-loader-read-mode.prj
-!r2 -NNq -e bin.relocs.apply=true -c 'prj restore .tmp/newprj-loader-read-mode.prj && echo overlay-restored;e io.cache.read;p8 4 @0x10001;f~readmode.saved;CC. @0x10020' bins/ne/anim8.exe
-!r2 -NNq -e bin.cache=true -e bin.relocs.apply=true -c 'CCu current_comment @0x10020;prj restore .tmp/newprj-loader-read-mode.prj || echo readmode-refused;e io.cache.read;p8 4 @0x10001;f~readmode.saved;CC. @0x10020' bins/ne/anim8.exe
+!r2 -NNq -e bin.relocs.apply=true -c 'prj restore .tmp/newprj-loader-read-mode.prj && echo overlay-restored;e io.cache.read;p8 4 @0x100000001;f~readmode.saved;CC. @0x100000020' bins/ne/anim8.exe
+!r2 -NNq -e bin.cache=true -e bin.relocs.apply=true -c 'CCu current_comment @0x100000020;prj restore .tmp/newprj-loader-read-mode.prj || echo readmode-refused;e io.cache.read;p8 4 @0x100000001;f~readmode.saved;CC. @0x100000020' bins/ne/anim8.exe
 rm .tmp/newprj-loader-read-mode.prj
 EOF
 EXPECT=<<EOF
 overlay-restored
 false
 00000300
-0x00010020 1 readmode.saved
+0x100000020 1 readmode.saved
 saved_comment
 readmode-refused
 true
@@ -1976,4 +1976,57 @@ EOF
 EXPECT_ERR=<<EOF
 ERROR: Cannot save snapshot: requires a restorable read-only original and valid virtual edits
 EOF
+RUN
+
+NAME=newprj refuses identified old NE coordinates before load open or restore mutation
+FILE=bins/ne/anim8.exe
+CMDS=<<EOF_CMDS
+mkdir .tmp
+e asm.addr.segment.bits=16
+f old.saved=0x10020
+prj save .tmp/newprj-old-ne.prj
+o--
+o malloc://0x100
+omp 1 rwx
+e asm.arch=x86
+e asm.bits=16
+e asm.addr.segment.bits=4
+e asm.lines=false
+e prj.name=current_guard
+wx 4090 @0x20
+f current.marker=0x20
+af+ 0x20 current_function
+afb+ 0x20 0x20 2
+prj load .tmp/newprj-old-ne.prj || echo load-refused
+prj open .tmp/newprj-old-ne.prj || echo open-refused
+prj restore .tmp/newprj-old-ne.prj || echo restore-refused
+o*~?
+om*~?
+p8 2 @0x20
+f~current.marker
+f~old.saved
+afl~current_function
+e asm.addr.segment.bits
+e asm.lines
+e prj.name
+rm .tmp/newprj-old-ne.prj
+EOF_CMDS
+EXPECT=<<EOF_EXPECT
+load-refused
+open-refused
+restore-refused
+1
+1
+4090
+0x00000020 1 current.marker
+0x00000020    1      2 current_function
+4
+false
+current_guard
+EOF_EXPECT
+EXPECT_ERR=<<EOF_ERR
+ERROR: Old NE project coordinates are unsupported; analyze the original binary again
+ERROR: Old NE project coordinates are unsupported; analyze the original binary again
+ERROR: Old NE project coordinates are unsupported; analyze the original binary again
+EOF_ERR
 RUN

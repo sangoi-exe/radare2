@@ -3045,8 +3045,8 @@ static void set_prompt(RCore *core) {
 
 	// TODO: also in visual prompt and disasm/hexdump?
 	if (r_config_get_b (core->config, "asm.addr.segment")) {
-		ut32 sb = r_config_get_i (core->config, "anal.cs"); // segment base value
-		ut32 sg = r_config_get_i (core->config, "asm.addr.segment.bits"); // segment granurality
+		ut64 sb = r_config_get_i (core->config, "anal.cs"); // segment base value
+		int sg = r_config_get_i (core->config, "asm.addr.segment.bits"); // selector shift
 		ut32 a, b;
 		r_num_segaddr (core->addr, sb, sg, &a, &b);
 		snprintf (tmp, sizeof (tmp), "%04x:%04x", a, b);

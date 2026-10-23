@@ -229,7 +229,28 @@ bool test_r_num_reference_nesting_limit(void) {
 	mu_end;
 }
 
+bool test_r_num_segaddr(void) {
+	ut32 selector, offset;
+	mu_assert_true (r_num_segaddr (0x12340000ffffULL, 0, 32, &selector, &offset), "C48 with a narrow offset");
+	mu_assert_eq (selector, 0x1234, "selector at bit32");
+	mu_assert_eq (offset, 0xffff, "narrow offset retained");
+	mu_assert_true (r_num_segaddr (0x123489abcdefULL, 0, 32, &selector, &offset), "C48 with a full offset32");
+	mu_assert_eq (selector, 0x1234, "high offset does not change selector");
+	mu_assert_eq (offset, 0x89abcdef, "offset32 is not truncated");
+	mu_assert_true (r_num_segaddr (0xffffffffffffULL, 0, 32, &selector, &offset), "maximum C48");
+	mu_assert_eq (selector, UT16_MAX, "maximum selector16");
+	mu_assert_eq (offset, UT32_MAX, "maximum offset32");
+	mu_assert_false (r_num_segaddr (0x1000000000000ULL, 0, 32, &selector, &offset), "out-of-range selector is not valid C48");
+	mu_assert_false (r_num_segaddr (0, 0, 64, &selector, &offset), "invalid shift cannot invoke undefined arithmetic");
+	mu_assert_true (r_num_segaddr (0xf0070, 0, 4, &selector, &offset), "real-mode display remains unchanged");
+	mu_assert_eq (selector, 0xf000, "real-mode paragraph selector");
+	mu_assert_eq (offset, 0x70, "real-mode offset");
+	mu_assert_eq (r_num_get (num, "1234:5678"), 0x179b8, "configuration-free numeric syntax remains real mode");
+	mu_end;
+}
+
 bool all_tests(void) {
+	mu_run_test (test_r_num_segaddr);
 	mu_run_test (test_r_num_reference_nesting_limit);
 	mu_run_test (test_r_num_nested_reference_tokens);
 	mu_run_test (test_r_num_hex_unsigned);

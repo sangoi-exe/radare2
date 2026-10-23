@@ -154,7 +154,7 @@ static RVecRBinReloc *patch_relocs(RBinFile *bf) {
 		case SEL_16:
 		case OFF_16:
 			size = 2;
-			ut16 value = reloc->ntype == SEL_16? target >> 16: target;
+			ut16 value = reloc->ntype == SEL_16? target >> 32: target;
 			if (reloc->additive) {
 				value += r_buf_read_le16_at (ne->buf, reloc->paddr);
 			}
@@ -162,10 +162,11 @@ static RVecRBinReloc *patch_relocs(RBinFile *bf) {
 			break;
 		case POI_32:
 			size = 4;
+			ut32 pointer = ((ut32)(target >> 32) << 16) | (target & UT16_MAX);
 			if (reloc->additive) {
-				target += r_buf_read_le32_at (ne->buf, reloc->paddr);
+				pointer += r_buf_read_le32_at (ne->buf, reloc->paddr);
 			}
-			r_write_le32 (bytes, target);
+			r_write_le32 (bytes, pointer);
 			break;
 		default:
 			R_LOG_WARN ("Unsupported NE relocation patch type %" PFMT64u, reloc->ntype);

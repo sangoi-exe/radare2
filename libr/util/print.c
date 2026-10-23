@@ -457,18 +457,18 @@ static int r_print_addr_tostring(RPrint *p, ut64 addr, char *buf, size_t buf_siz
 		return snprintf (buf, buf_size, "%s%c", b36str, ch);
 	}
 	if (use_segoff) {
-		const ut32 a = addr & 0xffff;
-		const ut32 s = (addr - a) >> ((p && p->config) ? p->config->seggrn : 4);
+		ut32 s, a;
+		r_num_segaddr (addr, p && p->config? p->config->segbas: 0, p && p->config? p->config->seggrn: 4, &s, &a);
 		if (dec) {
 			if (use_color) {
-				return snprintf (buf, buf_size, "%s%9d:%-5d" Color_RESET "%c", pre, s & 0xffff, a & 0xffff, ch);
+				return snprintf (buf, buf_size, "%s%9u:%-5u" Color_RESET "%c", pre, s, a, ch);
 			}
-			return snprintf (buf, buf_size, "%9d:%-5d%c", s & 0xffff, a & 0xffff, ch);
+			return snprintf (buf, buf_size, "%9u:%-5u%c", s, a, ch);
 		}
 		if (use_color) {
-			return snprintf (buf, buf_size, "%s%04x:%04x" Color_RESET "%c", pre, s & 0xffff, a & 0xffff, ch);
+			return snprintf (buf, buf_size, "%s%04x:%04x" Color_RESET "%c", pre, s, a, ch);
 		}
-		return snprintf (buf, buf_size, "%04x:%04x%c", s & 0xffff, a & 0xffff, ch);
+		return snprintf (buf, buf_size, "%04x:%04x%c", s, a, ch);
 	}
 	if (dec) {
 		if (use_color) {
@@ -574,7 +574,7 @@ R_API bool r_print_offset_strbuf(RPrint *p, RStrBuf *sb, ut64 off, int invert, i
 			ut32 s, a;
 			r_num_segaddr (off, segbas, seggrn, &s, &a);
 			if (offdec) {
-				snprintf (space, sizeof (space), "%d:%d", s, a);
+				snprintf (space, sizeof (space), "%u:%u", s, a);
 				ok &= r_strbuf_appendf (sb, "%s%s%9s%s", k, inv, space, reset);
 			} else {
 				ok &= r_strbuf_appendf (sb, "%s%s%04x:%04x%s", k, inv, s, a, reset);
@@ -612,10 +612,10 @@ R_API bool r_print_offset_strbuf(RPrint *p, RStrBuf *sb, ut64 off, int invert, i
 		ut32 s, a;
 		r_num_segaddr (off, segbas, seggrn, &s, &a);
 		if (offdec) {
-			snprintf (space, sizeof (space), "%d:%d", s & 0xffff, a & 0xffff);
+			snprintf (space, sizeof (space), "%u:%u", s, a);
 			return r_strbuf_appendf (sb, "%9s%s", space, reset);
 		}
-		return r_strbuf_appendf (sb, "%04x:%04x", s & 0xffff, a & 0xffff);
+		return r_strbuf_appendf (sb, "%04x:%04x", s, a);
 	}
 	const int sz = print_offset_len (off, false);
 	const int sz2 = print_offset_len (delta, true);
@@ -1195,8 +1195,7 @@ R_API void r_print_hexdump(RPrint *p, ut64 addr, const ut8 *buf, int len, int ba
 			if (use_segoff) {
 				int seggrn = (p && p->config)? p->config->seggrn: 4;
 				ut32 s, a;
-				a = addr & 0xffff;
-				s = ((addr - a) >> seggrn) & 0xffff;
+				r_num_segaddr (addr, p && p->config? p->config->segbas: 0, seggrn, &s, &a);
 				snprintf (soff, sizeof (soff), "%04x:%04x ", s, a);
 				delta += strlen (soff) - 10;
 			} else {

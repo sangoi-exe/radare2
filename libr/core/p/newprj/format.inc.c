@@ -4,45 +4,6 @@
 
 #include "newprj.h"
 
-static const char *rprj_entry_type_tostring(int a) {
-	switch (a) {
-	case RPRJ_INFO: return "Info";
-	case RPRJ_MAPS: return "Maps";
-	case RPRJ_CMDS: return "Cmds";
-	case RPRJ_FLAG: return "Flags";
-	case RPRJ_CMNT: return "Comments";
-	case RPRJ_MODS: return "Mods";
-	case RPRJ_BLOB: return "Blob";
-	case RPRJ_STRS: return "Strings";
-	case RPRJ_THEM: return "Theme";
-	case RPRJ_HINT: return "Hints";
-	case RPRJ_EVAL: return "Evals";
-	case RPRJ_XREF: return "Xrefs";
-	case RPRJ_FUNC: return "Functions";
-	case RPRJ_VART: return "VarTypes";
-	case RPRJ_BRKP: return "Breakpoints";
-	case RPRJ_SIGS: return "Signals";
-	case RPRJ_TYPE: return "Types";
-	case RPRJ_TLNK: return "TypeLinks";
-	case RPRJ_FMT: return "Formats";
-	case RPRJ_GLOB: return "Globals";
-	case RPRJ_STATE: return "State";
-	}
-	return "UNKNOWN";
-}
-
-static const char *rprj_st_get(R2ProjectStringTable *st, ut32 idx) {
-	if (!st || !st->data || idx >= st->size) {
-		return NULL;
-	}
-	const ut8 *s = st->data + idx;
-	return memchr (s, 0, st->size - idx)? (const char *)s: NULL;
-}
-
-static bool rprj_st_is_valid(R2ProjectStringTable *st) {
-	return st && st->data && st->size > 0 && st->data[st->size - 1] == 0 && rprj_st_get (st, 0);
-}
-
 static void rprj_st_write(RBuffer *b, R2ProjectStringTable *st) {
 	r_buf_write (b, st->data, st->size);
 }
@@ -137,10 +98,6 @@ static void rprj_signal_write_record(RBuffer *b, R2ProjectSignal *sig) {
 	r_write_le32 (buf, sig->signum);
 	r_write_le32 (buf + 4, sig->option);
 	r_buf_write (b, buf, sizeof (buf));
-}
-
-static bool rprj_read_exact(RBuffer *b, ut8 *buf, size_t len) {
-	return r_buf_read (b, buf, len) == (st64)len;
 }
 
 static bool rprj_color_is_set(const RColor *color) {
@@ -356,29 +313,6 @@ static void rprj_header_write(RBuffer *b) {
 	r_write_le32 (buf + r_offsetof (R2ProjectHeader, magic), RPRJ_MAGIC);
 	r_write_le32 (buf + r_offsetof (R2ProjectHeader, version), RPRJ_VERSION);
 	r_buf_write (b, buf, sizeof (buf));
-}
-
-static bool rprj_header_read(RBuffer *b, R2ProjectHeader *hdr) {
-	ut8 buf[RPRJ_HEADER_SIZE];
-	if (!rprj_read_exact (b, buf, sizeof (buf))) {
-		return false;
-	}
-	hdr->magic = r_read_le32 (buf + r_offsetof (R2ProjectHeader, magic));
-	hdr->version = r_read_le32 (buf + r_offsetof (R2ProjectHeader, version));
-	return hdr->magic == RPRJ_MAGIC;
-}
-
-static bool rprj_entry_read(RBuffer *b, R2ProjectEntry *entry) {
-	ut8 buf[RPRJ_ENTRY_SIZE];
-	R_LOG_DEBUG ("reading entry at 0x%08"PFMT64x, r_buf_at (b));
-	if (!rprj_read_exact (b, buf, sizeof (buf))) {
-		return false;
-	}
-	entry->size = r_read_le32 (buf + r_offsetof (R2ProjectEntry, size));
-	entry->type = r_read_le32 (buf + r_offsetof (R2ProjectEntry, type));
-	R_LOG_DEBUG ("entry at 0x%08"PFMT64x" with type=%d(%s) and size=%d",
-			r_buf_at (b), entry->type, rprj_entry_type_tostring (entry->type), entry->size);
-	return true;
 }
 
 static bool rprj_entry_begin(RBuffer *b, ut64 *at, ut32 type, ut32 version) {

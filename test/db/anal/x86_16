@@ -350,23 +350,81 @@ EOF
 RUN
 
 NAME=x86-16 synthetic NE segment targets
-FILE=malloc://0x500000
+FILE=malloc://65536
 CMDS=<<EOF
 e asm.arch=x86
 e asm.bits=16
-e asm.addr.segment.bits=16
-wx 9ad7024f00 @0x10006
-?v $ij @0x10006
-wx ea551a0100 @0x4f02ee
-?v $ij @0x4f02ee
-wx e8e9ff @0x4f02fa
-pi 1 @0x4f02fa
-?v $ij @0x4f02fa
+e asm.addr.segment.bits=32
+omv 1 0x4f00000000
+wx 9ad7024f00 @0x4f00000006
+?v $ij @0x4f00000006
+wx ea551a0100 @0x4f000002ee
+?v $ij @0x4f000002ee
+wx e8e9ff @0x4f000002fa
+pi 1 @0x4f000002fa
+?v $ij @0x4f000002fa
 EOF
 EXPECT=<<EOF
-0x4f02d7
-0x11a55
-call 0x4f02e6
-0x4f02e6
+0x4f000002d7
+0x100001a55
+call 0x4f000002e6
+0x4f000002e6
+EOF
+RUN
+
+NAME=x86-16 C48 preserves full far offsets and decoded relative operand width
+FILE=malloc://65536
+CMDS=<<EOF
+e asm.arch=x86
+e asm.bits=16
+e asm.addr.segment.bits=32
+omv 1 0x123489abc000
+wx 669a78563412cdab @0x123489abc000
+?v $ij @0x123489abc000
+wx 66eaefcdab893412 @0x123489abc010
+?v $ij @0x123489abc010
+wx 66e800000000 @0x123489abcdef
+pi 1 @0x123489abcdef
+?v $ij @0x123489abcdef
+wx e80000 @0x123489abc020
+pi 1 @0x123489abc020
+?v $ij @0x123489abc020
+e asm.syntax=att
+pi 1 @0x123489abcdef
+pi 1 @0x123489abc020
+omv 1 0x1234ffff0000
+wx 66e800000000 @0x1234fffffffa
+pi 1 @0x1234fffffffa
+?v $ij @0x1234fffffffa
+EOF
+EXPECT=<<EOF
+0xabcd12345678
+0x123489abcdef
+call 0x123489abcdf5
+0x123489abcdf5
+call 0x12340000c023
+0x12340000c023
+calll 0x123489abcdf5
+callw 0x12340000c023
+calll 0x123400000000
+0x123400000000
+EOF
+RUN
+
+NAME=x86-16 C48 full-offset symbol substitution and numeric display
+FILE=malloc://65536
+CMDS=<<EOF
+e asm.arch=x86
+e asm.bits=16
+e asm.addr.segment.bits=32
+omv 1 0x123489abc000
+wx 669aefcdab893412 @0x123489abc000
+f high_target=0x123489abcdef
+pdj 1 @0x123489abc000~{[0].disasm}
+?j 0x123489abcdef~{segment}
+EOF
+EXPECT=<<EOF
+lcall high_target
+1234:89abcdef
 EOF
 RUN

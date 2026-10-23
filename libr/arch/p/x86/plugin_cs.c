@@ -3968,8 +3968,8 @@ static void anop(RArchSession *a, RAnalOp *op, ut64 addr, const ut8 *buf, int le
 			op->type = R_ANAL_OP_TYPE_CALL;
 			// TODO: what if UCALL?
 			if (INSOP(1).type == X86_OP_IMM) {
-				ut64 seg = INSOP(0).imm;
-				ut64 off = INSOP(1).imm;
+				ut64 seg = (ut16)INSOP(0).imm;
+				ut32 off = INSOP(1).imm;
 				op->ptr = INSOP (0).mem.disp;
 				op->jump = (seg << a->config->seggrn) + off;
 			} else {
@@ -4017,8 +4017,8 @@ static void anop(RArchSession *a, RAnalOp *op, ut64 addr, const ut8 *buf, int le
 		switch (INSOP(0).type) {
 		case X86_OP_IMM:
 			if (INSOP(1).type == X86_OP_IMM) {
-				ut64 seg = INSOP(0).imm;
-				ut64 off = INSOP(1).imm;
+				ut64 seg = (ut16)INSOP(0).imm;
+				ut32 off = INSOP(1).imm;
 				op->ptr = INSOP (0).mem.disp;
 				op->jump = (seg << a->config->seggrn) + off;
 			} else {
@@ -4361,6 +4361,17 @@ static bool decode(RArchSession *as, RAnalOp *op, RArchDecodeMask mask) {
 	size_t size = len;
 	bool ok = r_arch_cs_disasm (handle, (const uint8_t **)&buf, &size, (uint64_t *)&naddr, &csi);
 	cs_insn *insn = &csi.insn;
+	if (ok && mode == CS_MODE_16 && as->config->seggrn > 16 && as->config->seggrn <= 32
+			&& cs_insn_group (handle, insn, X86_GRP_BRANCH_RELATIVE)) {
+		cs_x86 *x86 = &insn->detail->x86;
+		ut64 offset_mask = (1ULL << as->config->seggrn) - 1;
+		ut64 operand_mask = x86->encoding.imm_size == 4? UT32_MAX: UT16_MAX;
+		ut64 target = (addr & ~offset_mask) | (x86->operands[0].imm & offset_mask & operand_mask);
+		if (target != x86->operands[0].imm) {
+			x86->operands[0].imm = target;
+			snprintf (insn->op_str, sizeof (insn->op_str), "0x%"PFMT64x, target);
+		}
+	}
 	//XXX: capstone lcall seg:off workaround, remove when capstone will be fixed
 	if (ok && mode == CS_MODE_16 && r_str_startswith (insn->mnemonic, "lcall")) {
 		char *opstr = strdup (insn->op_str);

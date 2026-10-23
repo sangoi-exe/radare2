@@ -4,6 +4,7 @@
 
 #include <r_core.h>
 #include <rvc.h>
+#include "p/newprj/read.inc.c"
 // required to make spp use RStrBuf instead of SStrBuf
 #define USE_R2 1
 #include <spp/spp.h>
@@ -219,7 +220,47 @@ static void *project_run_script(void *user) {
 	return r_core_cmd_lines (script->core, script->data)? user: NULL;
 }
 
-static bool r_core_project_load(RCore *core, const char *prj_name, const char *rcpath) {
+static bool project_script_is_old_ne(const char *data) {
+	bool ne = false;
+	bool old = false;
+	const char *line = data;
+	while (*line) {
+		const char *end = strchr (line, '\n');
+		const size_t len = end? end - line: strlen (line);
+		const char *value = NULL;
+		if (r_str_startswith (line, "'e file.type = ")) {
+			value = line + strlen ("'e file.type = ");
+		} else if (r_str_startswith (line, "'e asm.addr.segment.bits = ")) {
+			value = line + strlen ("'e asm.addr.segment.bits = ");
+		}
+		if (value) {
+			char *text = r_str_ndup (value, len - (value - line));
+			if (text) {
+				r_str_trim (text);
+				if (r_str_startswith (line, "'e file.type = ")) {
+					ne = !strcmp (text, "ne");
+				} else {
+					old = r_num_math (NULL, text) == 16;
+				}
+				free (text);
+			}
+		}
+		line += len;
+		if (*line) {
+			line++;
+		}
+	}
+	return ne && old;
+}
+
+static void project_reset(RCore *core, bool reset) {
+	if (reset) {
+		r_config_set (core->config, "prj.name", "");
+		r_core_cmd0 (core, "o--");
+	}
+}
+
+static bool r_core_project_load(RCore *core, const char *prj_name, const char *rcpath, bool reset) {
 	if (!core || R_STR_ISEMPTY (prj_name) || !rcpath) {
 		return false;
 	}
@@ -233,7 +274,23 @@ static bool r_core_project_load(RCore *core, const char *prj_name, const char *r
 		char *prj_bin = prj_path? r_file_new (prj_path, "prj.bin", NULL): NULL;
 		bool exists = prj_bin && r_file_exists (prj_bin);
 		if (exists) {
-			ret = r_core_cmdf (core, "prj load %s", prj_bin) != -1;
+			R2ProjectHeader hdr;
+			R2ProjectStringTable st = {0};
+			RBuffer *b = rprj_read_open (prj_bin, &hdr, &st);
+			const bool old = b && rprj_is_old_ne (b, &st);
+			const bool admitted = b && !old;
+			r_unref (b);
+			free (st.data);
+			if (!admitted) {
+				if (old) {
+					R_LOG_ERROR ("Old NE project coordinates are unsupported; analyze the original binary again");
+				}
+				free (prj_bin);
+				free (prj_path);
+				return false;
+			}
+			project_reset (core, reset && !sandbox);
+			ret = r_core_cmdf (core, "prj load %s", prj_bin) == 0;
 		} else {
 			R_LOG_WARN ("Binary project '%s' not found; falling back to legacy script", prj_bin? prj_bin: "prj.bin");
 		}
@@ -246,6 +303,12 @@ static bool r_core_project_load(RCore *core, const char *prj_name, const char *r
 	char *rc_data = r_file_slurp (rcpath, NULL);
 	if (!rc_data || !r_str_startswith (rc_data, "# r2 rdb project file")) {
 		R_LOG_ERROR ("Cannot read project script '%s'", rcpath);
+		free (rc_data);
+		free (prj_path);
+		return false;
+	}
+	if (project_script_is_old_ne (rc_data)) {
+		R_LOG_ERROR ("Old NE project coordinates are unsupported; analyze the original binary again");
 		free (rc_data);
 		free (prj_path);
 		return false;
@@ -268,6 +331,7 @@ static bool r_core_project_load(RCore *core, const char *prj_name, const char *r
 		}
 	}
 	free (prj_file);
+	project_reset (core, reset && !sandbox);
 	if (sandbox) {
 		char *line = rc_data, *out = rc_data;
 		while (*line) {
@@ -320,7 +384,7 @@ loaded:
 
 static RThreadFunctionRet project_load_background(RThread *th) {
 	ProjectState *ps = th->user;
-	r_core_project_load (ps->core, ps->prj_name, ps->rc_path);
+	r_core_project_load (ps->core, ps->prj_name, ps->rc_path, false);
 	free (ps->prj_name);
 	free (ps->rc_path);
 	free (ps);
@@ -363,10 +427,8 @@ R_API bool r_core_project_open(RCore *core, const char *prj_path) {
 				&& !r_cons_yesno (core->cons, 'y', "Close current session? (Y/n)")) {
 			goto beach;
 		}
-		r_config_set (core->config, "prj.name", "");
-		r_core_cmd0 (core, "o--");
 	}
-	ret = r_core_project_load (core, prj_name, prj_script);
+	ret = r_core_project_load (core, prj_name, prj_script, true);
 	if (ret) {
 		r_core_project_undirty (core);
 	}

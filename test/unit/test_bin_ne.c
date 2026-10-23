@@ -1,4 +1,4 @@
-#include <r_bin.h>
+#include <r_core.h>
 #include "minunit.h"
 
 // Protect the established native NE loader behavior and its evidence-status boundary.
@@ -114,9 +114,87 @@ static bool test_ne_incomplete_and_empty(void) {
 	mu_end;
 }
 
+static bool test_ne_coordinates_and_relocation_bytes(void) {
+	ut8 bytes[0x200] = {0};
+	ne_image (bytes);
+	r_write_le16 (bytes + 0x46, 6);
+	r_write_le16 (bytes + 0x54, 2);
+	r_write_le16 (bytes + 0x56, 1);
+	r_write_le16 (bytes + 0x5e, 1);
+	r_write_le16 (bytes + 0x68, 0x58);
+	r_write_le16 (bytes + 0x6a, 0x5a);
+	r_write_le16 (bytes + 0x82, 0x40);
+	r_write_le16 (bytes + 0x86, 0x40);
+	const ut8 entry[] = { 1, 1, 1, 0x20, 0, 0 };
+	memcpy (bytes + 0x90, entry, sizeof (entry));
+	memcpy (bytes + 0x9a, "\x03" "DLL", 4);
+	memset (bytes + 0x100, 0, 0x40);
+	r_write_le32 (bytes + 0x100, UT16_MAX);
+	r_write_le16 (bytes + 0x104, UT16_MAX);
+	r_write_le16 (bytes + 0x106, UT16_MAX);
+	r_write_le32 (bytes + 0x108, UT16_MAX);
+	r_write_le16 (bytes + 0x10c, 2);
+	r_write_le16 (bytes + 0x10e, 0xfff0);
+	bytes[0x110] = 0x11;
+	r_write_le32 (bytes + 0x114, UT16_MAX);
+	const ut8 records[] = {
+		3, 0, 0, 0, 1, 0, 0x20, 0,
+		2, 0, 4, 0, 1, 0, 0x20, 0,
+		5, 0, 6, 0, 1, 0, 0x20, 0,
+		3, 4, 8, 0, 1, 0, 0x20, 0,
+		2, 4, 12, 0, 1, 0, 0x20, 0,
+		5, 4, 14, 0, 1, 0, 0x20, 0,
+		0, 4, 16, 0, 1, 0, 0x20, 0,
+		3, 1, 20, 0, 1, 0, 7, 0,
+	};
+	r_write_le16 (bytes + 0x140, 8);
+	memcpy (bytes + 0x142, records, sizeof (records));
+	RCore *core = r_core_new ();
+	r_config_set_b (core->config, "bin.relocs.apply", true);
+	mu_assert_notnull (r_core_file_open (core, "malloc://512", R_PERM_RWX, 0), "in-memory original NE input");
+	mu_assert_eq (r_io_fd_write_at (core->io, core->io->desc->fd, 0, bytes, sizeof (bytes)), sizeof (bytes), "write original physical input before loading");
+	mu_assert_true (r_core_bin_load (core, NULL, UT64_MAX), "actual Core NE load and relocation overlay");
+	RBinFile *file = r_bin_cur (core->bin);
+	mu_assert_streq (file->bo->plugin->meta.name, "ne", "actual NE loader selected");
+	mu_assert_eq (core->anal->config->seggrn, 32, "NE selects C48 without widening machine operands");
+	mu_assert_eq (core->anal->config->bits, 16, "machine mode remains sixteen bits");
+	RBinSection *section = RVecRBinSection_at (&file->bo->sections_vec, 0);
+	mu_assert_eq (section->vaddr, 0x100000000ULL, "selector starts at bit32");
+	mu_assert_eq (section->paddr, 0x100, "physical section location unchanged");
+	mu_assert_eq (section->size, 0x40, "machine segment size unchanged");
+	RBinAddr *startup = r_list_first (file->bo->entries);
+	mu_assert_eq (startup->vaddr, 0x100000002ULL, "startup entry uses C48");
+	mu_assert_eq (startup->paddr, 0x102, "startup physical location unchanged");
+	RBinAddr *entrypoint = r_list_get_n (file->bo->entries, 1);
+	mu_assert_notnull (entrypoint, "fixed entry-table ordinal retained");
+	mu_assert_eq (entrypoint->vaddr, 0x100000020ULL, "entry-table ordinal uses C48");
+	mu_assert_eq (entrypoint->paddr, 0x120, "entry-table physical location unchanged");
+	Sdb *db = file->sdb_info;
+	mu_assert_eq (sdb_num_get (db, "ne.reloc.1.0.target_vaddr", NULL), 0x100000020ULL, "resolved analysis target uses C48");
+	mu_assert_eq (sdb_num_get (db, "ne.reloc.1.0.application.0.vaddr", NULL), 0x100000000ULL, "relocation source uses C48");
+	mu_assert_eq (sdb_num_get (db, "ne.reloc.1.7.target_vaddr", NULL), 0x200000000ULL, "synthetic import selector uses C48");
+	mu_assert_streq (sdb_const_get (db, "ne.reloc.1.0.application.0.original", NULL), "ffff0000", "retained original raw pointer");
+	ut8 current[24];
+	mu_assert_true (r_io_read_at (core->io, 0x100000000ULL, current, sizeof (current)), "read actual mapped overlay");
+	mu_assert_eq (r_read_le32 (current), 0x00010020, "far pointer remains offset16 plus selector16");
+	mu_assert_eq (r_read_le16 (current + 4), 1, "selector field is a raw WORD");
+	mu_assert_eq (r_read_le16 (current + 6), 0x20, "offset field is a raw WORD");
+	mu_assert_eq (r_read_le32 (current + 8), 0x0002001f, "additive raw pointer preserves carry semantics");
+	mu_assert_eq (r_read_le16 (current + 12), 3, "additive selector WORD");
+	mu_assert_eq (r_read_le16 (current + 14), 0x10, "additive offset WORD wraps independently");
+	mu_assert_eq (current[16], 0x31, "additive low byte unchanged");
+	mu_assert_eq (r_read_le32 (current + 20), 0x00020000, "import target encoded as raw far pointer");
+	ut8 original[sizeof (bytes)];
+	mu_assert_eq (r_buf_read_at (file->buf, 0, original, sizeof (original)), sizeof (original), "read original input after patching");
+	mu_assert_memeq (original, bytes, sizeof (bytes), "analysis overlay never mutates original NE bytes");
+	r_core_free (core);
+	mu_end;
+}
+
 int all_tests(void) {
 	mu_run_test (test_ne_resolution_status);
 	mu_run_test (test_ne_incomplete_and_empty);
+	mu_run_test (test_ne_coordinates_and_relocation_bytes);
 	return tests_passed != tests_run;
 }
 

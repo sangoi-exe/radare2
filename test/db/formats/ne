@@ -30,15 +30,15 @@ ir~WIN87EM
 ir~:0..11
 EOF
 EXPECT=<<EOF
-nth paddr      vaddr      bind   type size lib name                                 demangled
----------------------------------------------------------------------------------------------
-1   0x00000d8e 0x0001038e GLOBAL NONE 0        WNDPROC
-2   0x00002b5a 0x0001215a GLOBAL NONE 0        DIAL_ABOUT
+nth paddr      vaddr       bind   type size lib name                                 demangled
+----------------------------------------------------------------------------------------------
+1   0x00000d8e 0x10000038e GLOBAL NONE 0        WNDPROC
+2   0x00002b5a 0x10000215a GLOBAL NONE 0        DIAL_ABOUT
 --
-nth paddr         size vaddr        vsize perm flags type name
---------------------------------------------------------------
-0   0x00000a00  0x54ee 0x00010000  0x54ee -r-x 0x0   MAP  MOVEABLE.2560
-1   0x00007600  0x3ec4 0x00020000  0x3ec4 -rw- 0x0   MAP  MOVEABLE.30208
+nth paddr         size vaddr         vsize perm flags type name
+---------------------------------------------------------------
+0   0x00000a00  0x54ee 0x100000000  0x54ee -r-x 0x0   MAP  MOVEABLE.2560
+1   0x00007600  0x3ec4 0x200000000  0x3ec4 -rw- 0x0   MAP  MOVEABLE.30208
 --
     "name": "ICONX",
     "name": "FRAME_1",
@@ -80,33 +80,33 @@ nth paddr         size vaddr        vsize perm flags type name
     "name": "ACCELS",
     "name": "1",
 --
-nth vaddr      bind type lib name
----------------------------------
-91  0x00030000 NONE FUNC     KERNEL.INITTASK
-23  0x00030004 NONE FUNC     KERNEL.LOCKSEGMENT
-30  0x00030008 NONE FUNC     KERNEL.WAITEVENT
-5   0x0003000c NONE FUNC     USER.INITAPP
-132 0x00030010 NONE FUNC     KERNEL.GETWINFLAGS
-24  0x00030014 NONE FUNC     KERNEL.UNLOCKSEGMENT
+nth vaddr       bind type lib name
+----------------------------------
+91  0x300000000 NONE FUNC     KERNEL.INITTASK
+23  0x300000004 NONE FUNC     KERNEL.LOCKSEGMENT
+30  0x300000008 NONE FUNC     KERNEL.WAITEVENT
+5   0x30000000c NONE FUNC     USER.INITAPP
+132 0x300000010 NONE FUNC     KERNEL.GETWINFLAGS
+24  0x300000014 NONE FUNC     KERNEL.UNLOCKSEGMENT
 --
 217
 --
-0x00014298 0x00004c98 SET_32 3     WIN87EM.__FPMATH
-0x000142b2 0x00004cb2 SET_16 5     WIN87EM.__FPMATH
-0x000142b8 0x00004cb8 SET_16 2     WIN87EM.__FPMATH
-0x000142bd 0x00004cbd SET_32 3     WIN87EM.__FPMATH
-0x000142cb 0x00004ccb SET_32 3     WIN87EM.__FPMATH
-vaddr      paddr      type   ntype name
----------------------------------------
-0x00010001 0x00000a01 SET_32 3     KERNEL.INITTASK
-0x00010025 0x00000a25 SET_32 3     KERNEL.LOCKSEGMENT
-0x0001003c 0x00000a3c SET_32 3     KERNEL.WAITEVENT
-0x00010045 0x00000a45 SET_32 3     USER.INITAPP
-0x00010074 0x00000a74 SET_32 3     KERNEL.GETWINFLAGS
-0x000100d0 0x00000ad0 SET_32 3     KERNEL.UNLOCKSEGMENT
-0x00010186 0x00000b86 SET_32 3     KERNEL.CATCH
-0x00010192 0x00000b92 SET_32 3     USER.POSTQUITMESSAGE
-0x000101a7 0x00000ba7 SET_32 3     USER.LOADSTRING
+0x100004298 0x00004c98 SET_32 3     WIN87EM.__FPMATH
+0x1000042b2 0x00004cb2 SET_16 5     WIN87EM.__FPMATH
+0x1000042b8 0x00004cb8 SET_16 2     WIN87EM.__FPMATH
+0x1000042bd 0x00004cbd SET_32 3     WIN87EM.__FPMATH
+0x1000042cb 0x00004ccb SET_32 3     WIN87EM.__FPMATH
+vaddr       paddr      type   ntype name
+----------------------------------------
+0x100000001 0x00000a01 SET_32 3     KERNEL.INITTASK
+0x100000025 0x00000a25 SET_32 3     KERNEL.LOCKSEGMENT
+0x10000003c 0x00000a3c SET_32 3     KERNEL.WAITEVENT
+0x100000045 0x00000a45 SET_32 3     USER.INITAPP
+0x100000074 0x00000a74 SET_32 3     KERNEL.GETWINFLAGS
+0x1000000d0 0x00000ad0 SET_32 3     KERNEL.UNLOCKSEGMENT
+0x100000186 0x00000b86 SET_32 3     KERNEL.CATCH
+0x100000192 0x00000b92 SET_32 3     USER.POSTQUITMESSAGE
+0x1000001a7 0x00000ba7 SET_32 3     USER.LOADSTRING
 EOF
 RUN
 
@@ -117,11 +117,11 @@ ir*~KILLTIMER
 ir*~reloc.?
 EOF
 EXPECT=<<EOF
-'f reloc.USER.KILLTIMER 4 0x000104f4
-'f reloc.USER.KILLTIMER 4 0x00010502
-'f reloc.USER.KILLTIMER 4 0x0001054d
-'f reloc.USER.KILLTIMER 4 0x00010959
-'f reloc.USER.KILLTIMER 4 0x00012114
+'f reloc.USER.KILLTIMER 4 0x1000004f4
+'f reloc.USER.KILLTIMER 4 0x100000502
+'f reloc.USER.KILLTIMER 4 0x10000054d
+'f reloc.USER.KILLTIMER 4 0x100000959
+'f reloc.USER.KILLTIMER 4 0x100002114
 209
 EOF
 RUN
@@ -187,7 +187,7 @@ ik info/ne.reloc.1.0.application_count
 ik info/ne.reloc.1.0.application.0.vaddr
 ik info/ne.reloc.1.0.application.0.target_vaddr
 ik info/ne.reloc.1.0.application.0.original
-p8 4 @0x10001
+p8 4 @0x100000001
 EOF
 EXPECT=<<EOF
 718
@@ -205,8 +205,8 @@ synthetic_import
 KERNEL.INITTASK
 0x5b
 1
-0x10001
-0x30000
+0x100000001
+0x300000000
 ffff0000
 00000300
 EOF

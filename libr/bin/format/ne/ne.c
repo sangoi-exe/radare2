@@ -124,7 +124,7 @@ bool r_bin_ne_load_segments(r_bin_ne_obj_t *bin, RVecRBinSection *segments) {
 		bs->size = se->offset? (se->length? se->length: 0x10000): 0;
 		bs->vsize = R_MAX (bs->size, se->minAllocSz? se->minAllocSz: 0x10000);
 		// Synthetic analysis segment IDs, not Windows runtime selectors.
-		bs->vaddr = (ut64)(i + 1) << 16;
+		bs->vaddr = (ut64)(i + 1) << 32;
 		bs->add = true;
 		bs->bits = R_SYS_BITS_PACK (16);
 		bs->is_data = se->flags & IS_DATA;
@@ -401,7 +401,7 @@ static bool ne_segment_address(r_bin_ne_obj_t *bin, ut16 segment, ut16 offset, R
 		return false;
 	}
 	addr->bits = 16;
-	addr->vaddr = ((ut64)segment << 16) | offset;
+	addr->vaddr = ((ut64)segment << 32) | offset;
 	addr->paddr = offset < size? (ut64)se->offset * bin->alignment + offset: UT64_MAX;
 	return true;
 }
@@ -484,12 +484,12 @@ static RBinImport *ne_reloc_import(r_bin_ne_obj_t *bin, NE_image_reloc_item *rel
 		return NULL;
 	}
 	index = RVecRBinImport_length (&bin->imports);
-	*target = bin->imports_base + index * 4;
-	if (*target > UT32_MAX - 3) {
+	if ((bin->imports_base >> 32) > UT16_MAX || index > (UT32_MAX - 3) / 4) {
 		free (module);
 		free (func);
 		return NULL;
 	}
+	*target = bin->imports_base + (ut64)index * 4;
 	RBinImport *imp = RVecRBinImport_emplace_back (&bin->imports);
 	if (imp) {
 		imp->name = r_bin_name_new_from (r_str_newf ("%s.%s", module, func));
@@ -701,7 +701,7 @@ static void ne_load_relocs(r_bin_ne_obj_t *bin) {
 					break;
 				}
 				reloc.paddr = paddr + source;
-				reloc.vaddr = ((ut64)(index + 1) << 16) | source;
+				reloc.vaddr = ((ut64)(index + 1) << 32) | source;
 				RBinReloc *copy = RVecRBinReloc_emplace_back (bin->relocs);
 				if (!copy) {
 					reason = "allocation_failed";
@@ -833,7 +833,7 @@ void __init(RBuffer *buf, r_bin_ne_obj_t *bin) {
 	}
 	r_buf_read_at (buf, (ut64)bin->header_offset + bin->ne_header->EntryTableOffset, bin->entry_table, bin->ne_header->EntryTableLength);
 	ne_load_entries (bin);
-	bin->imports_base = (ut64)(bin->ne_header->SegCount + 1) << 16;
+	bin->imports_base = (ut64)(bin->ne_header->SegCount + 1) << 32;
 	ne_load_relocs (bin);
 	__ne_get_resources (bin);
 }

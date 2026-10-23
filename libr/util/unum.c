@@ -895,25 +895,30 @@ R_API double r_num_sin(double a) {
 // convert address into segmented address
 // takes addr, segment base and segment granurality
 R_API bool r_num_segaddr(ut64 addr, ut64 sb, int sg, ut32 *a, ut32 *b) {
-#if 0
-	s = n >> 16 << 12;
-	a = n & 0x0fff;
-#endif
+	R_RETURN_VAL_IF_FAIL (a && b, false);
+	*a = *b = 0;
+	if (sg < 0 || sg > 32) {
+		return false;
+	}
+	ut64 segment, offset;
 	if (sb) {
-		ut32 csbase = (sb << 4);
+		ut32 csbase = sb << 4;
 		if (addr > csbase) {
 			*a = sb;
 			*b = addr - csbase;
 		} else {
 			int delta = csbase - addr;
 			*a = csbase + delta;
-			*b = addr - csbase+ delta;
+			*b = addr - csbase + delta;
 		}
-	} else {
-		*a = ((addr >> 16) << (16 - sg));
-		*b = (addr & 0xffff);
+		return *a <= UT16_MAX && *b <= UT16_MAX;
 	}
-	return *a <= 0xffff && *b <= 0xffff;
+	ut64 mask = sg > 16? (1ULL << sg) - 1: UT16_MAX;
+	segment = (addr & ~mask) >> sg;
+	offset = addr & mask;
+	*a = segment;
+	*b = offset;
+	return segment <= UT16_MAX && offset <= (sg > 16? UT32_MAX: UT16_MAX);
 }
 
 // wont work for 64bit but thats by design

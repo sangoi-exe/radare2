@@ -174,13 +174,14 @@ static bool profile_relocated(BorlandProfileContext *ctx, ut64 physical, int siz
 				if (width != 2) {
 					return false;
 				}
-				r_write_le16 (expected + off, (reloc->ntype == 2? target >> 16: target) + (reloc->additive? r_read_le16 (expected + off): 0));
+				r_write_le16 (expected + off, (reloc->ntype == 2? target >> 32: target) + (reloc->additive? r_read_le16 (expected + off): 0));
 				break;
 			case 3:
 				if (width != 4) {
 					return false;
 				}
-				r_write_le32 (expected + off, target + (reloc->additive? r_read_le32 (expected + off): 0));
+				ut32 pointer = ((ut32)(target >> 32) << 16) | (target & UT16_MAX);
+				r_write_le32 (expected + off, pointer + (reloc->additive? r_read_le32 (expected + off): 0));
 				break;
 			default:
 				return false;
@@ -198,7 +199,7 @@ static bool profile_relocated(BorlandProfileContext *ctx, ut64 physical, int siz
 		return true;
 	}
 	char segment[48];
-	snprintf (segment, sizeof (segment), "ne.reloc.%"PFMT64u, address >> 16);
+	snprintf (segment, sizeof (segment), "ne.reloc.%"PFMT64u, address >> 32);
 	ut64 count;
 	if (!profile_number (ctx, segment, "count", &count) || count > r_buf_size (ctx->file->buf) / 8) {
 		return false;

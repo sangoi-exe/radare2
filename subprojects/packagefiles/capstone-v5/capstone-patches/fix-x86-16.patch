@@ -2,12 +2,15 @@ diff --git a/arch/X86/X86ATTInstPrinter.c b/arch/X86/X86ATTInstPrinter.c
 index 216efb2..37cab47 100644
 --- a/arch/X86/X86ATTInstPrinter.c
 +++ b/arch/X86/X86ATTInstPrinter.c
-@@ -536,6 +536,9 @@ static void printPCRelImm(MCInst *MI, unsigned OpNo, SStream *O)
+@@ -536,6 +536,12 @@ static void printPCRelImm(MCInst *MI, unsigned OpNo, SStream *O)
  			imm = imm & 0xffffffff;
  		}
  
-+		if (MI->csh->mode == CS_MODE_16)
-+			imm = (imm & 0xffff) | ((MI->address >> 16) << 16);
++		if (MI->csh->mode == CS_MODE_16) {
++			uint8_t width = X86_immediate_size(MCInst_getOpcode(MI), NULL);
++			uint64_t mask = width == 4 ? UINT64_C(0xffffffff) : UINT64_C(0xffff);
++			imm = ((uint64_t)imm & mask) | (MI->address & ~mask);
++		}
 +
  		if (imm < 0) {
  			SStream_concat(O, "0x%"PRIx64, imm);
@@ -16,12 +19,14 @@ diff --git a/arch/X86/X86IntelInstPrinter.c b/arch/X86/X86IntelInstPrinter.c
 index 6167e85..cff9237 100644
 --- a/arch/X86/X86IntelInstPrinter.c
 +++ b/arch/X86/X86IntelInstPrinter.c
-@@ -767,6 +767,9 @@ static void printPCRelImm(MCInst *MI, unsigned OpNo, SStream *O)
+@@ -767,6 +767,11 @@ static void printPCRelImm(MCInst *MI, unsigned OpNo, SStream *O)
  			imm = imm & 0xffffffff;
  		}
  
-+		if (MI->csh->mode == CS_MODE_16)
-+			imm = (imm & 0xffff) | ((MI->address >> 16) << 16);
++		if (MI->csh->mode == CS_MODE_16) {
++			uint64_t mask = opsize == 4 ? UINT64_C(0xffffffff) : UINT64_C(0xffff);
++			imm = ((uint64_t)imm & mask) | (MI->address & ~mask);
++		}
 +
  		printImm(MI, O, imm, true);
  
