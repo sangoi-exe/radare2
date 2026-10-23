@@ -1,6 +1,6 @@
 # Intent Contract: native review reproduction and remediation
 
-Status: active
+Status: on-hold
 Task mode: Doctrine
 Lifecycle phase: Remediation review
 Strategy epoch: 3
@@ -121,5 +121,9 @@ Authority: the current user answered “beleza, pode corrigir; sobre o claude, p
 - Rollback/revert affordance: local immutable commits and previous remote bases remain; a future compensating revert/push requires new authority. No destructive reset or force push is authorized.
 - User-visible handoff: root reported all four verified pushes before starting correction work. This authorization is consumed by this pre-remediation checkpoint; future correction commits are not automatically authorized for publication.
 
-Blocker: none. H1/H2/H3 and R1/N1 technical directions are established; implementation and new validation remain unexecuted.
-Next action: Dispatch bounded host and native correction entries with disjoint footprints, then qualify the matching bridge/consumer stack and obtain the required Remediation delta review. Keep Claude calls serialized; a prior Gate's quota dispensation does not automatically apply to a new Gate.
+N5 is implemented and locally committed at native `98bb06da8b41a193ea464d2e0e5e8cce8de46ca5`: baseline0/2, focused9/9, native109/109, preparation10/10, registered native1/1 and language/build reuse. H5 reproduced all three failures and left partial changes in its eight allowed files, but its Worker turn ended with a backend content-risk error before a final validated handoff. Root has not retried, replaced the executor, bypassed restrictions or performed its implementation. No source cleanup/restoration occurred.
+
+The current user subsequently reported less than5GB free space. Root suspended new builds and observed4.3GiB available. A read-only Ninja graph inventory identifies822 existing compiler/linker outputs totaling approximately1.963GiB in the task's `native-c48/build-2` through `build-9`. Proposed cleanup is limited to those obsolete generated outputs; preserve all sources, logs, language artifacts, Ninja/configuration metadata, SDKs, native-c48/build-10, native-review-fixes/source-3/build-3 and the current bridge/host inputs. Nothing has been deleted and no cleanup authority is inferred from the warning.
+
+Blocker: current-user decision on the bounded disk cleanup before more build allocation; H5 also needs state-preserving recovery of its interrupted Worker turn. The four-correction authority remains valid; no new material repair route is selected.
+Next action: Ask permission for the exact regenerable-output cleanup, then recover the same H5 task from its partial state, integrate matching bridge/consumers and obtain Remediation delta review. Keep Claude calls serialized; a prior Gate's quota dispensation does not automatically apply to a new Gate.
