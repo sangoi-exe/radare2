@@ -1,6 +1,6 @@
 # Intent Contract: native review reproduction and remediation
 
-Status: active
+Status: on-hold
 Task mode: Doctrine
 Lifecycle phase: Implementation
 Strategy epoch: 3
@@ -84,7 +84,7 @@ The selected C48/BP/project chain is implemented and integrated at host `9ad3e70
 
 The matching MCP server/core plugin builds and complete `test2.sh` run pass with the optional native SCRANTIC case enabled; unsigned JSON tests and18 actual stdio tool outcomes also pass. The selected high-address function/context and saved-analysis close/reopen/restore observations retain C48 identities, preserve saved state and discard an unsaved marker. Three separately optional fixture-dependent NE/TASM relocation witnesses did not run. No whole-game, descriptor-emulation, every-ENTER-nesting or new SMM-runtime claim is made. The task log retains exact proof anchors, failed attempts and the newly corrected operand32 ENTER defect.
 
-All source microtasks and active documentation propagation are complete. The final Code Gate remains pending. The private build consumes matching host/bridge/native/language inputs; no global installation or push occurred. The pinned native runtime commit is local and must be published separately before a remote-only consumer can fetch it. Later documentation-only native commits do not change the tested pin's runtime content.
+All initial source microtasks and active documentation propagation are committed. The completed final Code Gate returned `DO_NOT_PROCEED` for four source-proven regressions, so the task is not complete and no remediation is authorized yet. The private build consumes matching host/bridge/native/language inputs; no global installation or push occurred. The pinned native runtime commit is local and must be published separately before a remote-only consumer can fetch it. Later documentation-only native commits do not change the tested pin's runtime content.
 
 ## Closed decisions and current execution boundary
 
@@ -92,9 +92,17 @@ E-A is selected. The alternative existing typed-decoder route is not selected: i
 
 F-B's concrete C48/RAM6 route, ordinary pointer/stack preservation, directly exposed BP correction and old-NE intentional break are selected by the current-user confirmation above. F-A containment, RAM8 and host/native coordinate adaptation are not selected. The specific residual limitation is incomplete automatic detection for old state without sufficient metadata or arbitrary scripts; the user's confirmation accepts that limit, not compatibility or a fictitious successful validation. Original saved files remain untouched. Corrected CALLF emulation, fresh NE roundtrips and positive old-state refusal are validated within the stated boundaries; no original-game reachability or full-descriptor claim is made.
 
-The epoch1 Initial and epoch2 Strategy-reset audits on `/root/review_remediation_plan_audit` returned PROCEED for their respective objects. The same task completed the epoch3 Strategy-reset audit with PROCEED, complete contract coverage and no material findings. Root records the registered transition to active Implementation and publishes the execution-start locator. No material current-user decision remains open.
+The epoch1 Initial and epoch2 Strategy-reset audits on `/root/review_remediation_plan_audit` returned PROCEED for their respective objects. The same task completed the epoch3 Strategy-reset audit with PROCEED, complete contract coverage and no material findings. That admitted implementation; it did not approve the final code. Those user decisions remain closed. The subsequent Code Gate now requires the current user's remediation decision.
 
 Review scheduling constraint: the current user requires at most one active Claude reviewer call at a time, including reciprocal continuations, to avoid concurrent quota exhaustion. Authority: current-thread user message at source line2099, `2026-10-23T12:59:33.398-03:00` (`America/Sao_Paulo`), turn `01a1691c-f1b9-74f3-8912-081d7c6cfcea`. Senior reviewers may run in parallel. This changes scheduling only, not required coverage, paired examination or final disposition; it is not a Gate waiver.
 
-Blocker: none. Component validation must respect the declared stable-input dependencies.
-Next action: Review the fixed four-repository candidate through the broad default local crossed Code Gate. Serialize every Claude call; retain independent source-pair coverage, reciprocal examination and one integration-Senior final disposition.
+## Final Code Gate and pending remediation decision
+
+`/root/review_native_integration_senior` issued the final cumulative `DO_NOT_PROCEED` for host `daf6203c984ac00ec6bf3fe63ae01ce33aa75f30`, bridge `06dff9497a40607db0128ae65187e66fdb7ab893`, native `9e4e272a5e365af9e60da517bfa64bc2ca9d1d4f` and MCP `74c660f3f6ee51de0f44072957f4a6d2fefbc3c3`. Required semantic coverage and accounting are complete across56 changed paths plus direct followers. Four source Senior pairs and integration completed the non-dispensed procedure. One Claude invocation at a time was respected. Four Claude initial reports and the host reciprocal succeeded; the effects reciprocal hit the actual shared session quota. The root recorded the finite remaining-contribution dispensation, including absent integration-Claude input, without claiming agreement or approval. Exact reports, root analysis and the actual error remain under task cache `code-review-Zwm5IN/`; [the task log](../task-logs/2026-10-23-native-review-remediation.md#final-code-gate) owns the durable findings and coverage record.
+
+Pending findings are H1 (continuation metadata carries into another selector), H2 (the16,385th distinct import aliases slot zero in raw far4 encoding), H3 (two newly routed print callers change explicit-CS Real Mode output) and R1 (C48-specific PTRSUB/resolver changes remove Real Mode named-global reconstruction). Root verified their source/arithmetic evidence; no new runtime reproduction was performed during review. The resolver-comment nit N1 should follow the ultimately selected R1 semantics. Existing passing suites do not cover these failing relations.
+
+Root recommends correcting the four findings at existing owners, retaining selected C48/RAM6 and ordinary near2/far4/SP2, with direct tests and matching dependency/pin propagation. For H2, lossless allocation across synthetic selectors preserves prior representable capacity; explicit refusal after16,384 slots is an evidenced narrower alternative requiring a user decision. Neither route is selected yet. No generic wrap-traversal subsystem, global explicit-CS redesign, new address service, arbitrary-script detector, migration, original modification, global installation or push is proposed. The unused-local-volatile-read concern remains an unconfirmed inherited observation, not an automatically admitted fifth correction.
+
+Blocker: current-user selection of substantive remediation, including the H2 capacity direction. The registered `DO_NOT_PROCEED` transition is `request-user-decision`, `same-lifecycle`, compatible task paths retained. Status is on-hold; Lifecycle phase remains Implementation. This is not Closeout or a final-review override.
+Next action: Present the four verified findings and the recommended bounded correction route. Await the current user's decision before source changes, plan amendment, correction dispatch or another Gate.
