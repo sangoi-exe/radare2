@@ -1055,6 +1055,20 @@ static bool test_anal_cparse_supplied_calling_conventions(void) {
 			mu_assert_streq (decl->type->child->function.callconv, "stdcall", "the supplied convention stays on the actual inner function");
 			r_type_decl_free (decl);
 			free (type);
+			const char *commented_static[] = {
+				"/// @note(mark)\n__attribute__((cdecl)) /* note; */ static int h(void);",
+				"/// @note(mark)\n__attribute__((cdecl)) /* note; */static int h(void);"
+			};
+			for (j = 0; j < R_ARRAY_SIZE (commented_static); j++) {
+				RAnal *commented = r_anal_new ();
+				mu_assert_true (r_anal_import_c_decls (commented, commented_static[j], &error), "C2 frames the entire declaration without treating comment text as syntax or consuming its following token");
+				mu_assert_null (error, "semicolon-bearing prefix comment imports without a diagnostic");
+				mu_assert_streq (sdb_const_get (commented->sdb_types, "func.h.cc", NULL), "cdecl", "atomic comment framing preserves the supplied convention on a fresh function");
+				mu_assert_streq (sdb_const_get (commented->sdb_types, "func.h.@.static", NULL), "true", "atomic comment framing preserves static storage");
+				mu_assert_streq (sdb_const_get (commented->sdb_types, "func.h.prototype", NULL), "fixed", "the whole framed declaration retains its fixed prototype");
+				mu_assert_streq (sdb_const_get (commented->sdb_types, "func.h.@.note", NULL), "mark", "generic annotation metadata stays independent of comment framing");
+				r_anal_free (commented);
+			}
 			mu_assert_true (r_anal_import_c_decls (anal,
 				"/// @note(mark)\n__attribute__((cdecl)) /* note */ static int h(void);", &error), "C2 removes the witnessed prefix comment before preparing static storage");
 			mu_assert_null (error, "comment-separated attributed static declaration imports without a diagnostic");

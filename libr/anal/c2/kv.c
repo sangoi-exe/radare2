@@ -119,6 +119,8 @@ static inline void kvc_skipn(KVCParser *kvc, size_t amount) {
 	}
 }
 
+static void skip_spaces(KVCParser *kvc);
+
 static const char *scan_to_semicolon(KVCParser *kvc) {
 	int depth = 0;
 	char quote = 0;
@@ -132,6 +134,16 @@ static const char *scan_to_semicolon(KVCParser *kvc) {
 				quote = 0;
 			}
 			continue;
+		}
+		if (ch == '/') {
+			const char *start = kvc->s.a;
+			skip_spaces (kvc);
+			if (kvc->error) {
+				return NULL;
+			}
+			if (kvc->s.a != start) {
+				continue;
+			}
 		}
 		if (ch == '"' || ch == '\'') {
 			quote = ch;
@@ -179,7 +191,7 @@ static void skip_spaces(KVCParser *kvc) {
 				kvc_error (kvc, "Unclosed comment");
 				return;
 			}
-			kvc_skipn (kvc, 1 + closing - p);
+			kvc_skipn (kvc, closing - kvc->s.a + 2);
 			again = true;
 		}
 		p = kvc_peekn (kvc, 3);
@@ -1150,8 +1162,11 @@ static bool tryparse(KVCParser *kvc, const char *word, const char *type, KVCPars
 
 static bool kvc_tagged_function(KVCParser *kvc) {
 	KVCParser lookahead = *kvc;
+	lookahead.error = NULL;
+	lookahead.error_msg = NULL;
 	const char *start = lookahead.s.a;
 	const char *end = scan_to_semicolon (&lookahead);
+	free (lookahead.error_msg);
 	if (!end) {
 		return false;
 	}
