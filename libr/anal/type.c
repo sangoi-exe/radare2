@@ -349,14 +349,22 @@ R_API RList *r_anal_types_from_fcn(RAnal *anal, RAnalFunction *fcn) {
 	return type_used;
 }
 
-static RAnalBaseType *get_enum_type(Sdb *types, const char *sname) {
-
-	RAnalBaseType *base_type = r_anal_base_type_new (R_ANAL_BASE_TYPE_KIND_ENUM);
-	if (!base_type) {
+static RAnalBaseType *get_enum_type(Sdb *root, Sdb *types, const char *sname, RTypeNamespace space) {
+	char *type_name = space == R_TYPE_NAMESPACE_TAG? r_str_newf ("enum %s", sname): strdup (sname);
+	if (!type_name) {
 		return NULL;
 	}
-	const ut64 recorded = sdb_num_getf (types, NULL, "type.%s.size", sname);
-	base_type->size = recorded? recorded: 32;
+	RAnalBaseType *base_type = r_anal_base_type_new (R_ANAL_BASE_TYPE_KIND_ENUM);
+	if (!base_type) {
+		free (type_name);
+		return NULL;
+	}
+	RTypeDeclNode declaration = { .kind = R_TYPE_DECL_BASE, .base.name = type_name };
+	RTypeLayout layout;
+	if (r_type_decl_layout (root, &declaration, &layout)) {
+		base_type->size = layout.bits;
+	}
+	free (type_name);
 
 	char *members = get_type_data (types, "enum", sname);
 	if (!members) {
@@ -514,7 +522,7 @@ R_API RAnalBaseType *r_anal_get_base_type(RAnal *anal, const char *name, RTypeNa
 	if (!strcmp (type, "struct")) {
 		base_type = get_composite_type (types, name, R_ANAL_BASE_TYPE_KIND_STRUCT);
 	} else if (!strcmp (type, "enum")) {
-		base_type = get_enum_type (types, name);
+		base_type = get_enum_type (anal->sdb_types, types, name, space);
 	} else if (!strcmp (type, "union")) {
 		base_type = get_composite_type (types, name, R_ANAL_BASE_TYPE_KIND_UNION);
 	} else if (!strcmp (type, "typedef")) {

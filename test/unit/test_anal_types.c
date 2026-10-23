@@ -269,6 +269,7 @@ static bool test_anal_get_base_type_enum(void) {
 
 	mu_assert_eq (R_ANAL_BASE_TYPE_KIND_ENUM, base->kind, "Wrong base type");
 	mu_assert_streq (base->name, "foo", "type name");
+	mu_assert_eq (base->size, 0, "an unavailable target integer width remains unknown");
 
 	RAnalEnumCase *cas = RVecAnalEnumCase_at (&base->enum_data.cases, 0);
 	mu_assert_eq (cas->val, 1, "Incorrect value for enum case");
@@ -310,6 +311,51 @@ static bool test_anal_save_base_type_enum(void) {
 	sdb_free (reg);
 
 	r_anal_free (anal);
+	mu_end;
+}
+
+static bool test_anal_base_type_enum_width_roundtrip(void) {
+	const struct {
+		RTypeNamespace space;
+		ut64 recorded;
+		ut64 expected;
+	} cases[] = {
+		{ R_TYPE_NAMESPACE_ORDINARY, 0, 16 },
+		{ R_TYPE_NAMESPACE_TAG, 0, 16 },
+		{ R_TYPE_NAMESPACE_ORDINARY, 8, 8 },
+		{ R_TYPE_NAMESPACE_TAG, 8, 8 },
+		{ R_TYPE_NAMESPACE_ORDINARY, 32, 32 },
+		{ R_TYPE_NAMESPACE_TAG, 32, 32 }
+	};
+	size_t index;
+	for (index = 0; index < R_ARRAY_SIZE (cases); index++) {
+		RAnal *anal = r_anal_new ();
+		sdb_set (anal->sdb_types, "int", "type", 0);
+		sdb_num_set (anal->sdb_types, "type.int.size", 16, 0);
+		Sdb *tags = r_type_namespace (anal->sdb_types, R_TYPE_NAMESPACE_TAG, true);
+		setup_sdb_for_enum (anal->sdb_types);
+		setup_sdb_for_enum (tags);
+		Sdb *selected = cases[index].space == R_TYPE_NAMESPACE_TAG? tags: anal->sdb_types;
+		Sdb *other = cases[index].space == R_TYPE_NAMESPACE_TAG? anal->sdb_types: tags;
+		sdb_num_set (other, "type.foo.size", cases[index].expected == 32? 8: 32, 0);
+		if (cases[index].recorded) {
+			sdb_num_set (selected, "type.foo.size", cases[index].recorded, 0);
+		}
+		const char *spelling = cases[index].space == R_TYPE_NAMESPACE_TAG? "enum foo": "foo";
+		RTypeLayout before, after;
+		mu_assert_true (r_type_get_layout (anal->sdb_types, spelling, &before), "measure the selected enum before reading");
+		mu_assert_eq (before.bits, cases[index].expected, "layout uses the selected namespace and target default");
+		RAnalBaseType *base = r_anal_get_base_type (anal, "foo", cases[index].space);
+		mu_assert_notnull (base, "read the selected enum metadata");
+		mu_assert_eq (base->size, before.bits, "the reader exposes the effective layout width");
+		mu_assert_eq (base->space, cases[index].space, "the reader retains the requested namespace");
+		r_anal_save_base_type (anal, base);
+		mu_assert_eq (sdb_num_get (selected, "type.foo.size", NULL), before.bits, "saving retains the effective width in the selected namespace");
+		mu_assert_true (r_type_get_layout (anal->sdb_types, spelling, &after), "measure the selected enum after saving");
+		mu_assert_eq (after.bits, before.bits, "read/save does not change the enum width");
+		r_anal_base_type_free (base);
+		r_anal_free (anal);
+	}
 	mu_end;
 }
 
@@ -2151,6 +2197,7 @@ int all_tests(void) {
 	mu_run_test (test_anal_save_base_type_union);
 	mu_run_test (test_anal_get_base_type_enum);
 	mu_run_test (test_anal_save_base_type_enum);
+	mu_run_test (test_anal_base_type_enum_width_roundtrip);
 	mu_run_test (test_anal_get_base_type_typedef);
 	mu_run_test (test_anal_type_bitsize_struct_cycle);
 	mu_run_test (test_anal_type_bitsize_struct_recorded);
