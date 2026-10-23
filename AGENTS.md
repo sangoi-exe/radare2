@@ -35,6 +35,17 @@ Last reviewed: 2026-10-23 on `master`. Maintainers changing topology, ownership,
 
 Completed-task archives are stored at `I:\.wsl\archives\radare2\2026-10-23\` on Windows, accessible at `/mnt/i/.wsl/archives/radare2/2026-10-23/` in WSL. The [archive inventory and restoration record](.sangoi/task-logs/2026-10-23-native-review-remediation.md#authorized-historical-cache-archival-and-disk-recovery) maps each archive to its original path under `/home/lucas/.cache/codex`. The archives retain their original relative paths; external symlink targets are not bundled. These historical archives are not the current task's runtime inputs.
 
+## Shared native task artifacts
+
+For new task or qualification artifacts across the native workspace, use only the needed categories under the existing task-scoped cache owner:
+
+- `sources/`: required retained source snapshots or unique inputs. Canonical repositories remain the source owners; do not duplicate unchanged Git source merely to fill this category.
+- `build/`: regenerable compiler outputs and disposable working source copies when supported Make or preparation routes write in-tree. Use separate Meson output directories where supported, but do not assume all builds or preparation steps can run out-of-tree.
+- `runtime/`: private SDKs, installations, plugins and matching language inputs still consumed. Rebuildable inputs are not disposable while a current consumer needs them.
+- `evidence/`: logs, reports and proof kept separate from regenerable work. Durable workspace records retain their existing `.sangoi` owners; this category is not another plan or task-log authority.
+
+Before treating a working copy as disposable, preserve unique changes, retained evidence and matching prepared-source inputs with their identity metadata. Create only categories actually needed. Existing active paths stay in place; this prospective layout is not a migration or new deletion authorization.
+
 ## Shared prospective commit attribution
 
 Commits materially authored by Codex in any of the four native repositories must include the exact trailer `Co-authored-by: Codex <codex@openai.com>` unless the current user explicitly says otherwise. Apply this prospectively without rewriting existing history or changing Git author/committer configuration.
