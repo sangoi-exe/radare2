@@ -1040,6 +1040,47 @@ bool test_r_core_afs_preserves_compound_return_name_and_flags(void) {
 	mu_end;
 }
 
+bool test_r_core_signature_applies_supplied_callconv(void) {
+	const struct {
+		const char *callconv;
+		bool registered;
+	} cases[] = {
+		{ "__cdecl16far", true },
+		{ "__cdecl16far", false },
+		{ "review_unknown", false },
+		{ NULL, false }
+	};
+	size_t index;
+	for (index = 0; index < R_ARRAY_SIZE (cases); index++) {
+		RCore *core = r_core_new ();
+		r_anal_cc_reset (core->anal);
+		mu_assert_true (r_anal_cc_set (core->anal, "ax __cdecl16near (stack)"), "seed a recognized operational default");
+		if (cases[index].registered) {
+			mu_assert_true (r_anal_cc_set (core->anal, "ax __cdecl16far (stack)"), "seed the host-supported supplied convention control");
+		}
+		r_anal_set_cc_default (core->anal, "__cdecl16near");
+		RAnalFunction *fcn = r_anal_create_function (core->anal, "before", 0x1000, R_ANAL_FCN_TYPE_FCN, NULL);
+		RAnalBlock *block = r_anal_create_block (core->anal, fcn->addr, 1);
+		r_anal_function_add_block (fcn, block);
+		r_unref (block);
+		mu_assert_streq (r_anal_function_cc (fcn), "__cdecl16near", "new application starts with the previous operational default");
+		char *declaration = cases[index].callconv? r_str_newf ("void __attribute__((r2_cc(\"%s\"))) applied_cc(int value)", cases[index].callconv): strdup ("void applied_cc(int value)");
+		char *error = NULL;
+		mu_assert_true (r_core_anal_function_set_signature (core, fcn->addr, declaration, &error), "Core admits the supplied source convention without requiring host registration");
+		mu_assert_null (error, "successful application has no diagnostic");
+		mu_assert_nullable_streq (sdb_const_get (core->anal->sdb_types, "func.applied_cc.cc", NULL), cases[index].callconv, "the admitted record retains supplied versus absent convention knowledge");
+		mu_assert_streq (r_anal_function_cc (fcn), cases[index].callconv? cases[index].callconv: "__cdecl16near", "an actual application honors supplied input instead of persisted-readback fallback");
+		mu_assert_true (r_anal_function_set_callconv (core->anal, fcn, "__cdecl16near"), "a later intentional operational selection remains available");
+		mu_assert_true (r_core_anal_function_set_signature (core, fcn->addr, declaration, &error), "unchanged function-scoped reapplication succeeds");
+		mu_assert_null (error, "unchanged application has no diagnostic");
+		mu_assert_streq (r_anal_function_cc (fcn), "__cdecl16near", "unchanged reapplication preserves the later operational selection");
+		mu_assert_nullable_streq (sdb_const_get (core->anal->sdb_types, "func.applied_cc.cc", NULL), cases[index].callconv, "operational selection and unchanged application do not rewrite source knowledge");
+		free (declaration);
+		r_core_free (core);
+	}
+	mu_end;
+}
+
 bool test_r_anal_function_structured_signature_preserves_raw_callconv(void) {
 	RAnal *anal = r_anal_new ();
 	r_anal_cc_reset (anal);
@@ -1064,6 +1105,7 @@ bool test_r_anal_function_structured_signature_preserves_raw_callconv(void) {
 	signature->callconv = strdup ("replacement_native");
 	mu_assert_true (r_anal_function_set_signature (anal, fcn, signature), "explicit structured input updates the raw fact");
 	mu_assert_streq (sdb_const_get (anal->sdb_types, "func.scanf.cc", NULL), "replacement_native", "explicit input is retained without imposing host support");
+	mu_assert_streq (r_anal_function_cc (fcn), "replacement_native", "new explicit structured input replaces the prior operational convention");
 	signature->noreturn = true;
 	mu_assert_true (r_anal_function_set_signature (anal, fcn, signature), "structured noreturn is supplied independently of the declaration node");
 	mu_assert_true (fcn->is_noreturn, "the supplied noreturn fact reaches the function");
@@ -2205,6 +2247,7 @@ int all_tests(void) {
 	mu_run_test (test_r_core_afs_reuses_selected_parser_admission);
 	mu_run_test (test_r_core_afs_name_collision_preserves_state);
 	mu_run_test (test_r_anal_function_structured_signature_preserves_raw_callconv);
+	mu_run_test (test_r_core_signature_applies_supplied_callconv);
 	mu_run_test (test_r_anal_function_structured_signature_preserves_operational_callconv);
 	mu_run_test (test_r_core_signature_long_isolation_admission);
 	mu_run_test (test_r_core_signature_preserves_independent_flags);

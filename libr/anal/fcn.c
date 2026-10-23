@@ -3863,8 +3863,9 @@ R_API bool r_anal_function_signature_apply(RAnal *anal, RAnalFunction *fcn, cons
 	if (prepared->link && !r_type_set_link (anal->sdb_types, prepared->type_name, fcn->addr)) {
 		return false;
 	}
+	const char *callconv = sdb_const_getf (prepared->types, NULL, "func.%s.cc", prepared->name);
 	RAnalFunctionSignature signature = {
-		.callconv = (char *)function_signature_callconv (anal, fcn, prepared->type_name),
+		.callconv = (char *)(R_STR_ISNOTEMPTY (callconv)? callconv: function_signature_callconv (anal, fcn, prepared->type_name)),
 		.noreturn = prepared->has_noreturn? prepared->noreturn: function_signature_is_noreturn (anal->sdb_types, prepared->type_name, fcn->is_noreturn)
 	};
 	function_signature_sync (fcn, &signature, prepared->preserve_operational_callconv);
