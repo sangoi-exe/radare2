@@ -1,5 +1,9 @@
 # Workspace changelog
 
+## 2026-10-23
+
+- Reproduced the supplied native/host review findings through real engine, SDK and bridge paths. Native `e6145a1` preserves volatile memory dependencies and single-member union reads while retaining CALLOTHER encoding; native 94/94, preparation 10/10 and root 3/3 decisive checks pass. Host `86f689fecd` preserves effective enum width through read/save; host `213b26aa22` applies explicitly supplied conventions without persisted-readback substitution while preserving later-afc priority. Private full build/install, 107 units, 9 CLI controls and real SDK/plugin probes pass. These are local validated checkpoints, not final review approval. Bridge enum construction and CALLF representation require current-user decisions; final pin/integration/Code Gate remain pending. No global installation, push or original-input mutation.
+
 ## 2026-10-22
 
 - Completed the user-selected C2 framing correction at251fce71b7 and Core buffer-reference correction atba83599199. Existing comment handling protects declaration boundaries and preserves the following token; tagged lookahead owns its diagnostic. Valid universal-Mach-O inputs no longer hit the optional-baseline NULL reference. Same-prefix private qualification passes4 production API witnesses,132 units, C2 2/2, Mach-O19/19 and project73/73 without skips, timeouts or changed expectations. Root independently confirmed both corrected production paths. Final single-Senior Code Gate returned PROCEED with complete eight-path coverage and no findings, closing the admitted semantic-fidelity task without relabeling earlier negative reports. Broader matrices and retained out-of-scope observations remain disclosed. No global installation, push or additional build tree.

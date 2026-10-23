@@ -1,6 +1,6 @@
 # Intent Contract: native review reproduction and remediation
 
-Status: active
+Status: on-hold
 Task mode: Doctrine
 Lifecycle phase: Implementation
 Strategy epoch: 1
@@ -48,7 +48,7 @@ All four match the supplied report heads. Host has pre-existing untracked `.refs
 
 The ordinary STORE path before native `b63e07d` and current patch0170 controls provide a dependency baseline, not known-good complete volatile support. Enum/CC behavior and the three CALLF variants are inherited from the supplied earlier bases; there is no known-good implementation for those exact outcomes. The existing unqualified, corrected unprefixed CALLF and operational-CC paths are retained controls.
 
-Retained native N7 inputs match the current canonical patch/build inputs. Root ran `flat_conditional_stack_store_negative`, `flat_conditional_stack_store_positive` and `qualified_volatile_equal_sized_member` against its real executable and matching languages: 3/3 passed, exit0. No new failure witness has run yet. The source-supported conditional failure is not an observed whole-pipeline wrong return.
+At admission, retained native N7 inputs matched the current canonical patch/build inputs and three root-run ordinary/struct controls passed3/3. N1 subsequently reproduced conversion/collapse and normal scheduled volatile dependency loss: the final IR/C returns3 instead of4/5. Its real single-member union helper/pipeline witnesses also fail, while five controls pass. H1 observed host enum16/32/32, native size4 for host8/32 enums, and successful new signature application substituting near for native-only far. The task log owns exact source, output and correction-state evidence; these are now executed failures, not just external probe claims.
 
 ## First directly verifiable slice and work packages
 
@@ -62,9 +62,33 @@ The root-owned execution projection is [the microtask annex](2026-10-23-native-r
 
 Retained task build/evidence root: `/home/lucas/.cache/codex/radare2/native-review-remediation-2026-10-23/`. Use fresh destinations and native Git-object snapshots; do not alter retained proof or remove preparation markers to force reuse. The initial snapshot may use the existing native Git object store for the runner's clean-source check, with no registered additional worktree or index mutation.
 
-Current-user decisions open: none for the selected route and first witnesses. Production correction dispatch remains dependent on established local mechanism and actual evidence. A required material boundary change stops its dependent mutation and returns to the user.
+Current implementation checkpoints: native `e6145a192c909740012400d27cad969bd954fdd8` corrects volatile memory effects and single-member union reads; host `86f689fecd26c2b6f88c99657bd2b8f7ea0567df` corrects enum read/save width; host `213b26aa2210b8d667e0c7e4b0f2af24cd8927d4` applies supplied conventions faithfully. Native qualification passes94 native and10 preparation tests; root independently repeated the two scheduled STORE cases and union case,3/3. Host qualification passes53 type and54 function units,9 existing CLI cases, and real SDK probes. Root also observed native-only far reaching the existing native model, explicit unknown model refusal, and later-afc precedence using the corrected SDK with the retained bridge. These are validated checkpoints, not a completed task or Code Gate approval.
+
+The bridge enum correction, final native pin/component integration and final Code Gate remain pending. The bridge still pins native168c8b6; it does not yet consume the new native checkpoint. No global installation or push occurred.
+
+## Material decisions awaiting the current user
+
+The completed work and confirmed five-group envelope remain. No new correction dispatch or Gate may proceed while the decisions below are pending. Both packages are classified `current_user_decision`; their underlying reproduced defects remain true. No proposed restriction, API change or risk acceptance is selected by this plan.
+
+### Enum construction boundary
+
+Required property: preserve the host's effective enum width at native construction without changing the native global default or silently changing unrelated enum metadata. The current factory takes identity/display but always constructs with its private default width/metatype. Public `decodeType` can import a supplied size, so a new API is not technically mandatory. Root recommends a narrow explicit-size factory extension because it retains the existing construction owner rather than adding an encode/decode adaptation just to create the type.
+
+- **E-A — recommended:** Extend the existing `TypeFactory::getTypeEnum` construction boundary to accept an explicit per-type width, with existing default construction retained for current default callers. The bridge supplies host layout width; existing factory ownership, identity, display, interning and configured metatype remain. Maintained cost is the narrow native API plus direct bridge/test/pin propagation. It changes the native/bridge compiled interface, not persisted analysis shape. It is reversible through local source commits and matching rebuilds; no migration or publication is selected. Evidence: patch0300's current getTypeEnum, TypeFactory private enumsize/enumtype, and H1's real8/32-to4/4 failure. The user must select this API change.
+- **E-B — existing-interface alternative:** Construct a correctly sized enum through the existing native typed decoder. Factory interning remains native and no new public construction parameter is needed. The bridge would maintain an additional codec-input construction path and must preserve identity/display/default metatype as well as width; those integration details are not yet implemented or qualified. This is locally reversible and does not require a saved-data migration. Evidence: public decodeType/decodeEnum and existing enum roundtrip tests. The user may select this route instead of E-A.
+
+Falsifier for the need to change construction: the current bridge creates distinct1-byte/4-byte enum objects from the H1 inputs without changing a global default; it currently creates4/4.
+
+### CALLF address-representation boundary
+
+Required property: the admitted indirect CALLF variants read their actual memory operand and preserve target and return-frame meaning. Root reproduced all three missing-load forms with real Sleigh. At code coordinate0x10001000, the operand32 form also saves0x10001005 rather than offset0x1005 and reserves six bytes. Intel Volume2A,253666-093US (September2026), CALL description and same-privilege pseudocode establish the loaded selector/offset and padded operand32 frame. The live Win16 processor specification instead represents selector16+offset16 as a four-byte synthetic coordinate. Patch0130 couples segment inner size to the two-byte stack space, and native pointer defaults derive from that same segment operation.
+
+- **F-A — bounded alternative, requires explicit restriction:** Keep the current16:16 coordinate, pointer and stack owners. Correct the prefixed instructions, selector-aware operand access and frame inside that representable domain, and explicitly refuse unsupported/unproven wider offsets rather than truncate or alias them. This retains existing architecture and avoids a broader address-model change; maintained cost is bounded specification/consumer/test work plus an honest admission/refusal boundary. It narrows the supported input/result envelope and may refuse a symbolic offset not proven representable. It is containment outside the accepted domain, not complete16:32 support. Local commits/rebuilds are reversible; no saved-data migration is selected. The user must accept this restricted result before implementation.
+- **F-B — recommended to preserve the confirmed result:** Preserve full32-bit offsets with16-bit selectors for operand cells and far targets. This requires a selected address-representation change and propagation through the existing native/bridge owners; widening only the current inner field is insufficient because stack/pointer contracts depend on it. Maintained cost, validation breadth and compatibility impact exceed the local instruction patch. The exact representation must be investigated and selected before implementation; this card is not a preapproved full-width design. Source commits are reversible, but existing analysis-coordinate consequences must be resolved before mutation. The user must authorize this broader strategy rather than accept F-A's restriction. The recommendation prioritizes the confirmed semantic result instead of preserving the current representation by silently reducing supported inputs.
+
+Falsifier for the representation boundary: current coordinates distinguish all relevant nonzero-high-word cell/target offsets without truncation, selector collision or changed pointer/stack semantics. No such path was found. Cell-content emulation and a corrected CALLF candidate remain unexecuted; no game reachability or full-descriptor support is claimed.
 
 Plan audit: `/root/review_remediation_plan_audit` returned PROCEED with complete Intent Contract coverage and no material findings. The audit corroborated the exact user confirmation and the retained3/3 control evidence; it did not claim new runtime reproduction or implementation review. The registered transition publishes the locator and enters active Implementation.
 
-Blocker: none for the first bounded witness entry.
-Next action: Execute N1 with real native implementations, record the observed results and establish the exact correction mechanism before production dispatch.
+Blocker: current-user selection of E-A/E-B and F-A/F-B. The current native/host checkpoints are safe and retained; no remaining mutation is authorized while these material decisions are pending.
+Next action: Present the two concise decision packages. After selection, record the precise Scope/architecture consequence and use the resident amendment/revision/reset route that actually applies before continuing.
