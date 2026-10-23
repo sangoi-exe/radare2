@@ -1056,6 +1056,12 @@ static bool test_anal_cparse_supplied_calling_conventions(void) {
 			r_type_decl_free (decl);
 			free (type);
 			mu_assert_true (r_anal_import_c_decls (anal,
+				"/// @note(mark)\n__attribute__((cdecl)) /* note */ static int h(void);", &error), "C2 removes the witnessed prefix comment before preparing static storage");
+			mu_assert_null (error, "comment-separated attributed static declaration imports without a diagnostic");
+			mu_assert_streq (sdb_const_get (anal->sdb_types, "func.h.cc", NULL), "cdecl", "prefix comment removal preserves the supplied convention");
+			mu_assert_streq (sdb_const_get (anal->sdb_types, "func.h.@.static", NULL), "true", "prefix comment removal preserves static storage");
+			mu_assert_streq (sdb_const_get (anal->sdb_types, "func.h.@.note", NULL), "mark", "prefix comment removal preserves separate annotation metadata");
+			mu_assert_true (r_anal_import_c_decls (anal,
 				"static int plain_static(void);"
 				"__attribute__((cdecl)) static int h(void);"
 				"__attribute__((note(mark))) static int n(void);", &error), "C2 prepares static storage across leading semantic and generic attributes");

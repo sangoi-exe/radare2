@@ -439,6 +439,24 @@ static char *kvc_declaration_text(KVCParser *kvc, RStrs span, bool metadata, boo
 			}
 			continue;
 		}
+		if (!depth && prefix && !prefix_attribute) {
+			RStrs saved = kvc->s;
+			kvc->s = r_strs_new (cursor, span.b);
+			skip_spaces (kvc);
+			const char *end = kvc->s.a;
+			kvc->s = saved;
+			if (kvc->error) {
+				break;
+			}
+			if (end != cursor) {
+				if (!r_strbuf_append_n (&text, start, cursor - start) || !r_strbuf_append (&text, " ")) {
+					kvc_error (kvc, "Cannot prepare declaration prefix");
+					break;
+				}
+				start = cursor = end;
+				continue;
+			}
+		}
 		if (!depth && (size_t)(span.b - cursor) >= strlen ("__attribute__")
 				&& !strncmp (cursor, "__attribute__", strlen ("__attribute__"))) {
 			if (metadata && !kvc_semantic_attribute (cursor)) {
