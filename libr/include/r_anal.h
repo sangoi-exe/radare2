@@ -1488,6 +1488,8 @@ R_API bool r_anal_cc_argclob(RAnal *anal, const char *caller_cc, int n, const ch
 R_API bool r_anal_cc_isclobber(RAnal *anal, const char *cc, const char *reg);
 R_API const char *r_anal_cc_default(RAnal *anal);
 R_API const char *r_anal_function_cc(RAnalFunction *fcn);
+// Borrowed named prototype at the exact call PC, or NULL; invalidated by type database changes.
+R_API const char *r_anal_call_type_at(RAnal *anal, ut64 addr);
 R_API const char *r_anal_call_convention(RAnal *anal, RAnalOp *op);
 R_API int r_anal_call_stack_pop(RAnal *anal, RAnalOp *op);
 R_API void r_anal_set_cc_default(RAnal *anal, const char *convention);

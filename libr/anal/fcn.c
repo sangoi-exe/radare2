@@ -154,7 +154,7 @@ static char *fcn_call_type(RAnal *anal, RAnalOp *op, RAnalFunction **callee) {
 	return flag? r_type_func_guess (anal->sdb_types, flag->name): NULL;
 }
 
-R_IPI const char *r_anal_call_type_at(RAnal *anal, ut64 addr) {
+R_API const char *r_anal_call_type_at(RAnal *anal, ut64 addr) {
 	R_RETURN_VAL_IF_FAIL (anal && anal->sdb_types, NULL);
 	return sdb_const_getf (anal->sdb_types, NULL,
 		"calllink.%08" PFMT64x, addr);
