@@ -1,5 +1,9 @@
 # Workspace changelog
 
+## 2026-10-24
+
+- Prepared a private Windows guest from the user-retained `.refs` media and executed one valid observer control plus seven exact relocation variants through native Computer Use. Under the observed KRNL386 loader, raw types0x0d/0x0b produced narrow offset16/far16:16 effects, not the widths inferred from their names; marker/additive controls retained raw output and confirmed independent word addition. Matching H6 observation reproduces skipped wide-labelled records and a POI_32 offset carry into the selector. The four-finding follow-up is on-hold for production direction, without source corrections or final Code Gate approval. The guest/evidence remain retained, owned processes are stopped, and no global installation, original mutation or push occurred.
+
 ## 2026-10-23
 
 - Closed the native review-remediation task after PROCEED_AFTER_FIXES with complete16-path coverage and all six serialized Claude calls successful. Host `1dfd6b68ad` restores descriptor-derived NE import-map permissions and checks RW on both windows. The corrected oracle fails on H5, then fresh matching Make/private installation and NE5/5 pass; root repeated5/5 and verified source/library equality. Superseded current summaries are corrected. Earlier H5/B4/M2, print and CLI results retain their actual tested-host identities; no new whole-stack run is claimed. The known optional xattr warning, H5-produced project permission limitation and broader proof limits remain recorded. No migration, additional push or global installation occurred.
