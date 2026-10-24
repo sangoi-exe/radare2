@@ -2,6 +2,8 @@
 
 ## 2026-10-24
 
+- Verified the user's source-type-mask hypothesis in the exact installed KRNL386: the connected relocation path computes the raw type AND7, handles flags separately and applies additive far pointers with two independent WORD ADDs. Root independently checked aligned disassembly and physical bytes. The user-confirmed NE/carry correction remains unimplemented while the additional-encoding consequence of adopting that general mask awaits selection. Current Wine/Ghidra source differences are recorded as dated reference evidence, not Microsoft loader contracts.
+
 - Prepared a private Windows guest from the user-retained `.refs` media and executed one valid observer control plus seven exact relocation variants through native Computer Use. Under the observed KRNL386 loader, raw types0x0d/0x0b produced narrow offset16/far16:16 effects, not the widths inferred from their names; marker/additive controls retained raw output and confirmed independent word addition. Matching H6 observation reproduces skipped wide-labelled records and a POI_32 offset carry into the selector. The four-finding follow-up is on-hold for production direction, without source corrections or final Code Gate approval. The guest/evidence remain retained, owned processes are stopped, and no global installation, original mutation or push occurred.
 
 ## 2026-10-23
