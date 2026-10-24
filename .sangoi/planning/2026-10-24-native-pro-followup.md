@@ -1,6 +1,6 @@
 # Intent Contract: native Pro follow-up and Windows NE observations
 
-Status: active
+Status: on-hold
 Task mode: Doctrine
 Lifecycle phase: Implementation
 Strategy epoch: 3
@@ -104,4 +104,6 @@ The local Initial Intent Contract audit on `/root/pro_followup_plan_audit` retur
 
 The replacement epoch3 Strategy-reset Intent audit on `/root/pro_followup_plan_audit` returned PROCEED with complete required field coverage and no material finding. This closes the current planning admission, not execution or Code review. The normal transition enters active Implementation and republishes the existing plan locator.
 
-The earlier lab/guide slice is checkpointed at64a158fd4ae1c010d82b8eeeebbeb5d7b60f223c. The current user resumed execution with `vamos seguir então`; W9–W11 produced the retained NE/instruction results, W13/W14 corrected and integrated LEAVE, and W15 corrected the real global producer. Next action: resolve the exact relocation-operand information boundary needed by the already-selected selector/location separation, then present any material mechanism choice before its dependent changes. The source audit rules out a currentCS-only patch as a complete correction; it does not select a new representation or capture subsystem. Whole-task completion still requires remaining corrections/direction decisions, matching verification, committed candidate, applicable final Code Gate and closeout records. No lab-only result closes the production findings.
+The current observations and F3/F4 integration are recorded in host8060b99882447e0839ba6a4847248177524c38bb. The user resumed execution with `vamos seguir então`; W9–W11 produced retained NE/instruction results, W13/W14 corrected and integrated LEAVE, and W15 corrected the real global producer. Bounded F7 follow-up and root checks now locate the missing per-use source-field association before native P-code emission, plus the separate missing loaded-field target relationship. No further provenance lookup is required to state that boundary.
+
+Blocking current-user decision: confirm the proposed extension into the existing native parse/build and bridge/memory-input boundaries, so relocation facts bind before their source association is lost and static targets remain separate from machine-selector bits. This is the concrete architecture delta beyond the already-approved separation principle; the plan does not yet select a new interface, representation or Strategy epoch. The recommendation excludes a second decoder, generic serialized provenance protocol, runtime capture service, persistent database and fixed selector values. Next action is the user's confirmation/correction of this delta, followed by the applicable strategy/plan route before dependent implementation. The task remains on-hold; no new Gate or mutation is authorized by the advisory source report. Whole-task completion still requires remaining decisions/corrections, matching verification, committed candidate, final Code Gate and closeout records.
