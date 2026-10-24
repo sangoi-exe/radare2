@@ -2,6 +2,8 @@
 
 ## 2026-10-23
 
+- Closed the native review-remediation task after PROCEED_AFTER_FIXES with complete16-path coverage and all six serialized Claude calls successful. Host `1dfd6b68ad` restores descriptor-derived NE import-map permissions and checks RW on both windows. The corrected oracle fails on H5, then fresh matching Make/private installation and NE5/5 pass; root repeated5/5 and verified source/library equality. Superseded current summaries are corrected. Earlier H5/B4/M2, print and CLI results retain their actual tested-host identities; no new whole-stack run is claimed. The known optional xattr warning, H5-produced project permission limitation and broader proof limits remain recorded. No migration, additional push or global installation occurred.
+
 - Qualified unchanged MCP74c660f3 against corrected H5/B4/N5 inputs: fresh root Make/API probe, full test2 with native SCRANTIC, JSON-number proof and18 expected stdio outcomes pass. Actual loaded components match the selected stack; fresh snapshot/close/reopen/restore preserves saved high-address state and discards an unsaved marker. Three optional relocation inputs remain unprovided. Owned processes/listeners are closed, and canonical MCP source is unchanged. Implementation is ready for the required local remediation Code Gate, not yet formally approved.
 
 - Pinned the corrected native engine at bridge `e2f76d8` and qualified it with the H5 host SDK. The semantic API probe, native109/109, preparation10/10, XML1/1, build reuse and complete bridge116/116 pass. Only the engine revision changed; no golden or bridge API adaptation was needed. Matching MCP qualification and final remediation review remain pending, with compiler/leak-check/platform limits retained in the task log.
