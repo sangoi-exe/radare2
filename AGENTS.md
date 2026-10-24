@@ -33,11 +33,11 @@ Last reviewed: 2026-10-24 on `master`. Maintainers changing topology, ownership,
 
 ## Windows-owned validation
 
-Claims about Windows-owned loader/API behavior or applicable machine-state effects require execution of the relevant case in actual installed Microsoft Windows. Synthetic host tests remain useful for our production consumers and host-only contracts, but do not substitute for that external observation. Retain the native host, bridge, engine and MCP validation entry points; these suites do not all run as Win16. An unavailable or unrun guest case is an explicit proof gap, not success.
+Claims about 16-bit machine behavior or DOS/Windows-owned behavior require execution of the relevant target case and comparison with our real production consumers. Do not accept those claims solely from invented expectations or a self-derived simulation. Windows-owned loader/API claims require actual installed Microsoft Windows. Synthetic host tests remain useful for our production consumers and host-only contracts, but do not substitute for target observations. Retain the native host, bridge, engine and MCP validation entry points; these suites do not all run as Win16. An unavailable or unrun target case is an explicit proof gap, not success.
 
 Account separately for the file segment ordinal, observed runtime selector, actual relocated bytes and C48 analysis coordinate. A synthetic-ID substitution may support a host-consumer comparison, but is not Windows byte equality.
 
-The retained user media are `.refs/Microsoft MS-DOS 6.22 Plus Enhanced Tools (3.5).7z` and `.refs/Microsoft Windows 3.11 (Retail Full) (3.5).7z`. The installed MS-DOS6.22/Windows3.11 lab uses genuine Microsoft software on DOSBox-X-emulated hardware, not physical hardware. Under `/home/lucas/.cache/codex/radare2/native-pro-followup-2026-10-24/`, the installed disk is `runtime/dos622-win311/disk-c.img`, later boot uses `runtime/dos622-win311/control/boot.conf`, and retained observations are in `evidence/dos622-win311/`. Do not rerun the one-use `runtime/dos622-win311/control/create.conf` against the installed disk; stage or collect with native image tools only while the guest is stopped. The [lab qualification and independent selector observations](.sangoi/task-logs/2026-10-24-native-pro-followup.md#genuine-dos-lab-qualification-and-independent-selector-observation) own detailed evidence and its coverage limits.
+The retained user media are `.refs/Microsoft MS-DOS 6.22 Plus Enhanced Tools (3.5).7z` and `.refs/Microsoft Windows 3.11 (Retail Full) (3.5).7z`. The reusable lab lives at `.refs/labs/dos622-win311/`, not in `.cache`. Relative to that root, the installed DOSBox-X baseline is `runtime/dos622-win311/disk-c.img`, its boot control is `runtime/dos622-win311/control/boot.conf`, and its observations are in `evidence/dos622-win311/`. Genuine Microsoft MS-DOS6.22/Windows3.11 also completed the unchanged observer control on a separate non-root QEMU8.2.2/KVM disk, with KVM enabled and visible DOS/Windows identities; `evidence/qemu-kvm/run-2/` owns that result. This qualifies only the observed control, not the relocation variants, LEAVE or ARPL cases. DOSBox-X CPU effects remain emulator observations; KVM does not establish physical386 timing or peripheral equivalence. The [native operator procedure](doc/windows311-lab.md) describes both routes, fresh writable copies and evidence paths, interactive KVM verification, safe shutdown and stopped-image collection. Preserve the DOSBox baseline and evaluated KVM disks; do not substitute TCG for KVM or rerun the one-use `runtime/dos622-win311/control/create.conf` against the installed disk. The [lab qualification and independent selector observations](.sangoi/task-logs/2026-10-24-native-pro-followup.md#genuine-dos-lab-qualification-and-independent-selector-observation) own the earlier detailed evidence and its coverage limits.
 
 ## Historical native task archives
 
@@ -45,14 +45,16 @@ Completed-task archives are stored at `I:\.wsl\archives\radare2\2026-10-23\` on 
 
 ## Shared native task artifacts
 
-For new task or qualification artifacts across the native workspace, use only the needed categories under the existing task-scoped cache owner:
+Reusable lab execution inputs, observer sources, frozen witnesses and retained observations belong under `.refs/labs/dos622-win311/`, with its existing `sources/`, `build/`, `runtime/` and `evidence/` structure. Keep every file needed to execute that lab out of `.cache`. The supplied media stay at their original `.refs/*.7z` paths. Keep proprietary media and installed guests outside Git.
+
+For other task artifacts and disposable build work across the native workspace, use only the needed categories under the applicable task-scoped cache owner:
 
 - `sources/`: required retained source snapshots or unique inputs. Canonical repositories remain the source owners; do not duplicate unchanged Git source merely to fill this category.
 - `build/`: regenerable compiler outputs and disposable working source copies when supported Make or preparation routes write in-tree. Use separate Meson output directories where supported, but do not assume all builds or preparation steps can run out-of-tree.
 - `runtime/`: private SDKs, installations, plugins and matching language inputs still consumed. Rebuildable inputs are not disposable while a current consumer needs them.
 - `evidence/`: logs, reports and proof kept separate from regenerable work. Durable workspace records retain their existing `.sangoi` owners; this category is not another plan or task-log authority.
 
-Before treating a working copy as disposable, preserve unique changes, retained evidence and matching prepared-source inputs with their identity metadata. Create only categories actually needed. Existing active paths stay in place; this prospective layout is not a migration or new deletion authorization.
+Before treating a working copy as disposable, preserve unique changes, retained evidence and matching prepared-source inputs with their identity metadata. A lab `build/` member that remains a frozen witness or required input is not disposable merely because of its directory name. Create only categories actually needed. Other existing active paths stay in place; this layout is not a new migration or deletion authorization.
 
 ## Shared prospective commit attribution
 
