@@ -29,7 +29,15 @@ Validation entry points are the host Make build and `r2r`/unit tests below, brid
 
 Native preparation and Meson build reuse validate matching patches/source inputs through the engine's shared runner. Stale or ambiguous preparation refuses without changing source bytes; preserve changes and prepare a new matching checkout or distribution rather than removing `patch.done` and retrying. Matching prepared distributions remain buildable without Git. The child guides own the preparation details and combined native/bridge test procedure.
 
-Last reviewed: 2026-10-23 on `master`. Maintainers changing topology, ownership, build/test entry points or dependency integration must refresh this map and the affected child guidance against live files; branch names and installed components are not proof that this map is current.
+Last reviewed: 2026-10-24 on `master`. Maintainers changing topology, ownership, build/test entry points or dependency integration must refresh this map and the affected child guidance against live files; branch names and installed components are not proof that this map is current.
+
+## Windows-owned validation
+
+Claims about Windows-owned loader/API behavior or applicable machine-state effects require execution of the relevant case in actual installed Microsoft Windows. Synthetic host tests remain useful for our production consumers and host-only contracts, but do not substitute for that external observation. Retain the native host, bridge, engine and MCP validation entry points; these suites do not all run as Win16. An unavailable or unrun guest case is an explicit proof gap, not success.
+
+Account separately for the file segment ordinal, observed runtime selector, actual relocated bytes and C48 analysis coordinate. A synthetic-ID substitution may support a host-consumer comparison, but is not Windows byte equality.
+
+The retained user media are `.refs/Microsoft MS-DOS 6.22 Plus Enhanced Tools (3.5).7z` and `.refs/Microsoft Windows 3.11 (Retail Full) (3.5).7z`. The installed MS-DOS6.22/Windows3.11 lab uses genuine Microsoft software on DOSBox-X-emulated hardware, not physical hardware. Under `/home/lucas/.cache/codex/radare2/native-pro-followup-2026-10-24/`, the installed disk is `runtime/dos622-win311/disk-c.img`, later boot uses `runtime/dos622-win311/control/boot.conf`, and retained observations are in `evidence/dos622-win311/`. Do not rerun the one-use `runtime/dos622-win311/control/create.conf` against the installed disk; stage or collect with native image tools only while the guest is stopped. The [lab qualification and independent selector observations](.sangoi/task-logs/2026-10-24-native-pro-followup.md#genuine-dos-lab-qualification-and-independent-selector-observation) own detailed evidence and its coverage limits.
 
 ## Historical native task archives
 
