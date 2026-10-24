@@ -145,7 +145,7 @@ static RVecRBinReloc *patch_relocs(RBinFile *bf) {
 				mapped = false;
 				break;
 			}
-			RIOMap *map = b->iob.map_add (b->iob.io, desc->fd, R_PERM_R, delta, address, R_MIN ((size_t)0x10000, imports_size - delta));
+			RIOMap *map = b->iob.map_add (b->iob.io, desc->fd, desc->perm, delta, address, R_MIN ((size_t)0x10000, imports_size - delta));
 			if (!map) {
 				mapped = false;
 				break;

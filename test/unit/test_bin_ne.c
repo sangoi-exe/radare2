@@ -299,7 +299,8 @@ static bool test_ne_import_selector_spill(void) {
 	mu_assert_eq (second->itv.size, 8, "spill map contains the remaining slots");
 	mu_assert_streq (first->name, "ne.imports", "first map name retained");
 	mu_assert_streq (second->name, "ne.imports", "spill map name retained");
-	mu_assert_eq (first->perm, R_PERM_R, "import map permission retained");
+	mu_assert_eq (first->perm, R_PERM_RW, "first import map retains descriptor read/write permissions");
+	mu_assert_eq (second->perm, R_PERM_RW, "spill import map retains descriptor read/write permissions");
 	mu_assert_eq (core->io->desc->fd, file->fd, "original descriptor selection retained");
 	RIOMapAdd map_add = core->bin->iob.map_add;
 	core->bin->iob.map_add = ne_fail_spill_map;
