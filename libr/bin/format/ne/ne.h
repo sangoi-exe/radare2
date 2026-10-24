@@ -41,6 +41,10 @@ typedef struct {
 	char *os;
 } r_bin_ne_obj_t;
 
+static inline ut8 r_bin_ne_reloc_type(const r_bin_ne_obj_t *bin, ut8 raw_type) {
+	return bin->ne_header->targOS == 2? raw_type & 7: raw_type;
+}
+
 static inline bool r_bin_ne_import_address(const r_bin_ne_obj_t *bin, size_t index, ut64 *address) {
 	ut64 selector = bin->imports_base >> 32;
 	if (selector > UT16_MAX || index >= (0x10000 - selector) * 0x4000) {

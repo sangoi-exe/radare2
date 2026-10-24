@@ -6,7 +6,7 @@
 #include "../../libr/anal/p/anal_borland.c"
 #undef r_anal_plugin_borland
 
-#define LOCAL_BASE 0x10000
+#define LOCAL_BASE 0x100000000ULL
 #define LOCAL_DATA (LOCAL_BASE + 32)
 
 static bool selected_types(RAnal *anal) {
@@ -167,7 +167,7 @@ static bool test_data_conflicting_extents_and_references(void) {
 		ut64 epoch = r_anal_types_dirty_epoch (ctx.anal);
 		mu_assert_false (profile_data (&ctx, 32, 70, "StartupData70Partial"), "conflicting full/interior/tail/unknown/link/other-space/code owner refuses");
 		mu_assert_eq (r_anal_types_dirty_epoch (ctx.anal), epoch, "refusal adds no type link");
-		mu_assert_null (sdb_const_get (ctx.anal->sdb_types, "link.00010020", NULL), "no requested link after refusal");
+		mu_assert_null (sdb_const_get (ctx.anal->sdb_types, "link.100000020", NULL), "no requested link after refusal");
 		mu_assert_eq (R_ANAL_REF_TYPE_MASK (reference_type (ctx.anal, LOCAL_DATA - 5, LOCAL_DATA + 69)), R_ANAL_REF_TYPE_DATA, "incoming tail reference retained");
 		mu_assert_eq (R_ANAL_REF_TYPE_MASK (reference_type (ctx.anal, LOCAL_DATA + 69, LOCAL_DATA + 100)), R_ANAL_REF_TYPE_CODE, "outgoing tail reference retained");
 		if (scenario < 4) {
@@ -278,7 +278,7 @@ static bool test_data_array_element_views(void) {
 		ut64 epoch = r_anal_types_dirty_epoch (ctx.anal);
 		mu_assert_eq (profile_data_array (&ctx, 32, "uint16_t", 24), compatible, "only exact aligned plain element DATA coexists");
 		if (compatible) {
-			mu_assert_streq (sdb_const_get (ctx.anal->sdb_types, "link.00010020", NULL), "uint16_t [24]", "complete array linked natively");
+			mu_assert_streq (sdb_const_get (ctx.anal->sdb_types, "link.100000020", NULL), "uint16_t [24]", "complete array linked natively");
 			epoch = r_anal_types_dirty_epoch (ctx.anal);
 			mu_assert_true (profile_data_array (&ctx, 32, "uint16_t", 24), "array element rerun");
 		}
@@ -335,7 +335,7 @@ static bool test_data_array_string_and_guards(void) {
 		if (scenario) {
 			mu_assert_eq (r_anal_types_dirty_epoch (ctx.anal), epoch, "refusal changes no existing type link");
 		} else {
-			mu_assert_streq (sdb_const_get (ctx.anal->sdb_types, "link.00010020", NULL), "uint16_t [2]", "whole array represented by type link alone");
+			mu_assert_streq (sdb_const_get (ctx.anal->sdb_types, "link.100000020", NULL), "uint16_t [2]", "whole array represented by type link alone");
 		}
 		mu_assert_ptreq (r_meta_get_in (ctx.anal, start, R_META_TYPE_STRING), node, "whole STRING node retained");
 		mu_assert_ptreq (node->data, item, "STRING item identity retained");
@@ -376,8 +376,15 @@ static bool test_local_native_chained_application(void) {
 	r_write_le16 (bytes + 0x101, 0x11);
 	r_write_le16 (bytes + 0x111, UT16_MAX);
 	r_write_le16 (bytes + 0x128, 5);
-	const ut8 records[] = { 3, 0, 1, 0, 2, 0, 0, 0, 5, 4, 0x28, 0, 2, 0, 0x10, 0 };
-	r_write_le16 (bytes + 0x140, 2);
+	r_write_le16 (bytes + 0x130, 0xfff0);
+	r_write_le16 (bytes + 0x132, 0x1234);
+	r_write_le16 (bytes + 0x134, 0x5aa5);
+	const ut8 records[] = {
+		3, 0, 1, 0, 2, 0, 0, 0,
+		5, 4, 0x28, 0, 2, 0, 0x10, 0,
+		3, 4, 0x30, 0, 2, 0, 0x10, 0,
+	};
+	r_write_le16 (bytes + 0x140, 3);
 	memcpy (bytes + 0x142, records, sizeof (records));
 	RCore *core = r_core_new ();
 	r_config_set (core->config, "asm.arch", "x86");
@@ -404,22 +411,34 @@ static bool test_local_native_chained_application(void) {
 	mu_assert_true (profile_number_is (&ctx, "ne.reloc.1.0", "application_count", 2), "native producer actually expanded two applications");
 	mu_assert_true (profile_number_is (&ctx, "ne.reloc.1.0", "source_offset", 1), "raw head differs from selected application");
 	mu_assert_notnull (file->bo->relocs, "native object relocation vector");
-	mu_assert_eq (profile_mapped (&ctx, 0x111, 4, true), 0x10011, "local actual application mapping");
+	mu_assert_eq (profile_mapped (&ctx, 0x111, 4, true), 0x100000011ULL, "local actual application mapping");
 	ut8 qualified[4];
-	mu_assert_true (profile_current (&ctx, 0x111, 4, 0x10011, qualified), "local actual application current bytes and context");
+	mu_assert_true (profile_current (&ctx, 0x111, 4, 0x100000011ULL, qualified), "local actual application current bytes and context");
 	BorlandProfileBinding chain = { 3, 0, 2, 0, 0x200, NULL, false, true, true };
 	mu_assert_true (profile_binding (&ctx, 0x111, &chain), "select actual non-head application, not raw head");
-	mu_assert_eq (R_ANAL_REF_TYPE_MASK (reference_type (core->anal, 0x10011, 0x20000)), R_ANAL_REF_TYPE_DATA, "selected field receives exact DATA relation");
+	mu_assert_eq (R_ANAL_REF_TYPE_MASK (reference_type (core->anal, 0x100000011ULL, 0x200000000ULL)), R_ANAL_REF_TYPE_DATA, "selected field receives exact DATA relation");
 	chain.singleton = true;
 	mu_assert_false (profile_binding (&ctx, 0x111, &chain), "stronger singleton fact cannot qualify a chain");
 	BorlandProfileBinding additive = { 5, 4, 2, 0x10, 0x210, NULL, false, true, false };
 	mu_assert_true (profile_binding (&ctx, 0x128, &additive), "native additive offset uses actual original5 plus target0010");
 	ut8 value[2];
-	r_io_read_at (core->io, 0x10028, value, 2);
+	r_io_read_at (core->io, 0x100000028ULL, value, 2);
 	mu_assert_eq (r_read_le16 (value), 0x15, "nonzero native additive arithmetic");
 	value[0] ^= 0xff;
-	core->anal->iob.overlay_write_at (core->io, 0x10028, value, 1);
+	core->anal->iob.overlay_write_at (core->io, 0x100000028ULL, value, 1);
 	mu_assert_false (profile_binding (&ctx, 0x128, &additive), "patched additive field refuses");
+	// Measured Windows pointer addition wraps each WORD without offset carry into the selector.
+	ut8 pointer[6];
+	mu_assert_true (r_io_read_at (core->io, 0x100000030ULL, pointer, sizeof (pointer)), "actual additive pointer overlay and adjacent bytes");
+	mu_assert_eq (r_read_le32 (pointer), 0x12360000, "Windows additive pointer WORDs do not share carry");
+	mu_assert_eq (r_read_le16 (pointer + 4), 0x5aa5, "additive pointer preserves adjacent bytes");
+	mu_assert_true (profile_current (&ctx, 0x130, 4, 0x100000030ULL, qualified), "current-byte qualifier uses independent pointer WORD addition");
+	BorlandProfileBinding additive_pointer = { 3, 4, 2, 0x10, 0x210, NULL, false, true, false };
+	mu_assert_true (profile_binding (&ctx, 0x130, &additive_pointer), "field binding uses independent pointer WORD addition");
+	pointer[2] ^= 1;
+	mu_assert_true (core->anal->iob.overlay_write_at (core->io, 0x100000032ULL, pointer + 2, 1), "change only the current pointer selector byte");
+	mu_assert_false (profile_current (&ctx, 0x130, 4, 0x100000030ULL, qualified), "current-byte qualifier refuses a patched additive pointer");
+	mu_assert_false (profile_binding (&ctx, 0x130, &additive_pointer), "field binding refuses a patched additive pointer");
 	r_unref (buf);
 	r_core_free (core);
 	mu_end;

@@ -180,7 +180,7 @@ static bool test_ne_coordinates_and_relocation_bytes(void) {
 	mu_assert_eq (r_read_le32 (current), 0x00010020, "far pointer remains offset16 plus selector16");
 	mu_assert_eq (r_read_le16 (current + 4), 1, "selector field is a raw WORD");
 	mu_assert_eq (r_read_le16 (current + 6), 0x20, "offset field is a raw WORD");
-	mu_assert_eq (r_read_le32 (current + 8), 0x0002001f, "additive raw pointer preserves carry semantics");
+	mu_assert_eq (r_read_le32 (current + 8), 0x0001001f, "Windows additive pointer WORDs do not share carry");
 	mu_assert_eq (r_read_le16 (current + 12), 3, "additive selector WORD");
 	mu_assert_eq (r_read_le16 (current + 14), 0x10, "additive offset WORD wraps independently");
 	mu_assert_eq (current[16], 0x31, "additive low byte unchanged");
@@ -189,6 +189,80 @@ static bool test_ne_coordinates_and_relocation_bytes(void) {
 	mu_assert_eq (r_buf_read_at (file->buf, 0, original, sizeof (original)), sizeof (original), "read original input after patching");
 	mu_assert_memeq (original, bytes, sizeof (bytes), "analysis overlay never mutates original NE bytes");
 	r_core_free (core);
+	mu_end;
+}
+
+static bool test_ne_windows_effective_relocation_widths(void) {
+	int scenario;
+	for (scenario = 0; scenario < 2; scenario++) {
+		ut8 bytes[0x200] = {0};
+		ne_image (bytes);
+		bytes[0x76] = scenario? 4: 2;
+		r_write_le16 (bytes + 0x82, 0x40);
+		r_write_le16 (bytes + 0x86, 0x40);
+		memset (bytes + 0x100, 0, 0x40);
+		const ut8 records[] = {
+			0x0b, 0, 0, 0, 1, 0, 0x20, 0,
+			0x0b, 4, 8, 0, 1, 0, 0x20, 0,
+			0x0d, 0, 16, 0, 1, 0, 0x20, 0,
+			0x0d, 4, 24, 0, 1, 0, 0x20, 0,
+			3, 4, 32, 0, 1, 0, 0x20, 0,
+		};
+		size_t i;
+		for (i = 0; i < 4; i++) {
+			ut8 *source = bytes + 0x100 + 8 * i;
+			r_write_le16 (source, i & 1? 0xfff0: UT16_MAX);
+			r_write_le16 (source + 2, i & 1? UT16_MAX: 0x1234);
+			r_write_le16 (source + 4, 0x5aa5);
+		}
+		r_write_le32 (bytes + 0x120, UT16_MAX);
+		r_write_le16 (bytes + 0x124, 0x5aa5);
+		r_write_le16 (bytes + 0x140, 5);
+		memcpy (bytes + 0x142, records, sizeof (records));
+		RCore *core = r_core_new ();
+		r_config_set_b (core->config, "bin.relocs.apply", true);
+		mu_assert_notnull (r_core_file_open (core, "malloc://512", R_PERM_RWX, 0), "effective-kind NE input");
+		mu_assert_eq (r_io_fd_write_at (core->io, core->io->desc->fd, 0, bytes, sizeof (bytes)), sizeof (bytes), "original physical input");
+		mu_assert_true (r_core_bin_load (core, NULL, UT64_MAX), "production reader and Core overlay consume effective kinds");
+		RBinFile *file = r_bin_cur (core->bin);
+		mu_assert_streq (file->bo->info->os, scenario? "Windows 386": "Windows", "targetOS4 is not targetOS2");
+		mu_assert_eq (RVecRBinReloc_length (file->bo->relocs), 5, "one application per retained raw record");
+		for (i = 0; i < 5; i++) {
+			RBinReloc *reloc = RVecRBinReloc_at (file->bo->relocs, i);
+			ut8 raw_type = records[8 * i];
+			int width = i < 2? 4: 2;
+			if (scenario) {
+				width = i < 2? 6: 4;
+			}
+			if (i == 4) {
+				width = 4;
+			}
+			mu_assert_eq (reloc->ntype, raw_type, "native type retains the raw source byte");
+			mu_assert_eq (reloc->type, width * 8, "classification uses the target-specific effective width");
+			mu_assert_eq (reloc->vaddr, 0x100000000ULL + 8 * i, "source stays in C48 coordinates");
+			mu_assert_eq (reloc->addend, 0x100000020ULL, "target stays in C48 coordinates");
+			char key[96];
+			snprintf (key, sizeof (key), "ne.reloc.1.%zu.type", i);
+			mu_assert_eq (sdb_num_get (file->sdb_info, key, NULL), raw_type, "Sdb preserves raw type");
+			snprintf (key, sizeof (key), "ne.reloc.1.%zu.application.0.width", i);
+			mu_assert_eq (sdb_num_get (file->sdb_info, key, NULL), width, "application observation agrees with effective width");
+		}
+		ut8 current[40], expected[40];
+		memcpy (expected, bytes + 0x100, sizeof (expected));
+		r_write_le32 (expected + 32, scenario? 0x0002001f: 0x0001001f);
+		if (!scenario) {
+			r_write_le32 (expected, 0x00010020);
+			r_write_le32 (expected + 8, 0x00000010);
+			r_write_le16 (expected + 16, 0x20);
+			r_write_le16 (expected + 24, 0x10);
+		}
+		mu_assert_true (r_io_read_at (core->io, 0x100000000ULL, current, sizeof (current)), "read production overlay and adjacent bytes");
+		mu_assert_memeq (current, expected, sizeof (current), "Windows WORD effects preserve tails; non-Windows wide patches stay unsupported");
+		ut8 original[sizeof (bytes)];
+		mu_assert_eq (r_buf_read_at (file->buf, 0, original, sizeof (original)), sizeof (original), "read original source");
+		mu_assert_memeq (original, bytes, sizeof (bytes), "effective-kind patching never changes source bytes");
+		r_core_free (core);
+	}
 	mu_end;
 }
 
@@ -347,6 +421,7 @@ int all_tests(void) {
 	mu_run_test (test_ne_resolution_status);
 	mu_run_test (test_ne_incomplete_and_empty);
 	mu_run_test (test_ne_coordinates_and_relocation_bytes);
+	mu_run_test (test_ne_windows_effective_relocation_widths);
 	mu_run_test (test_ne_import_selector_spill);
 	mu_run_test (test_ne_import_capacity);
 	return tests_passed != tests_run;

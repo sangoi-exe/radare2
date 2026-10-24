@@ -97,7 +97,14 @@ static bool profile_binding(BorlandProfileContext *ctx, ut64 physical, const Bor
 				value = ((ut32)(resolved >> 32) << 16) | (resolved & UT16_MAX);
 			}
 			if (fact->flags & 4) {
-				value += width == 4? r_read_le32 (original): r_read_le16 (original);
+				RBinInfo *info = ctx->file->bo->info;
+				if (fact->type == 3 && info && info->os && !strcmp (info->os, "Windows")) {
+					ut16 offset = resolved + r_read_le16 (original);
+					ut16 selector = (resolved >> 32) + r_read_le16 (original + 2);
+					value = ((ut32)selector << 16) | offset;
+				} else {
+					value += width == 4? r_read_le32 (original): r_read_le16 (original);
+				}
 			}
 			if (native_matches != 1 || (width == 4? r_read_le32 (current) != (ut32)value: r_read_le16 (current) != (ut16)value)) {
 				return false;

@@ -625,7 +625,7 @@ static void ne_load_relocs(r_bin_ne_obj_t *bin) {
 			sdb_num_set (bin->kv, r_strf ("ne.reloc.%zu.count", index + 1), i + 1, 0);
 			RBinReloc reloc = {0};
 			reloc.ntype = rel.type;
-			switch (rel.type) {
+			switch (r_bin_ne_reloc_type (bin, rel.type)) {
 			case LOBYTE:
 				reloc.type = R_BIN_RELOC_8;
 				break;

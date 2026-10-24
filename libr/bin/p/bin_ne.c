@@ -167,7 +167,8 @@ static RVecRBinReloc *patch_relocs(RBinFile *bf) {
 		ut64 target = reloc->import? reloc->laddr: reloc->addend;
 		ut8 bytes[4] = {0};
 		int size = 0;
-		switch (reloc->ntype) {
+		ut8 type = r_bin_ne_reloc_type (ne, reloc->ntype);
+		switch (type) {
 		case LOBYTE:
 			size = 1;
 			bytes[0] = target;
@@ -178,7 +179,7 @@ static RVecRBinReloc *patch_relocs(RBinFile *bf) {
 		case SEL_16:
 		case OFF_16:
 			size = 2;
-			ut16 value = reloc->ntype == SEL_16? target >> 32: target;
+			ut16 value = type == SEL_16? target >> 32: target;
 			if (reloc->additive) {
 				value += r_buf_read_le16_at (ne->buf, reloc->paddr);
 			}
@@ -188,7 +189,13 @@ static RVecRBinReloc *patch_relocs(RBinFile *bf) {
 			size = 4;
 			ut32 pointer = ((ut32)(target >> 32) << 16) | (target & UT16_MAX);
 			if (reloc->additive) {
-				pointer += r_buf_read_le32_at (ne->buf, reloc->paddr);
+				if (ne->ne_header->targOS == 2) {
+					ut16 offset = target + r_buf_read_le16_at (ne->buf, reloc->paddr);
+					ut16 selector = (target >> 32) + r_buf_read_le16_at (ne->buf, reloc->paddr + 2);
+					pointer = ((ut32)selector << 16) | offset;
+				} else {
+					pointer += r_buf_read_le32_at (ne->buf, reloc->paddr);
+				}
 			}
 			r_write_le32 (bytes, pointer);
 			break;

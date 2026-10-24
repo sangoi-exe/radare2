@@ -162,7 +162,10 @@ static bool profile_relocated(BorlandProfileContext *ctx, ut64 physical, int siz
 			if (target == UT64_MAX) {
 				return false;
 			}
-			switch (reloc->ntype) {
+			RBinInfo *info = ctx->file->bo->info;
+			bool windows = info && info->os && !strcmp (info->os, "Windows");
+			ut64 type = windows? reloc->ntype & 7: reloc->ntype;
+			switch (type) {
 			case 0:
 				if (width != 1) {
 					return false;
@@ -174,14 +177,23 @@ static bool profile_relocated(BorlandProfileContext *ctx, ut64 physical, int siz
 				if (width != 2) {
 					return false;
 				}
-				r_write_le16 (expected + off, (reloc->ntype == 2? target >> 32: target) + (reloc->additive? r_read_le16 (expected + off): 0));
+				r_write_le16 (expected + off, (type == 2? target >> 32: target) + (reloc->additive? r_read_le16 (expected + off): 0));
 				break;
 			case 3:
 				if (width != 4) {
 					return false;
 				}
 				ut32 pointer = ((ut32)(target >> 32) << 16) | (target & UT16_MAX);
-				r_write_le32 (expected + off, pointer + (reloc->additive? r_read_le32 (expected + off): 0));
+				if (reloc->additive) {
+					if (windows) {
+						ut16 offset = target + r_read_le16 (expected + off);
+						ut16 selector = (target >> 32) + r_read_le16 (expected + off + 2);
+						pointer = ((ut32)selector << 16) | offset;
+					} else {
+						pointer += r_read_le32 (expected + off);
+					}
+				}
+				r_write_le32 (expected + off, pointer);
 				break;
 			default:
 				return false;
