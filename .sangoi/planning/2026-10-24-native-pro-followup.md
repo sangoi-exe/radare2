@@ -1,6 +1,6 @@
 # Intent Contract: native Pro follow-up and Windows NE observations
 
-Status: active
+Status: on-hold
 Task mode: Doctrine
 Lifecycle phase: Implementation
 Strategy epoch: 4
@@ -125,4 +125,6 @@ The local Initial Intent Contract audit on `/root/pro_followup_plan_audit` retur
 
 The replacement epoch3 Strategy-reset Intent audit on `/root/pro_followup_plan_audit` returned PROCEED with complete required field coverage and no material finding. This closes the current planning admission, not execution or Code review. The normal transition enters active Implementation and republishes the existing plan locator.
 
-Current production checkpoints are host99ccebded1494d720df4dfbfa1b15563094b9b84, bridge3ee355e1c80f42053b30ef247c560a6d73f6a783 (implementationaee9f677), native8012c5b2822d926815525d96cba0685e2f376d0a (implementationd5b66e2) and unchanged MCP74c660f3f6ee51de0f44072957f4a6d2fefbc3c3. The same Plan Auditor path returned PROCEED with complete required field coverage and no material finding; its nonblocking stale LEAVE-row wording is corrected above. The normal transition published the existing locator and entered Implementation without another user checkpoint. Next action: correct the downstream native value/reference consumers against the now-complete target observations, then propagate the bridge relationship provider and matching validation. Whole-task completion still requires remaining decisions/corrections, final committed candidate, Code Gate and closeout records.
+Current qualified production checkpoints are host99ccebded1494d720df4dfbfa1b15563094b9b84, bridge3ee355e1c80f42053b30ef247c560a6d73f6a783 (implementationaee9f677), native8012c5b2822d926815525d96cba0685e2f376d0a (implementationd5b66e2) and unchanged MCP74c660f3f6ee51de0f44072957f4a6d2fefbc3c3. The same Plan Auditor path returned PROCEED with complete required field coverage and no material finding; the normal transition entered Implementation. W23's first native F7 chain passes, but its current uncommitted candidate is incomplete and unbuilt after reported corrections; it is not a replacement qualified checkpoint.
+
+Current blocker: direct ptr1616/ptr1632 construction still turns an unbound numeric selector into a C48 ordinal before the new relationship resolver can act. The root reproduced raw selector4 becoming CALL0x400000000 without an independent target. The proposed delta unifies direct/indirect FAR target construction through the existing segmented-address operation and resolves known targets later from proven relationships, changing raw-P-code target timing/presentation. This material delta remains unselected; it does not amend the selected mechanism above by itself. Mutation and new Gates are held for the current-user decision. Preserve W23's frozen r1 evidence and uncommitted work; do not resume from its partial passes. Whole-task completion still requires this decision/correction, the separate text/export decisions, final matching validation, committed candidate, Code Gate and closeout records.
