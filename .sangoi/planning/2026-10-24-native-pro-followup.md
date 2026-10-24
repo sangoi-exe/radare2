@@ -1,6 +1,6 @@
 # Intent Contract: native Pro follow-up and Windows NE observations
 
-Status: active
+Status: on-hold
 Task mode: Doctrine
 Lifecycle phase: Implementation
 Strategy epoch: 6
@@ -99,6 +99,6 @@ The high-level sequence is: carry independently justified preservation through t
 
 The registered Senior Plan Auditor / Intent contract audit on /root/pro_followup_plan_audit returned epoch6 PROCEED with complete required field coverage and no material finding. It verified the latest confirmation and the subsequent clarification that this is a new semantic property represented at the loader boundary. Root applied the sole matching transition, republished the existing locator and entered active Implementation. This is execution admission, not implementation or Code-review success.
 
-Current next action: publish the qualified bridge/documentary checkpoints, then complete the remaining production-consumer comparisons with retained selector-chain/FAR observations and prepare the exact review frontier. No preservation-property decision remains open. The root retains the observed failure ledger and must stop for a genuinely new material boundary rather than reopen the confirmed property. No new guest run, dependency, persistent state, wire schema or instruction-harness change is selected.
+Current blocker and next action: obtain the current-user decision on the newly exposed precise FARRET caller-stack proof gap. The published checkpoints are intact. Full actual SELCHAIN analysis resolves both linked reads correctly with symbolic CS. FARRET preserves caller CS and raw four-byte frame behavior; its post-call SP is an unknown INDIRECT effect concealed by C high-variable merging, not a proven four-byte loss. Mixed-width SP/ESP prevents existing stack inference, and source-qualified function metadata does not reach the unresolved call. Root recommends bounded call-site prototype admission through existing native override machinery, without inventing a target or changing raw FAR stack operations; no new input contract is selected yet. The user may instead retain this precise full-caller result as explicitly unverified. Preserve the current route/checkpoints and stop affected mutation and review pending that decision. No preservation-property decision is reopened, and no new guest, dependency, persistent state or instruction-harness change is selected.
 
 Pending decisions outside this slice remain C48 text ingress and the separate export/overlay remediation. They do not authorize edits through the FAR confirmation. No final Code Gate or whole-task completion is claimed. Completion still requires the remaining authorized corrections/decisions, matching validation, a committed candidate, the default local Code Gate, exact bookkeeping and disclosure of unverified surfaces. Any Claude participation runs one native invocation at a time.

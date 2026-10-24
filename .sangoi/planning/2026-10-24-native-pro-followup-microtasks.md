@@ -4,7 +4,7 @@ Owner: [Intent Contract](2026-10-24-native-pro-followup.md). This annex owns exe
 
 Current lab owner after W6: `.refs/labs/dos622-win311/`. Earlier completed-entry cache footprints describe their actual execution history, not authorization to recreate the retired lab cache root. W6 moves the complete relative source/build/runtime/evidence tree; historical commands retain their original paths.
 
-Epoch6's normal Strategy-reset Plan audit returned PROCEED after the user's confirmed stable-unknown storage extension. W26 and W24 are locally qualified, committed and published; full selector-chain/FAR production comparisons and final review remain. W23/r4 remains frozen historical implementation evidence. W16/W20's raw direct-target presentation is not the current acceptance oracle. Completed entries retain their actual historical footprints/results.
+Epoch6's normal Strategy-reset Plan audit returned PROCEED after the user's confirmed stable-unknown storage extension. W26 and W24 are locally qualified, committed and published. Root's actual full SELCHAIN comparison passes; FARRET retains an unresolved post-call SP effect under mixed SP/ESP inference. Read-only diagnosis is complete, and the canonical plan is on hold for the current user's call-site-input/proof-gap decision. No new implementation entry is admitted. W23/r4 remains historical evidence; W16/W20's raw direct-target presentation is not the current acceptance oracle. Completed entries retain their actual historical footprints/results.
 
 ## W1 — private Windows3.11 preparation and valid observer control
 
