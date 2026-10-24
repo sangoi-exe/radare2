@@ -2,7 +2,7 @@
 
 Status: active
 Task mode: Doctrine
-Lifecycle phase: Strategy reset
+Lifecycle phase: Implementation
 Strategy epoch: 5
 Plan kind: Bugfix / Regression Plan
 Secondary kinds: Architecture / RFC Plan; Test / QA Plan; Instruction / Policy Plan
@@ -88,6 +88,6 @@ The direct numeric FAR-to-C48 construction and its query-miss acceptance are `de
 
 The high-level sequence is: finish unified native FAR construction and relationship resolution; activate the matching bridge initial-reference provider and direct followers; compare actual production consumers with retained target observations; run matching native/bridge validation and final review. Reuse prior deterministic proof only for unchanged objects and claims. The current known partial failures require a fresh candidate, not another semantic claim from r1.
 
-The latest current-user confirmation has lifted the direct-FAR decision hold. Epoch5 is in Strategy reset pending the registered Senior Plan Auditor / Intent contract audit on the retained /root/pro_followup_plan_audit path. Implementation and mutating dispatch wait for that normal decision. PROCEED republishes the same plan locator and enters active Implementation without another human confirmation.
+The latest current-user confirmation lifted the direct-FAR decision hold. The registered Senior Plan Auditor / Intent contract audit on /root/pro_followup_plan_audit returned epoch5 PROCEED with complete required field coverage and no material finding. Root applied the sole matching transition, republished the same plan locator and entered active Implementation. This admits execution, not implementation correctness or the final Code Gate.
 
 Pending decisions outside this slice remain C48 text ingress and the separate export/overlay remediation. They do not authorize edits through the FAR confirmation. No final Code Gate or whole-task completion is claimed. Completion still requires the remaining authorized corrections/decisions, matching validation, a committed candidate, the default local Code Gate, exact bookkeeping and disclosure of unverified surfaces. Any Claude participation runs one native invocation at a time.
