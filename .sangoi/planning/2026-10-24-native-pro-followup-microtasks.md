@@ -4,7 +4,7 @@ Owner: [Intent Contract](2026-10-24-native-pro-followup.md). This annex owns exe
 
 Current lab owner after W6: `.refs/labs/dos622-win311/`. Earlier completed-entry cache footprints describe their actual execution history, not authorization to recreate the retired lab cache root. W6 moves the complete relative source/build/runtime/evidence tree; historical commands retain their original paths.
 
-Epoch9 is the confirmed C48-first continuation. Sources18489/18524/18599 select contextual Core ingress followed by a separate native fact/test and bridge-precedence lot. W33/W34 and their executed results remain historical baseline evidence; the new F8/F9/F10 countercases are not approved by their prior PROCEED. W35's rejected candidate retains DO_NOT_PROCEED. Confirmation19128 selects R1 correction through the same Core owner; W35-R1 is the current entry, and the next lot waits for its applicable review.
+Epoch9 C48 is closed after the complete R1 Remediation delta review returned PROCEED. The old candidate retains DO_NOT_PROCEED. Sources18524/18599 already select the separate native fact/test and bridge-precedence lot; W35-R1's approval does not cover those countercases. Publication and activation of that selected next lot are next; the whole task remains active.
 
 ## W1 — private Windows3.11 preparation and valid observer control
 
@@ -334,7 +334,7 @@ Epoch9 is the confirmed C48-first continuation. Sources18489/18524/18599 select 
 
 ## W35-R1 — restore the generic character-literal boundary
 
-- Objective/status: implemented at79681f6effa610bb06602ed736bb927d47d20ae5 under confirmation19128. Actual NE literal/arithmetic/seek matches the known-good W27 behavior; W35 remains the preserved red candidate. Fresh private Make/install,25/25 units and52/52 offline CLI cases pass with source correspondence and root primary-path verification. Remediation delta review remains pending.
+- Objective/status: complete after PROCEED for candidate a8f9c1f94b3d5ab30aa3a5c587da24031e40ca05. Source79681f6eff restores actual NE literal/arithmetic/seek to the W27 baseline; W35 remains the preserved red candidate. Fresh private Make/install,25/25 units and52/52 offline CLI cases pass with source correspondence and independent root/reviewer primary-path verification. No remaining required C48 finding or proof gap; publication is next.
 - Canonical footprint: libr/core/numvars.inc.c, focused assertions in test/unit/test_bin_ne.c and the existing C48 case in test/db/formats/ne only. Generic parsing, help/guidance, other tests and all other repositories remain read-only.
 - Private footprint: P/build/w35-c48-source-r1/, build/w35-c48-tmp-r1/, runtime/w35-host-r1/ and evidence/w35-c48/r1/. Root supplies exact host3327b83fd4 and the existing unpatched local dependency refs. All W35 evaluated inputs/results and W27 remain frozen. No downloads, global install, cleanup or new proof owner.
 - Mechanism: at the new contextual admission boundary, leave single-quoted character tokens unclaimed so the current generic character-literal implementation executes. Keep successful named lookup, seggrn32, full C48 conversion and malformed-C48 rejection unchanged. Equivalent local branch organization is discretionary; no syntax redesign or generic API edit.

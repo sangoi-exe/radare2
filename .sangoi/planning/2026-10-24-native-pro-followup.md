@@ -2,7 +2,7 @@
 
 Status: active
 Task mode: Doctrine
-Lifecycle phase: Remediation review
+Lifecycle phase: Closeout
 Strategy epoch: 9
 Plan kind: Bugfix / Regression Plan
 Secondary kinds: Test / QA Plan
@@ -100,4 +100,4 @@ High-level sequence: audit this confirmed Intent Contract; implement/validate/co
 
 The epoch9 Strategy-reset Intent Contract audit on /root/pro_followup_plan_audit returned PROCEED. W35 passes its real NE C48 comparison,25 focused unit functions and52 offline command cases, but the complete single-Senior Code review on /root/c48_code_review returned DO_NOT_PROCEED for candidate b191a3382086ecdf8d323ca42a399ee9c6388c53. R1 is a newly demonstrated user-visible regression: the colon-admission branch claims the existing character literal `':'`, bypasses its generic owner and produces an error/zero instead of0x3a. Root independently reproduces the expression and rejected seek against matching baseline/candidate runtimes. No other reportable finding or unreviewed required surface remains in that Gate. The passing suites did not cover R1; they do not override it.
 
-Confirmation19128 selects the R1 correction and closes the hold within the unchanged Scope, owner and architecture. W35-R1 at79681f6effa610bb06602ed736bb927d47d20ae5 leaves single-quoted character tokens with their existing generic owner and adds focused expression/arithmetic/seek assertions. Fresh private Make/install,25 unit functions and52 offline command cases pass; root verifies canonical/tested input correspondence and the restored literal plus retained C48/Real Mode results. The rejected candidate retains DO_NOT_PROCEED. Next action: obtain the compatible /root/c48_code_review Remediation delta review before publication and native/bridge mutation. No override, risk acceptance or whole-task completion is implied. The existing optional xattr diagnostic, unavailable Valgrind and generic direct-API caveat retain their disclosed limits.
+Confirmation19128 selected R1 within the unchanged Scope, owner and architecture. W35-R1 at79681f6effa610bb06602ed736bb927d47d20ae5 restores the generic character-literal owner and adds focused assertions. Fresh private Make/install,25 unit functions and52 offline command cases pass. The complete Remediation delta review on /root/c48_code_review returns PROCEED for b191a3382086ecdf8d323ca42a399ee9c6388c53..a8f9c1f94b3d5ab30aa3a5c587da24031e40ca05, with R1 resolved and no remaining reportable finding or required proof gap. Root applies the matching Closeout transition for this increment. The old DO_NOT_PROCEED remains historical; no override or whole-task completion is implied. Next action: publish the qualified C48 checkpoint under retained authority, then activate the already-confirmed native/bridge lot through its applicable route. The optional xattr diagnostic, unavailable Valgrind and generic direct-API caveat retain their disclosed limits.
