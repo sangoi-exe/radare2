@@ -1,5 +1,9 @@
 # Workspace changelog
 
+## 2026-10-25
+
+- Implemented contextual hexadecimal C48 input at Core's existing numeric callback, after successful symbolic lookup. Actual NE-rendered0001:05e2 now evaluates/seeks0x1000005e2 rather than0x5f2; full offset32, input errors and Real Mode/generic controls pass. Fresh private Make/install,25 unit functions and52 offline NE/numvars/seek cases pass; root verified source correspondence and the primary CLI result. Valgrind is unavailable and the existing optional xattr diagnostic remains. The bounded Code review and publication are pending. The user also selected a separate subsequent native PHI/mask/test correction and exact-PC calllink priority over optional format inference; those countercases are not covered by the prior approval. No global installation or new guest execution occurred.
+
 ## 2026-10-24
 
 - Published native68cce808 and bridgede38d5fe after PROCEED with all three stack-policy findings closed and complete admitted coverage. Native82fac459 corrects determined-companion cleanup publication, aggregate slice selection and protection transfer; the bridge selects that qualified engine. Final focused12/12, native137/137, preparation10/10, XML1/1 and bridge120/120 pass, with bounded FARRET/INSTR/SELCHAIN comparisons and unchanged raw frame. The initial R3 fixture prerequisite failure is retained and corrected through real heritage. Matching inputs justify production-plugin/pin proof reuse, not a new full build. Both non-force pushes were independently verified. No global installation or new guest execution occurred; broader host and DS/SS decisions remain unresolved.
