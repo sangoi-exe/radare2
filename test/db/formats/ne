@@ -27,6 +27,10 @@ s
 ?vx 0xface:0x89abcdef
 ?vx 0xface:89abcdef
 ?vx 0001:05e2+2
+?vx ':'
+?vx ':'+1
+s ':'
+s
 e asm.addr.segment=true
 ?vx 0001:05e2
 e asm.addr.segment.bits=4
@@ -41,6 +45,9 @@ EXPECT=<<EOF
 0xface89abcdef
 0xface89abcdef
 0x1000005e4
+0x0000003a
+0x0000003b
+0x3a
 0x1000005e2
 0x000f0070
 EOF

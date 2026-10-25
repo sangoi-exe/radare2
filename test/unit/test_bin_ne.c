@@ -210,6 +210,14 @@ static bool test_ne_coordinates_and_relocation_bytes(void) {
 	mu_assert_eq (r_num_math (core->num, "0xface:89abcdef"), 0xface89abcdefULL, "prefixed selector and plain hexadecimal offset");
 	mu_assert_eq (r_num_math (core->num, "0001:0020+4"), 0x100000024ULL, "C48 composes with ordinary arithmetic");
 	mu_assert_eq (r_num_math (core->num, "2+3*4"), 14, "ordinary arithmetic is unchanged");
+	const char *err = NULL;
+	mu_assert_eq (r_num_math_err (core->num, "':'", &err), 0x3a, "colon character literal retains its generic owner in C48 context");
+	mu_assert_null (err, "colon character literal has no numeric error");
+	mu_assert_eq (core->num->nc.errors, 0, "colon character literal leaves Core numeric state clear");
+	mu_assert_eq (r_num_math_err (core->num, "':'+1", &err), 0x3b, "colon character literal composes with arithmetic");
+	mu_assert_null (err, "colon character arithmetic has no numeric error");
+	r_core_cmd0 (core, "s ':'");
+	mu_assert_eq (core->addr, 0x3a, "ordinary seek accepts the colon character literal in C48 context");
 	mu_assert_notnull (r_anal_create_function (core->anal, "face:89abcdef", 0x100000030ULL, R_ANAL_FCN_TYPE_FCN, NULL), "existing exact named function");
 	mu_assert_eq (r_num_math (core->num, "face:89abcdef"), 0x100000030ULL, "successful function lookup precedes segmented interpretation");
 	mu_assert_notnull (r_flag_set (core->flags, "named_coordinate", 0x100000028ULL, 1), "ordinary named flag");

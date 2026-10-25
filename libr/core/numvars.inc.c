@@ -1070,7 +1070,7 @@ static ut64 num_callback(RNum *userptr, const char *str, bool *ok) {
 			}
 		}
 		const char *colon = strchr (str, ':');
-		if (core->rasm->config->seggrn == 32 && colon) {
+		if (str0 != '\'' && core->rasm->config->seggrn == 32 && colon) {
 			if (ok) {
 				*ok = true;
 			}
