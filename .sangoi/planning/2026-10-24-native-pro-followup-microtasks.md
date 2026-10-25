@@ -4,7 +4,7 @@ Owner: [Intent Contract](2026-10-24-native-pro-followup.md). This annex owns exe
 
 Current lab owner after W6: `.refs/labs/dos622-win311/`. Earlier completed-entry cache footprints describe their actual execution history, not authorization to recreate the retired lab cache root. W6 moves the complete relative source/build/runtime/evidence tree; historical commands retain their original paths.
 
-Epoch9 C48 is closed/published at hostaf173fd50c. Source22932 selects the call/control-query correction. W46/W47 are complete and integrated at native13b16c2/bridgee7c903a; required Code review is next in active Remediation review/epoch10. Nativeeecc1d5/bridgeb065865 are the preserved reviewed base. No implementation Worker remains active; historical failures and proof limits remain.
+Complete Closeout/epoch10: W46/W47 are qualified, reviewed PROCEED_WITH_NITS and published at native13b16c2/bridgee7c903a, with exact remote verification in dependency order. Root final records use the authorized ordinary publication route. N1 is optional deferred documentation precision, not a required correction. No implementation/reviewer task remains active; historical failures and proof limits remain, without a new task being activated.
 
 ## W1 — private Windows3.11 preparation and valid observer control
 
