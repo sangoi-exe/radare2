@@ -188,6 +188,48 @@ static bool test_ne_coordinates_and_relocation_bytes(void) {
 	ut8 original[sizeof (bytes)];
 	mu_assert_eq (r_buf_read_at (file->buf, 0, original, sizeof (original)), sizeof (original), "read original input after patching");
 	mu_assert_memeq (original, bytes, sizeof (bytes), "analysis overlay never mutates original NE bytes");
+	mu_assert_eq (core->rasm->config->seggrn, 32, "Core numeric input shares NE formatting granularity");
+	r_config_set_b (core->config, "asm.addr.segment", false);
+	const ut64 addresses[] = { 0x100000020ULL, 0x1000005e2ULL, 0xface89abcdefULL, 0xffffffffffffULL };
+	size_t i;
+	for (i = 0; i < R_ARRAY_SIZE (addresses); i++) {
+		RStrBuf text;
+		r_strbuf_init (&text);
+		core->print->flags = R_PRINT_FLAGS_SEGOFF;
+		r_print_offset_strbuf (core->print, &text, addresses[i], 0, 0, NULL);
+		const char *err = NULL;
+		mu_assert_eq (r_num_math_err (core->num, r_strbuf_get (&text), &err), addresses[i], "rendered hexadecimal C48 expression round trip");
+		mu_assert_null (err, "rendered C48 token has no numeric error");
+		char *command = r_str_newf ("s %s", r_strbuf_get (&text));
+		r_core_cmd0 (core, command);
+		free (command);
+		mu_assert_eq (core->addr, addresses[i], "ordinary seek consumes the rendered C48 coordinate");
+		r_strbuf_fini (&text);
+	}
+	mu_assert_eq (r_num_math (core->num, "0xface:0x89abcdef"), 0xface89abcdefULL, "prefixed hexadecimal components retain offset32");
+	mu_assert_eq (r_num_math (core->num, "0xface:89abcdef"), 0xface89abcdefULL, "prefixed selector and plain hexadecimal offset");
+	mu_assert_eq (r_num_math (core->num, "0001:0020+4"), 0x100000024ULL, "C48 composes with ordinary arithmetic");
+	mu_assert_eq (r_num_math (core->num, "2+3*4"), 14, "ordinary arithmetic is unchanged");
+	mu_assert_notnull (r_anal_create_function (core->anal, "face:89abcdef", 0x100000030ULL, R_ANAL_FCN_TYPE_FCN, NULL), "existing exact named function");
+	mu_assert_eq (r_num_math (core->num, "face:89abcdef"), 0x100000030ULL, "successful function lookup precedes segmented interpretation");
+	mu_assert_notnull (r_flag_set (core->flags, "named_coordinate", 0x100000028ULL, 1), "ordinary named flag");
+	mu_assert_eq (r_num_math (core->num, "named_coordinate"), 0x100000028ULL, "successful flag lookup is unchanged");
+	const char *invalid[] = { "10000:0020", "0001:100000000", "0001:0020junk", "0001:" };
+	for (i = 0; i < R_ARRAY_SIZE (invalid); i++) {
+		const char *err = NULL;
+		mu_assert_eq (r_num_math_err (core->num, invalid[i], &err), 0, "invalid C48 token has no Real Mode fallback");
+		mu_assert_notnull (err, "invalid C48 token exports a numeric error");
+		mu_assert_true (core->num->nc.errors > 0, "invalid C48 token publishes Core numeric error state");
+	}
+	r_core_cmd0 (core, "s 0001:0020");
+	mu_assert_eq (core->addr, 0x100000020ULL, "seek recovers after invalid input");
+	r_core_cmd0 (core, "s 0001:100000000");
+	mu_assert_eq (core->addr, 0x100000020ULL, "invalid C48 seek preserves the current address");
+	r_config_set_b (core->config, "asm.addr.segment", true);
+	mu_assert_eq (r_num_math (core->num, "0001:0020"), 0x100000020ULL, "segmented-display visibility does not select input semantics");
+	r_config_set_i (core->config, "asm.addr.segment.bits", 4);
+	mu_assert_eq (r_num_math (core->num, "f000:0070"), 0xf0070, "Core Real Mode segmented input remains unchanged");
+	mu_assert_eq (r_num_get (NULL, "1234:5678"), 0x179b8, "configuration-free segmented input remains unchanged");
 	r_core_free (core);
 	mu_end;
 }

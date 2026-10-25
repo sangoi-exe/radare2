@@ -4304,7 +4304,7 @@ R_API int r_core_config_init(RCore *core) {
 	SETCB ("scr.last", "true", &cb_scrlast, "cache last output after flush to make _ command work (disable for performance)");
 	SETB ("asm.addr", "true", "show offsets in disassembly");
 	SETCB ("asm.addr.segment", "false", &cb_segoff, "show segmented address in prompt (x86-16)");
-	SETICB ("asm.addr.segment.bits", 4, &cb_asm_addr_segment_bits, "selector shift in bits: 4 for real mode, 32 for NE analysis coordinates (x86-16)");
+	SETICB ("asm.addr.segment.bits", 4, &cb_asm_addr_segment_bits, "selector shift in bits: 4 for real mode, 32 for NE analysis coordinates and hexadecimal selector:offset input (x86-16)");
 	n = SETICB ("asm.addr.base", 16, &cb_addrbase, "show address in base 8, 10, 16 or 36");
 	SETOPTIONS (n, "8", "10", "16", "36", NULL);
 	SETCB ("asm.addr.relto", "", &cb_reloff, "show offset relative to fun,map,sec,flg");

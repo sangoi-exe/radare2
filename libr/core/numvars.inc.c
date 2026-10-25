@@ -35,6 +35,22 @@ static ut64 invalid_numvar(RCore *core, const char *str) {
 	return 0;
 }
 
+static ut64 numvar_segmented_address(RCore *core, const char *str, const char *colon) {
+	char *end;
+	errno = 0;
+	ut64 selector = strtoull (str, &end, 16);
+	if (!isxdigit ((ut8)*str) || end != colon || errno == ERANGE || selector > UT16_MAX) {
+		return invalid_numvar (core, "Invalid C48 segmented address");
+	}
+	const char *offset_str = colon + 1;
+	errno = 0;
+	ut64 offset = strtoull (offset_str, &end, 16);
+	if (!isxdigit ((ut8)*offset_str) || end == offset_str || *end || errno == ERANGE || offset > UT32_MAX) {
+		return invalid_numvar (core, "Invalid C48 segmented address");
+	}
+	return (selector << 32) | offset;
+}
+
 static ut64 numvar_instruction_prev(RCore *core, int n, bool *ok) {
 	if (ok) {
 		*ok = true;
@@ -1052,6 +1068,13 @@ static ut64 num_callback(RNum *userptr, const char *str, bool *ok) {
 				}
 				return r_reg_get_value (core->dbg->reg, r);
 			}
+		}
+		const char *colon = strchr (str, ':');
+		if (core->rasm->config->seggrn == 32 && colon) {
+			if (ok) {
+				*ok = true;
+			}
+			return numvar_segmented_address (core, str, colon);
 		}
 		}
 		break;

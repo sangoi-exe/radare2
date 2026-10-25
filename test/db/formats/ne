@@ -12,6 +12,39 @@ hdr.csum c258016a
 0
 EOF
 RUN
+
+NAME=NE hexadecimal segmented expressions and ordinary seeks use C48
+FILE=bins/ne/anim8.exe
+CMDS=<<EOF
+e asm.addr.segment.bits
+e asm.addr.segment=false
+?vx 0001:05e2
+s 0001:05e2
+s
+?vx face:89abcdef
+s face:89abcdef
+s
+?vx 0xface:0x89abcdef
+?vx 0xface:89abcdef
+?vx 0001:05e2+2
+e asm.addr.segment=true
+?vx 0001:05e2
+e asm.addr.segment.bits=4
+?vx f000:0070
+EOF
+EXPECT=<<EOF
+32
+0x1000005e2
+0x1000005e2
+0xface89abcdef
+0xface89abcdef
+0xface89abcdef
+0xface89abcdef
+0x1000005e4
+0x1000005e2
+0x000f0070
+EOF
+RUN
 # merged: NE Segments; NE Resources JSON; NE Module imports; NE Relocs; NE Relocs and resolve function ordinal names
 NAME=NE Symbols
 FILE=bins/ne/anim8.exe
