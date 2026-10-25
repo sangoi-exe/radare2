@@ -1,6 +1,6 @@
 # Intent Contract: native Pro follow-up and Windows NE observations
 
-Status: active
+Status: on-hold
 Task mode: Doctrine
 Lifecycle phase: Implementation
 Strategy epoch: 9
@@ -97,4 +97,6 @@ Disposition of obsolete behavior: incorrect Real Mode reinterpretation of C48-co
 
 High-level sequence: audit this confirmed Intent Contract; implement/validate/commit/review C48; then finalize technical direction and execute the selected native/bridge lot through the existing applicable lifecycle routes, without another generic request to continue. Code findings or genuinely new material choices retain their normal user boundary. Later ir*/overlay and broader target-recovery choices remain outside the admitted sequence.
 
-The epoch9 Strategy-reset Intent Contract audit on /root/pro_followup_plan_audit returned PROCEED with complete field coverage and no material findings. Root applied the matching resident transition, published the unchanged plan locator and entered Implementation. W35 now passes the real NE hexadecimal render/expression/seek comparison,25 focused unit functions and52 offline command cases. Root verified the five-file mechanism, source correspondence and primary result. The ordinary ignored xattr diagnostic and unavailable Valgrind remain disclosed. Next action: commit the cohesive C48 candidate and obtain its bounded local Code decision before native/bridge mutation. The Plan result and local tests do not approve the unexecuted next lot.
+The epoch9 Strategy-reset Intent Contract audit on /root/pro_followup_plan_audit returned PROCEED. W35 passes its real NE C48 comparison,25 focused unit functions and52 offline command cases, but the complete single-Senior Code review on /root/c48_code_review returned DO_NOT_PROCEED for candidate b191a3382086ecdf8d323ca42a399ee9c6388c53. R1 is a newly demonstrated user-visible regression: the colon-admission branch claims the existing character literal `':'`, bypasses its generic owner and produces an error/zero instead of0x3a. Root independently reproduces the expression and rejected seek against matching baseline/candidate runtimes. No other reportable finding or unreviewed required surface remains in that Gate. The passing suites did not cover R1; they do not override it.
+
+The registered transition requests a current-user decision and retains the compatible reviewer path and Implementation lifecycle. Status is on-hold; only this administrative disposition is updated, not Scope or selected architecture. Recommended closure is to leave existing single-quoted character tokens unclaimed at the new Core admission branch and add focused expression/arithmetic/seek regression checks. That material remediation is proposed, not selected or implemented. Native/bridge execution stays sequenced behind C48 closure. No push, review override, risk acceptance or whole-task completion is claimed. Next action: obtain the current user's R1 decision, then apply its legal route. The existing optional xattr diagnostic, unavailable Valgrind and generic direct-API caveat retain their disclosed limits.

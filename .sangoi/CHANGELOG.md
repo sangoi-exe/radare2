@@ -2,7 +2,7 @@
 
 ## 2026-10-25
 
-- Implemented contextual hexadecimal C48 input at Core's existing numeric callback, after successful symbolic lookup. Actual NE-rendered0001:05e2 now evaluates/seeks0x1000005e2 rather than0x5f2; full offset32, input errors and Real Mode/generic controls pass. Fresh private Make/install,25 unit functions and52 offline NE/numvars/seek cases pass; root verified source correspondence and the primary CLI result. Valgrind is unavailable and the existing optional xattr diagnostic remains. The bounded Code review and publication are pending. The user also selected a separate subsequent native PHI/mask/test correction and exact-PC calllink priority over optional format inference; those countercases are not covered by the prior approval. No global installation or new guest execution occurred.
+- Hostcd8eab9039 implements contextual hexadecimal C48 input at Core's existing numeric callback. Actual NE text0001:05e2 now evaluates/seeks0x1000005e2; full offset32 and retained controls pass with private Make/install,25 unit functions and52 offline command cases. Complete Code review nevertheless returns DO_NOT_PROCEED for candidate b191a33820: the new branch also claims the existing colon character literal and breaks its expression/seek behavior. Root independently reproduces R1; correction awaits the current-user decision and no push occurred. Valgrind is unavailable and the existing optional xattr diagnostic remains. The separately authorized native PHI/mask/test and exact-calllink-priority lot stays sequenced behind C48 closure; prior approval does not cover those countercases. No global installation or new guest execution occurred.
 
 ## 2026-10-24
 
