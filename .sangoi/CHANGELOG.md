@@ -1,5 +1,9 @@
 # Workspace changelog
 
+## 2026-10-26
+
+- Closed and published the epoch11 native/bridge correction after PROCEED_WITH_NITS, complete paired native/bridge/integration coverage and eight successful serial Claude invocations. Native7a5505b, bridgef77db63 and reviewed root4b94ba22 were published in dependency order with exact remote verification. Pcode13/13, native153/153, preparation10/10, XML1/1 and current production controls pass; the same bridge frontier remains131/133 with two historical failures. No material defect or required runtime/validation fix remains. Closeout corrects active-plan status wording and records the optional native README precision nit, exact proof limits, corrected review explanations and one transient Claude scratch-footprint deviation. The final documentary checkpoint memorializes that result without changing reviewed source; no global install or fresh guest execution occurred.
+
 ## 2026-10-25
 
 - Qualified the epoch11 native/bridge candidate: native7a5505b includes containment overlap recovery, positive callee input-use evidence with surviving unresolved storage, and safe invalid-mapping rejection; bridgef77db63 schedules needed callee analysis without fixing inferred signatures and selects that engine. The exact reused7 CALL/RETURN path and formerly crashing NE/Real-Mode sequence pass. Current pcode13/13, native153/153, preparation10/10, XML1/1 and retained SSA/raw/calllink controls pass; the same133-case bridge frontier remains131/133 with two historical formatter failures. The committed candidate awaits local crossed Code review and remains unpublished. No global install, new guest observation or universal input-completeness claim is made.
