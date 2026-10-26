@@ -1,8 +1,8 @@
 # Intent Contract: preserve incomplete native call-input evidence
 
-Status: active
+Status: complete
 Task mode: Doctrine
-Lifecycle phase: Implementation
+Lifecycle phase: Closeout
 Strategy epoch: 1
 Plan kind: Feature / PRD Plan
 Plan kind rationale: Add an explicit representation for a demonstrated recovery limitation. The current native contract has dense source arguments and storage-only uncertainty, but no supported value/storage association with unknown source-parameter position. This is not a claim that an existing sparse representation regressed.
@@ -55,4 +55,4 @@ Use fresh task-scoped source/build/runtime/evidence categories only as needed un
 3. Integrate the exact engine and structured pdgx export through the matching private bridge; inspect actual C/JSON/XML.
 4. Commit the fixed candidate, obtain the registered local Code review, and finish durable records and final Git inspection.
 
-The root-owned [Microtask Program](2026-10-26-native-incomplete-call-inputs-microtasks.md) is the one subordinate execution projection because this runtime has no update_plan tool. The [task log](../task-logs/2026-10-26-native-incomplete-call-inputs.md) owns causal episodes and actual proof. /root/hole_plan returned PROCEED with complete Intent Contract coverage and no material finding; root applied publish-plan-locator-and-enter-implementation. H1 measured the loss and supplied a valid baseline red. H2 is implemented and qualified at native2ab32524c109737b0956b56f80ff2f249688d552. H3's export, exact pin and actual normal/retained production proof are integrated at bridge3fbfdd4568965c8bbc838e01720971d9e09172bf. Native164/164, preparation10/10, XML1/1, pcode21/21, types80/80 and resolution41/41 pass. Formatter10/12 retains two individually unchanged historical failures. No deliberate pause or material user decision remains. Next action: the fixed-candidate local crossed Code Gate, then its applicable transition and final records. No push or global installation is authorized.
+The root-owned [Microtask Program](2026-10-26-native-incomplete-call-inputs-microtasks.md) records completed execution; the [task log](../task-logs/2026-10-26-native-incomplete-call-inputs.md) owns causal episodes, proof and review resolutions. H1 measured the baseline loss; H2 is qualified at native2ab32524c109737b0956b56f80ff2f249688d552; H3 is qualified at bridge3fbfdd4568965c8bbc838e01720971d9e09172bf. Native164/164, preparation10/10, XML1/1, pcode21/21, types80/80 and resolution41/41 pass. Formatter10/12 retains two individually unchanged historical failures. The local crossed Gate on hostc806a1e424959750f6a5789aa6c558c58ee972f4 and those component candidates concluded PROCEED_WITH_NITS after complete independent and reciprocal coverage and root analysis. Root read and applied record-nits-enter-closeout. The optional XML-fragment specificity nit remains recorded and unapplied; no required source correction or semantic rerun remains. Three Claude invocations completed serially without failure or dispensation. No push, global installation or new guest run occurred. The subsequently authorized formatter corrections are a separate task and do not broaden this approval.
