@@ -1,8 +1,8 @@
 # Intent Contract: preserve native fixed-input byte slices
 
-Status: active
+Status: complete
 Task mode: Doctrine
-Lifecycle phase: Implementation
+Lifecycle phase: Closeout
 Strategy epoch: 1
 Plan kind: Bugfix / Regression Plan
 Plan kind rationale: Correct a reproduced inherited wrong-byte selection in late fixed-parameter reconstruction. Preserve the selected native owner and already-qualified order/tail behavior.
@@ -61,4 +61,4 @@ Use fresh task-scoped build/runtime/evidence roots under /home/lucas/.cache/code
 4. Obtain the registered local Code review, finish records, commit and inspect final Git state.
 5. In parallel, collect a separate read-only model-hole diagnosis and surface any actual material correction choice without changing this implementation Scope.
 
-Root owns strategy, the [Microtask Program](2026-10-26-native-fixed-input-slices-microtasks.md), [task log](../task-logs/2026-10-26-native-fixed-input-slices.md), integration, validation and Git. Workers own admitted source implementation. This runtime exposes no update_plan tool; the one subordinate annex retains execution continuity without owning Scope or lifecycle. /root/r4_plan returned PROCEED with complete Intent Contract coverage and no material finding. Root applied the registered publish-plan-locator-and-enter-implementation transition. S1/native37cd3df63a96b4b16669b2131ccb6ca6102a6b8d and S2/bridge86a0b12e30c97abeead4013a293ddd6c05ef0501 are implemented, validated and committed. No human decision blocks this correction. Next action: obtain the fixed-candidate local Code review using one narrow crossed Senior/Claude pair; trial-lifecycle ordering and byte-provenance complexity justify that procedure despite the single semantic owner. The completed separate model-hole diagnosis does not expand implementation Scope.
+Root owns strategy, the [Microtask Program](2026-10-26-native-fixed-input-slices-microtasks.md), [task log](../task-logs/2026-10-26-native-fixed-input-slices.md), integration, validation and Git. Workers own admitted source implementation. This runtime exposes no update_plan tool; the one subordinate annex retains execution continuity without owning Scope or lifecycle. /root/r4_plan returned PROCEED with complete planning coverage. S1/native37cd3df63a96b4b16669b2131ccb6ca6102a6b8d and S2/bridge86a0b12e30c97abeead4013a293ddd6c05ef0501 are implemented, validated and committed. The narrow crossed Senior/Claude Code review completed all eight admitted artifacts and direct followers; /root/r4_code_senior returned PROCEED_WITH_NITS for those refs and host0831d7166b2bdfa90bb6efe255dcf2375a64766f after independent assessments, reciprocal examination and root analysis. Root applied record-nits-enter-closeout and corrected the sole nonblocking XML-description nit without changing source, output or validation truth. Three serial Claude invocations succeeded; no dispensation or override applied. All requested work is complete. The separate model-hole diagnosis is retained without authorizing its implementation. No next implementation action, push or global installation is authorized by this completed contract.
