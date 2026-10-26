@@ -1,8 +1,8 @@
 # Intent Contract: close the two retained formatter failures
 
-Status: active
+Status: complete
 Task mode: Doctrine
-Lifecycle phase: Implementation
+Lifecycle phase: Closeout
 Strategy epoch: 1
 Plan kind: Bugfix / Regression Plan
 Plan kind rationale: Correct one reproduced declaration-data propagation defect and one stale test expectation. No new inference feature, prototype schema or rendering architecture is needed.
@@ -39,4 +39,4 @@ Non-goals: audit or rewrite other supplied signatures, change generic knowledge 
 
 ## Execution and continuity
 
-The first slice and affected validation are complete. Host a15ad98513ee99e13738691682b955d810a64ea7 adds the sole missing field; bridge6e95a570165a69b76d7120ac25fdb9641d6fe215 changes only the four names. Generated-data production runs restore the original recovery-off result, retain recovery-on specialization and leave the complete PPC graph unchanged. The selected regression frontier passes133/133:80 types,41 resolution and12 formatter cases. /root/formatter_plan returned PROCEED; root applied the transition and integrated F1. No material user decision remains. Next action: the default local single-Senior Code Gate on the committed two-line data/test delta and its records, then factual closeout. Native/bridge code, global installation and remote publication remain unchanged.
+The requested corrections and affected validation are complete. Host a15ad98513ee99e13738691682b955d810a64ea7 adds the sole missing field; bridge6e95a570165a69b76d7120ac25fdb9641d6fe215 changes only the four names. Generated-data production runs restore the original recovery-off result, retain recovery-on specialization and leave the complete PPC graph unchanged. The selected frontier passes133/133:80 types,41 resolution and12 formatter cases. /root/formatter_code reviewed host469edd22b51c12d41cfdd21abe12569ccdc50d6d and the bridge candidate with complete coverage, then returned PROCEED with no finding or required correction. Root read and applied enter-closeout. No blocker, pending material decision or required implementation remains. Private generated-data runtime/evidence is retained; global installation and push were not performed. Full-suite, gperf-enabled runtime and external ABI/CPU/Windows behavior remain outside the qualified result.
