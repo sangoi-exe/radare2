@@ -1,5 +1,9 @@
 # Workspace changelog
 
+## 2026-10-27
+
+- Implemented the R5 rejected-input discovery correction with native3accd42, bridge70598d1 and hostd3fa8d8989. The no-competing-read witness now obtains actual callee evidence and retains7 at stack+8 without a fabricated+4; unavailable bodies retain storage-only uncertainty. Three supplied library prototype facts restore both old C expectations, while the unchanged-input annotation case follows its honest warning without changing p-code. Pcode23/23, types/resolution/formatter133/133 and38 matching-data production processes pass; unchanged native166/166, preparation10/10 and XML1/1 remain qualified. The [task log](task-logs/2026-10-26-native-rejected-input-evidence.md) records the producer diagnosis, rejected header/EXPECT shortcuts, exact cache-link recovery, proof errors and limits. The committed candidate awaits local crossed Code review. No global installation or push occurred; valgrind is unavailable.
+
 ## 2026-10-26
 
 - Native3accd42 retains genuine unselected input locations as uncertainty before trial disposal, reusing the existing vector and positive-use association. The R5 no-competing-read witness supplies a valid native red0/1 followed by focused14/14; native166/166 and preparation10/10 plus exact final replay/language/reuse checks pass. The [task log](task-logs/2026-10-26-native-rejected-input-evidence.md) records the reproduced discovery gap, selected route, failed preparation/observation attempts and proof limits. Matching bridge discovery/pin qualification and Code review remain pending; no global installation or push occurred.
