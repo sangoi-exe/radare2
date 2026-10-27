@@ -144,6 +144,7 @@ func.fgets.ret=char *
 
 free=func
 func.free.args=1
+func.free.prototype=fixed
 func.free.arg.0=void *,ptr
 func.free.ret=void
 
@@ -220,6 +221,7 @@ func.isatty.ret=int
 
 malloc=func
 func.malloc.args=1
+func.malloc.prototype=fixed
 func.malloc.arg.0=size_t,size
 func.malloc.ret= void *
 
@@ -444,6 +446,7 @@ func.read.ret=ssize_t
 
 strcmp=func
 func.strcmp.args=2
+func.strcmp.prototype=fixed
 func.strcmp.arg.0=const char *,s1
 func.strcmp.arg.1=const char *,s2
 func.strcmp.ret=int
