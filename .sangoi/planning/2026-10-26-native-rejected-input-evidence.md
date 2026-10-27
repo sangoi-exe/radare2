@@ -1,6 +1,6 @@
 # Intent Contract: retain rejected input uncertainty for callee discovery
 
-Status: active
+Status: on-hold
 Task mode: Doctrine
 Lifecycle phase: Implementation
 Strategy epoch: 1
@@ -42,4 +42,4 @@ Out of Scope: partial-overlap residuals, auxiliary-callee failure isolation, sup
 
 ## Work and continuity
 
-The native first slice is complete at3accd421a5a71fc64d182481518cc5d75e8304b8: valid baseline red0/1 becomes focused14/14, full native166/166 and preparation10/10 pass, and exact final replay/language/reuse checks succeed. Root inspected and committed the native correction and documentation separately. This does not qualify bridge discovery. The program remains the sole subordinate projection; /root/r5_plan's PROCEED and selected route remain current. No material user decision remains. Next action: N2 updates the exact bridge pin and qualifies the real production discovery path with matching runtime inputs and preserved controls. Final Code procedure will be proportional to the actual resulting delta and risk.
+The native first slice is complete at3accd421a5a71fc64d182481518cc5d75e8304b8: focused14/14, native166/166 and preparation10/10 pass. N2's actual new production witness succeeds, but the affected type frontier is130/133 with three new warning/annotation-output failures whose semantic justification is unresolved. No EXPECT or bridge-source correction has been selected for those failures. Separately, read-intended SDB commands replaced the earlier formatter runtime's types.sdb symlink with a byte-identical regular file; the original generated target remains available. That old-cache mutation was outside the admitted footprint. Execution is on hold for the user's recovery direction and diagnostic continuation. The selected source mechanism, Scope and exclusions are not amended by this factual status update. No Code Gate or completion is claimed. Current native commits are unpublished; the bridge pin alone remains an uncommitted partial candidate. See the task log for exact state, evidence and pending decision.
