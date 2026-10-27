@@ -1,8 +1,8 @@
 # Intent Contract: retain rejected input uncertainty for callee discovery
 
-Status: active
+Status: complete
 Task mode: Doctrine
-Lifecycle phase: Implementation
+Lifecycle phase: Closeout
 Strategy epoch: 1
 Plan kind: Bugfix / Regression Plan
 Plan kind rationale: Close a reproduced native-to-bridge evidence-discovery gap through the existing uncertainty owner. No new representation, scheduler, source-arity inference or persistence is selected.
@@ -49,7 +49,7 @@ Out of Scope: partial-overlap residuals, auxiliary-callee failure isolation, sup
 
 Implementation and targeted qualification are complete: native3accd421a5a71fc64d182481518cc5d75e8304b8, host datad3fa8d8989a228c763ffd376260c9a7513ba89db and bridge70598d1c17492c6a488023abbf3cc75b502b9dd1. Native focused14/14, registered166/166, preparation10/10 and XML1/1 remain qualified on unchanged code inputs. With the fresh matching data prefix, pcode23/23 and types/resolution/formatter133/133 pass. Both old C expectations remain unchanged; the annotation case retains its commands and17 pcode operations, adding only the observed warning and annotation follower. Root inspected all current38 production process records and complete XML graphs. Valgrind is unavailable, so leak checks did not run. No whole-suite, other-platform or new machine/Windows claim is made.
 
-The local Scope-revision Intent contract audit returned PROCEED on /root/r5_plan with complete readiness coverage and no material finding. No deliberate pause or unresolved human choice remains. Next action: the local Task change-set Code Gate on the fixed committed candidate. Root selects narrow crossed review with one Senior/Claude pair: the nontrivial native uncertainty predicate and existing discovery seam need independent challenge, while the three-key producer correction, pin, tests and documentation are bounded direct followers rather than independent runtime subsystems. Both reviewers retain explicit native, host-data and bridge/proof coverage; no separate integration tier is needed for this narrow object. Claude invocations remain serialized. No Code Gate disposition or completion is claimed; all task commits remain unpublished. Root retains closure and final bookkeeping.
+The local Scope-revision Plan audit and final cumulative Task change-set Code Gate both returned PROCEED. The narrow crossed pair /root/r5_code_senior and /root/r5_code_claude completed all13-artifact coverage, independent assessments, reciprocal examination and root synthesis; both actual Claude calls completed serially. The exact reviewed host candidate is d15524c80889832e1247bbbd0bcfcc8be8903115, with bridge70598d1c17492c6a488023abbf3cc75b502b9dd1 and native3accd421a5a71fc64d182481518cc5d75e8304b8. No source correction, required nit, material decision or admitted implementation remains. Subsequent host changes only memorialize review and closeout. Ordinary full output is not universally unchanged: eligible unresolved candidates can add warnings without changing the observed call expressions. The task log records the disputed premises and corrected test membership. No task push or global installation occurred. The qualified private runtime is /home/lucas/.cache/codex/radare2/native-rejected-input-evidence-2026-10-26/runtime/integration/r2-library-prototypes; use outside that runtime requires the matching plugin/languages and regenerated type database. No active next implementation action is selected.
 
 ## Current-user recovery decision
 
