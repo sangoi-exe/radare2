@@ -1,0 +1,57 @@
+# Intent Contract: preserve caller output after auxiliary decode failure
+
+Status: active
+Task mode: Doctrine
+Lifecycle phase: Implementation
+Strategy epoch: 1
+Plan kind: Bugfix / Regression Plan
+Plan kind rationale: Correct a production-reproduced bridge regression at the optional analysis boundary. Keep native uncertainty recovery and the existing successful path; do not redesign the native evidence contract.
+
+## Confirmed objective and current-user authority
+
+Preserve conservative caller output when optional direct-callee analysis cannot decode its body. Keep unavailable call-input storage explicit, without inventing values or source parameter positions. Preserve the selected output mode, successful auxiliary discovery, supplied contracts, and existing caller/final-analysis error behavior. The source change belongs to the bridge and its direct tests and guidance; no native patch/API/pin, host source/signature schema, persistence, global installation, worktree, download, or push change is selected.
+
+The current task is attached by the user's request to resume session01a16717-0b9b-7e10-9f98-d4203ccbfde6. The completed R5 plan remains historical and complete; this contract owns the later auxiliary-failure correction. In the current thread01a17dd3-6b27-7513-834f-9efa22e2ac4a, the root presented the objective, conservative result, bridge-only Scope and non-goals in its preceding final handoff. The user confirmed with “ok, mas confere bem se é a melhor proposta hahaha” at source255, turn01a17df9-b0e2-7513-8e61-96da3512e15b, 2026-10-27T12:27:58.576-03:00.
+
+The comparison at source409, 2026-10-27T12:46:27.586-03:00, explained full disposal of the failed architecture followed by one caller-only reconstruction, including loss of earlier successful auxiliary evidence from that attempt. The user instructed “prossiga” at source427, turn01a17e11-9fb6-7212-826c-a8843e38d4a9, 2026-10-27T12:54:06.821-03:00, and again at source449, turn01a17e12-b1be-7713-b549-ada88f8f1152, 2026-10-27T12:55:16.984-03:00. These instructions select continuation with that disclosed conservative route and cost. Root restated the selected route at source468 before planning. Applicable timezone: America/Sao_Paulo. Source: /home/lucas/.codex/sessions/2026/10/27/rollout-2026-10-27T11-46-10-01a17dd3-6b27-7513-834f-9efa22e2ac4a.jsonl. No material decision remains open.
+
+## Wrong behavior, baseline, and cause
+
+Root reproduced the regression with the real retained pre-R5 and current plugins against the same private host and regenerated data. A 90-byte x86-32 witness keeps the existing no-competing-read caller and replaces its callee body with invalid instruction flow. The old plugin produces caller C. The current plugin returns no C and reports Bad instruction count exceeded at0x1050, exactly as direct analysis of that callee does. Current JSON returns only errors in normal and retained modes. All processes exit0, so exit status is not the result oracle. With the same invalid bytes but no callee body in host analysis, the current caller renders conservative C and unresolved stack[0x8:4]. With the original valid eight-byte callee, it correctly retains value7 through __input_storage.
+
+Baselines: hostd4d247109224780d68962833be01f1970e79c01d, bridge70598d1c17492c6a488023abbf3cc75b502b9dd1, native3accd421a5a71fc64d182481518cc5d75e8304b8. Pre-R5 bridge/native qualification is retained under /home/lucas/.cache/codex/radare2/native-incomplete-call-inputs-2026-10-26/. R5 qualification is retained under /home/lucas/.cache/codex/radare2/native-rejected-input-evidence-2026-10-26/. The bridge sequencing source is unchanged across R5; correct native retention of rejected uncertainty makes the existing unisolated auxiliary error path reachable for the new witness. Reverting patch0410 would restore the original discovery defect and is not selected.
+
+Canonical owner: r2ghidra/src/core_ghidra.cpp. Its initial caller action succeeds before the auxiliary loop. A callee exception escapes before final caller analysis, rendering, or harvest. The explicit native producer is BadDataError in flow.cc:547-553. Neither a generic LowlevelError nor a negative action return proves a recoverable decode failure or user cancellation.
+
+## Selected route and Technical rationale
+
+Catch the established native decode-error class only at the optional callee-action boundary and carry its stage and diagnostic to the bridge's command-local analysis owner. Complete existing Core wakeup and destroy the failed R2Architecture before reconstruction. Reuse the same full caller preparation, analysis, retained-code handling, rendering and harvest path once with auxiliary scheduling disabled. Do not carry failed Funcdata, Scope, prototype, graph or snapshot objects into that new attempt. The existing native translator cache/reset lifecycle remains native-owned.
+
+The successful path retains its current one-pass queue and final caller analysis. Only the recovered failure path loses all auxiliary enrichment from the failed attempt, including earlier successful callees. The reconstructed caller keeps the native unresolved-storage warning and gains an explicit auxiliary-failure diagnostic. The disabled auxiliary pass cannot request another reconstruction. Initialization and caller/final-analysis exceptions retain their existing error handling. Generic LowlevelError and auxiliary negative/incomplete results are not recovered. Caller/final negative results retain the existing warning/output path; neither outcome requests reconstruction. This correction makes no claim to recover every failure cause or identify the ultimate provenance of invalid decoding.
+
+The reason for whole-attempt disposal is concrete: copied call prototypes share callee scopes; Funcdata::clear preserves overrides and completion/model state; restart and inlining can mutate more than the queued function. A type-wide local catch followed by clearing that callee therefore lacks a sufficient rollback boundary. Architecture destruction and the native translator's existing reset provide a stronger existing ownership boundary without adding a native snapshot-import API or maintaining per-function rollback state.
+
+Reconstruction must keep the requested caller's selected interpretation. Preparation can change live Core architecture/bitness through address-specific callbacks; a new architecture reads those values. Capture the relevant selected caller inputs and re-establish them through existing Core configuration facilities before reconstruction rather than silently selecting the last callee's interpretation. This is not a rollback of every Core side effect. The fixed x86-32 witness showed unchanged asm.arch, asm.bits, anal.arch and configured language before failure and after another successful command in the same process. Qualification must check the actual reconstruction boundary, not infer it from destruction alone.
+
+Evidence-backed alternatives considered: keeping the first caller as a rendered fallback is unsafe because it is not an immutable graph; clearing it before auxiliaries erases positive evidence they can currently consult; same-architecture cleanup requires an unestablished failure-footprint classifier; separate auxiliary architectures with retained positive facts would require a new native import/rebinding contract. The selected route avoids those additional owners and preserves the primary result at the disclosed cost of less enrichment on a failed command.
+
+## Primary-path acceptance and proof
+
+- The demonstrated invalid auxiliary body yields caller C/JSON/XML rather than replacing output with an error. Output explicitly reports unavailable auxiliary evidence and unresolved stack+8, without fabricating value7 as a proved call input.
+- Normal and retained modes preserve their own existing output/p-code contracts. Caller-only reconstruction runs at most once and failure of that reconstruction is not suppressed or retried.
+- A mixed successful/failed auxiliary command returns conservative caller output. Earlier successful auxiliary evidence is intentionally not retained across full disposal; supplied host contracts remain authoritative.
+- Existing valid, missing/bodyless, ordinary-call, slicing, formatter, type-resolution and supplied-contract regressions remain qualified. Do not change unrelated EXPECTs to hide new failures.
+- Direct caller exceptions, invalid architecture initialization and unclassified errors do not enter the auxiliary decode fallback. Interrupted/incomplete actions retain their existing handling and never request reconstruction. Preserve existing locking and sleep cleanup.
+- Check the caller interpretation and same-process use after failure. No inferred signature/calllink writeback occurs merely because auxiliary recovery was attempted; existing explicitly requested harvest semantics remain unchanged.
+
+The first directly verifiable slice is the bridge correction plus a production regression using the already reproduced input. Its decisive oracle is conservative code and explicit uncertainty where the baseline emits only errors, paired with the unchanged valid-callee control. Use focused existing bridge build and regression entry points. Native source is unchanged; do not claim a new native, Windows, CPU or whole-platform qualification. A local synthetic binary through the production plugin does not establish target-machine behavior.
+
+## Scope, execution, and continuity
+
+Active task workspace: /home/lucas/work/radare2. Bridge implementation and direct guidance belong to its independent r2ghidra repository. Root owns this contract, the [Microtask Program](2026-10-27-auxiliary-callee-failure-microtasks.md), [task log](../task-logs/2026-10-27-auxiliary-callee-failure.md), changelog, integration, local commits and review. One subordinate Microtask Program is retained for cross-turn continuity because this runtime exposes no update_plan tool; it does not own Scope, route, authority or lifecycle.
+
+The implementation footprint is the existing bridge sequencing owner, its direct p-code production regressions, doc/incomplete-call-inputs.md and the bridge AGENTS.md flow description. Use only needed build/runtime/evidence categories beneath the fresh task owner /home/lucas/.cache/codex/radare2/auxiliary-callee-failure-2026-10-27/. Old qualified caches are read-only inputs, not cleanup targets or new output roots. Preserve proprietary .refs/ and all pre-existing user state.
+
+High-level work: implement and qualify the small primary slice through one bounded non-web Worker; integrate and commit the coherent candidate; obtain the default local Code Gate; finish records and exact Git inspection. The correction's native shared-state/lifecycle sensitivity calls for a narrow crossed Senior/Claude review rather than a broad source-partition wave. No external ChatGPT Gate or push is authorized.
+
+Current state: the Initial Intent Contract audit at /root/af1_plan_audit returned PROCEED with complete required coverage. Its sole nonblocking wording note is clarified above without changing the selected behavior. No source correction is implemented. Blocker: none. Next action: publish the existing plan locator at execution start and dispatch the bounded bridge Worker. Stop for a material new owner/API/behavior/risk/Scope boundary or an observed failure outside this admitted result.
